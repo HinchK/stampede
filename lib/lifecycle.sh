@@ -260,6 +260,65 @@ swarm_down() { # TARGET_DIR ASSUME_YES KEEP_WS
   printf '  %s✓ Transient channel files purged (profile, seats, traces preserved).%s\n\n' "$GREEN" "$RESET"
 }
 
+# Post-seating readiness gate. Every seat must exist and have settled into a
+# stable post-boot state. NOTE: "ready" includes WORKING — an agent that is
+# executing has demonstrably booted and consumed its standing brief; a strict
+# idle/done-only wait cannot pass against a live, busy swarm (verified
+# empirically). Blocked, unknown, or never-booted seats time out and fail.
+swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
+  local target_dir="${1:-$PWD}"
+  local timeout_ms="${2:-30000}"
+  local abs_target
+  abs_target=$(cd "$target_dir" 2>/dev/null && pwd -P) || {
+    printf '  %s✖ cannot access target directory: %s%s\n' "$RED" "$target_dir" "$RESET"
+    return 1
+  }
+
+  local ws_id
+  ws_id=$(find_workspace_by_cwd "$abs_target")
+  if [[ -z "$ws_id" ]]; then
+    printf '  %s✖ no active workspace for %s%s\n' "$RED" "$abs_target" "$RESET"
+    return 1
+  fi
+
+  # Seat roster: fresh seats.json ledger, else live agents in the workspace
+  local seats_file="${abs_target}/.herdr-swarm/seats.json"
+  local seats_spec="" src_label
+  if [[ -f "$seats_file" ]] && [[ "$(jq -r '.workspace_id // empty' "$seats_file" 2>/dev/null)" == "$ws_id" ]]; then
+    seats_spec=$(jq -r '.seats[]? | "\(.name)\t\(.kind)\t\(.pane)"' "$seats_file" 2>/dev/null)
+    src_label="seats.json ledger"
+  else
+    seats_spec=$(herdr agent list 2>/dev/null | jq -r --arg ws "$ws_id" \
+      '.result.agents[]? | select(.workspace_id == $ws) | "\(.name)\t\(.agent)\t\(.pane_id)"')
+    src_label="live agent registry"
+  fi
+
+  printf '%s▸ Seat Verification — %s (%s)%s\n' "$BOLD" "$ws_id" "$src_label" "$RESET"
+
+  if [[ -z "$seats_spec" ]]; then
+    printf '  %s✖ no seats recorded for this workspace%s\n' "$RED" "$RESET"
+    return 1
+  fi
+
+  local failures=0 name kind pane
+  while IFS=$'\t' read -r name kind pane; do
+    [[ -n "$name" ]] || continue
+    if ! herdr agent get "$name" >/dev/null 2>&1; then
+      printf '  %s✖ %s: agent not registered%s\n' "$RED" "$name" "$RESET"
+      failures=1
+      continue
+    fi
+    if herdr agent wait "$name" --until idle --until "done" --until working --timeout "$timeout_ms" >/dev/null 2>&1; then
+      printf '  %s✓ %s (%s in %s): ready%s\n' "$GREEN" "$name" "$kind" "$pane" "$RESET"
+    else
+      printf '  %s✖ %s: not ready within %sms%s\n' "$RED" "$name" "$timeout_ms" "$RESET"
+      failures=1
+    fi
+  done <<<"$seats_spec"
+
+  return "$failures"
+}
+
 # CLI dispatcher
 if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
   cmd="${1:-status}"

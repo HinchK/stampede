@@ -60,6 +60,11 @@ case "${1:-}" in
     # explicit launch; consume the subcommand token
     shift
     ;;
+  verify)
+    # post-seating readiness gate (lib/lifecycle.sh)
+    swarm_verify_seats "${2:-$PWD}" "${3:-30000}"
+    exit $?
+    ;;
   -*|"")
     # flags or bare invocation: default to launch
     ;;
@@ -89,6 +94,7 @@ Autonomous Multi-Agent Orchestration Swarm (Herdr + AGY + Claude Code + OpenCode
 Subcommands:
   up (default)            Launch or re-attach the swarm for the current repo
   status [dir]            Show workspace, seats, profile, and recent activity
+  verify [dir] [ms]       Check every seat is alive and brief-ready (default 30000ms)
   down [dir] [FLAGS]      Tear down the swarm tied to a directory
                             -y, --yes                      skip confirmation
                             --keep-ws, --keep-workspace    close seat panes only
@@ -442,6 +448,34 @@ if [[ -n "$SEAT_LEDGER" ]]; then
      | {workspace_id: $ws, seats: map({name: .[0], kind: .[1], pane: .[2]})}' \
     > "${PWD}/.herdr-swarm/seats.json"
   good "Seat ledger written: ${PWD}/.herdr-swarm/seats.json"
+fi
+
+# ──────────────────────────────────────────────────────────────────────────
+# Post-Seating Verification (T-010): readiness + brief acknowledgment gate
+# ──────────────────────────────────────────────────────────────────────────
+
+if swarm_verify_seats "$PWD"; then
+  good "All seats verified ready"
+else
+  warn "One or more seats failed readiness verification"
+  if [[ "$MODE" == "a" ]]; then
+    # Auto-queue fails closed when CRITICAL seats (arch, pm) are not ready —
+    # an unattended loop must not start on an unverified herd.
+    critical_fail=0
+    for critical_seat in "$ARCH_AGENT" "${SEAT_NAME_pm:-pm}"; do
+      if ! herdr agent wait "$critical_seat" --until idle --until "done" --until working --timeout 2000 >/dev/null 2>&1; then
+        bad "Critical seat not ready: ${critical_seat}"
+        critical_fail=1
+      fi
+    done
+    if (( critical_fail )); then
+      printf '  %s✖ FATAL: auto-queue requires verified seats (arch, pm). Re-run seating or investigate panes.%s\n' "$RED" "$RESET" >&2
+      exit 1
+    fi
+    note "Critical seats (arch, pm) ready — continuing despite non-critical seat failures"
+  else
+    note "Continuing (non-autonomous mode) — investigate failed seats before dispatching work"
+  fi
 fi
 
 # Start Kultivait Proxy in Ops pane if not already active
