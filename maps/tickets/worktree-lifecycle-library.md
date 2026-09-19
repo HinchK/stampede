@@ -2,7 +2,7 @@
 id: P2-1
 title: "Worktree Lifecycle Library: Provisioning, Locking, Pruning & Reconcile"
 type: wayfinder:prototype
-status: in_progress
+status: resolved
 assignee: arch
 prototype_asset: lib/worktree.sh,tests/test_worktree.sh
 parent: maps/universal-herdr-swarm.md

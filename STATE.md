@@ -27,6 +27,8 @@
 - **Nested Session Workspace Discovery (T-016c):** Resolved in commit `a08c9e8`. Sourced `find_workspace_by_cwd "$PWD"` in `herdr-loop-swarm.sh`, eliminating ambient `$HERDR_WORKSPACE_ID` hijacking and isolating nested/scratch swarms from host sessions.
 - **GitHub Issues Two-Way Synchronization (T-017):** Resolved in commit `0ae36f5`. `agy-gh` authored protocol specification `docs/findings/github-issues-sync.md` and prototype CLI `lib/gh_sync.sh` with fail-closed authentication and zero unconfirmed writes (`--dry-run` default).
 - **Dogfooding Rehearsal Receipt:** Documented in `docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md`. Successfully executed `status` -> `up` (`wR`) -> `status` -> `down --yes` against `/tmp/herdr-dogfood-scratch-rehearsal` from inside `wM` with zero disruption to the host session.
+- **Worktree Lifecycle Library (P2-1):** Resolved in commit `99867cf`. Built `lib/worktree.sh` supporting `worktree_provision`, porcelain locking, dirty tracked checkpoints, `worktree_prune`, and `worktree_reconcile`, validated by 21/21 passing assertions in `tests/test_worktree.sh`.
+- **Worktree Config & Ledger Integration Specification (P2-2 Spec):** Resolved in commit `b01b81f`. `pm` authored `docs/audits/2026-09-19-p2-2-config-integration-spec.md` defining `swarm.config.toml` schema, `lib/config.sh` bindings, `seats.json` v2 schema, and the `split_pane` CWD ordering contract.
 
 ---
 
@@ -34,9 +36,9 @@
 
 - **Milestones M1, M2, M3 Complete & Audited:**
   - Full end-to-end receipt attached; all M3 recommendations satisfied.
-- **Phase 2 Implementation Frontier (Parallel Worktree Swarm Fan-Out):**
-  - **P2-1 (Worktree Lifecycle Library `lib/worktree.sh`):** Provisioning, locking, pruning, and dirty checkpointing.
-  - **P2-2 (Config & Ledger Integration):** Per-seat `worktree = true` in `swarm.config.toml` and `"worktree_dir"` in `.herdr-swarm/seats.json`.
+- **Phase 2 Implementation Progress (Parallel Worktree Swarm Fan-Out):**
+  - **P2-1 (Worktree Lifecycle Library `lib/worktree.sh`):** Complete (`99867cf`).
+  - **P2-2 (Config, Ledger & Launcher Worktree Integration):** Next up. `worktree = true` in `swarm.config.toml`, `SEAT_WORKTREE_<seat>` in `lib/config.sh`, `seats.json` v2 with `"worktree_dir"`, and launcher CWD provisioning.
   - **P2-3 (Supervisor Worktree Suite Gating):** Running suite verification inside the worker's worktree.
   - **P2-4 (Arbiter Branch Merge):** Safe compare-and-swap integration of verified worker branches.
 
@@ -44,5 +46,6 @@
 
 ## 3. Immediate Next Step
 
-- Draft ticket `maps/tickets/worktree-lifecycle-library.md` for P2-1.
-- Dispatch `arch` to build `lib/worktree.sh` and `agy-docs` to update user guides.
+- Draft ticket `maps/tickets/worktree-config-and-ledger-integration.md` for P2-2.
+- Dispatch `arch` to implement P2-2 in `swarm.config.toml`, `lib/config.sh`, and `herdr-loop-swarm.sh`.
+- Dispatch `agy-docs` to document the v2 ledger schema and configuration parameters.
