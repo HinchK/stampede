@@ -24,6 +24,7 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - [Preflight Dependency and Daemon Verification](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/preflight-dependency-and-daemon-verification.md): Implemented lib/preflight.sh with 9-point validation matrix (daemon, core CLIs, python tomllib, gh auth, agent CLIs, git repo) and actionable human remediation hints.
 - [Lifecycle Safe Teardown and Target Disambiguation](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/lifecycle-safe-teardown-and-targeting.md): Hardened lib/lifecycle.sh with physical pane CWD matching, confirmation gate, and seats.json selective pane retirement to eliminate destructive teardown hazards (D1).
 - [Profile Validation and Safe Slug Emitter](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/profile-validation-and-safe-slug-emitter.md): Hardened lib/profile.sh test validation (blocking auto-mode on empty/none/true test commands), introduced shared lib/common.sh slugify(), and updated lib/config.sh to safely emit environment bindings via sys.argv and shlex.quote (D3 & D4).
+- [Integrate Profile Detection into Swarm Launcher](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/integrate-profile-into-launcher.md): Sourced lib/profile.sh and lib/lifecycle.sh in herdr-loop-swarm.sh, deleted hardcoded kultivait and TEST_CMD="true" defaults, gated auto-queue mode against non-runnable test commands, and bound workspace lookup to physical CWD (T-INT-1).
 
 
 

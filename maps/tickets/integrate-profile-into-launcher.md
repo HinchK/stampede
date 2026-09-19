@@ -2,10 +2,14 @@
 id: T-INT-1
 title: "Integrate Profile Detection into Swarm Launcher"
 type: wayfinder:prototype
-status: in_progress
+status: resolved
 assignee: arch
 prototype_asset: herdr-loop-swarm.sh
 parent: maps/universal-herdr-swarm.md
+resolution:
+  commit: b6237a0
+  verified_by: looper
+  date: "2026-09-19"
 ---
 
 # Integrate Profile Detection into Swarm Launcher (T-INT-1)
@@ -28,3 +32,12 @@ How should `herdr-loop-swarm.sh` be integrated with `lib/profile.sh` and `lib/li
    `grep -n 'Standard-Pentest\|TEST_CMD="true"' herdr-loop-swarm.sh && exit 1 || true`
    and
    `mkdir -p /tmp/test-empty-repo && (cd /tmp/test-empty-repo && /Users/hinchk/Fun/loop-bot-herd-agy/herdr-loop-swarm.sh --mode a < /dev/null 2>&1 | grep -q "FATAL") && rm -rf /tmp/test-empty-repo && echo "PASS: fail-closed profile integration"`
+
+## Verification Log
+
+- Sourced `lib/profile.sh` and `lib/lifecycle.sh` in `herdr-loop-swarm.sh`.
+- Deleted hardcoded `Standard-Pentest/kultivait` and `TEST_CMD="true"` defaults; `grep -n 'Standard-Pentest\|TEST_CMD="true"' herdr-loop-swarm.sh` returned empty.
+- Verified non-interactive execution in `/tmp/test-empty-repo` fails closed with FATAL before any panes are created.
+- Verified auto-queue mode (`-m a`) fails closed with fatal error when `TEST_CMD="none"`.
+- Tested `shellcheck herdr-loop-swarm.sh` clean (0 warnings).
+- Resolved in commit `b6237a0`.
