@@ -1,0 +1,13 @@
+# herdr-loop-swarm task list
+# format:  id | tier | owns (space-separated paths) | prompt
+#   tier ∈ code | docs | mechanical | hard   → routed to an agent kind
+#   owns must NOT overlap between tasks (the swarm rejects overlaps up front)
+#
+# Example: three of map #221's children that touch disjoint files, so they can
+# run in parallel instead of one-at-a-time through arch.
+
+tool-translation | code | src/kultivait/backends.py tests/test_backends.py | C2 (#214): translate Anthropic input_schema tools to OpenAI {type:function} at the local-backend boundary; reuse api_backends.py:71-86; add a live regression test.
+
+preprocessor-degrade | code | src/kultivait/preprocessor.py tests/test_preprocessor.py | #213: widen run_preprocessor so ANY backend error (ConnectError/HTTPStatusError, not just TimeoutError) degrades to router-only with a loud log line, per its docstring. Add a test.
+
+readme-rescope | docs | README.md | #219: re-scope the README around the supported ollama path; move llama.cpp to an experimental note. Keep the install command canonical.

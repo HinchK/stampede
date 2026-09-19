@@ -1,0 +1,13 @@
+# Local swarm state (per-project rendered briefs, profiles, ledgers)
+.herdr-swarm/
+
+# Python artifacts
+__pycache__/
+*.pyc
+
+# Local artifacts
+.DS_Store
+.env
+*.log
+.vscode/
+.clearance-rendered-preview-*/

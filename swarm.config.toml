@@ -1,0 +1,77 @@
+# Swarm Configuration: Herdr + AGY + Claude + OpenCode (GLM-5.3) + Kultivait
+# Location: ~/fun/loop-bot-herd-agy/swarm.config.toml
+
+[swarm]
+name = "loop-bot-herd-agy"
+version = "1.0.0"
+workspace_label = "swarm-dev"
+log_path = "/tmp/herdr-process.log"
+trace_dir = "~/.herdr-loop-swarm/traces"
+
+[proxy]
+enabled = true
+endpoint = "http://localhost:4114/v1"
+model_override = "auto"
+health_check_url = "http://localhost:4114/openapi.json"
+
+[geometry]
+min_cols = 80
+min_rows = 20
+enforce_floor = true
+auto_relocate_cramped = true
+
+# Agent Seats Definition
+[seats.pm]
+name = "pm"
+role = "Product Manager & Overseer"
+default_kind = "claude"
+model = "claude-3-7-sonnet"
+brief = "briefs/overseer-pm.md"
+tab = "herd"
+position = "top-left"
+
+[seats.arch]
+name = "arch"
+role = "Lead Architect & Implementation Engine"
+default_kind = "opencode"
+model = "zai/glm-5.3"
+brief = "briefs/arch.md"
+tab = "herd"
+position = "top-right"
+
+[seats.looper]
+name = "looper"
+role = "Autonomous Loop Orchestrator"
+default_kind = "agy"
+model = "gemini-2.5-pro"
+brief = "briefs/looper.md"
+tab = "herd"
+position = "bottom-full"
+
+[seats.docs]
+name = "agy-docs"
+role = "Documentation & Architecture Records (ADRs)"
+default_kind = "agy"
+model = "gemini-2.5-flash"
+brief = "briefs/worker-docs.md"
+tab = "ops"
+position = "top-left"
+
+[seats.gh]
+name = "agy-gh"
+role = "GitHub & CI Operations"
+default_kind = "agy"
+model = "gemini-2.5-flash"
+brief = "briefs/worker-gh.md"
+tab = "ops"
+position = "top-right"
+
+[seats.reviewer]
+name = "reviewer"
+role = "Security & Quality Auditor (Optional)"
+default_kind = "agy"
+model = "gemini-2.5-flash"
+brief = "briefs/reviewer.md"
+tab = "ops"
+position = "optional"
+enabled = false
