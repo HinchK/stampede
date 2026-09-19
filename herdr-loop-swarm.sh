@@ -9,9 +9,6 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 LIB_DIR="$SCRIPT_DIR/lib"
 CONFIG_FILE="$SCRIPT_DIR/swarm.config.toml"
-LOG_FILE="/tmp/herdr-process.log"
-# shellcheck disable=SC2034  # reserved: wired by the telemetry integration
-SESSION_ID="swarm-$(date +%Y%m%d-%H%M%S)"
 ENV_FILE="${PWD}/.env"
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -217,6 +214,9 @@ good "Config bound: ${SWARM_CONFIG_NAME} — seats: ${SEAT_KEYS}"
 # Namespaced agent handles for kickoff dispatches
 ARCH_AGENT="${SEAT_NAME_arch:-arch}"
 LOOPER_AGENT="${SEAT_NAME_looper:-looper}"
+
+# Stable telemetry session (shared with loop-bot so the Ops stream sees all)
+SESSION_ID=$(telemetry_session_id "${PWD}/.herdr-swarm")
 
 EXTERNAL=0
 if [[ "${HERDR_ENV:-}" != 1 ]]; then
@@ -428,9 +428,9 @@ done
 # Ops services pane (proxy host) — split below the ops anchor
 SRV_PANE=$(split_pane "$OpsAnchor" down 0.5 "$PWD") || true
 
-# Stream Process Log to Ops Anchor
-herdr pane rename "$OpsAnchor" "herdr-process.log" >/dev/null 2>&1 || true
-herdr pane run "$OpsAnchor" "clear && tail -n 40 -f $LOG_FILE" >/dev/null 2>&1 || true
+# Live telemetry stream occupies the Ops anchor pane (replaces raw log tail)
+herdr pane rename "$OpsAnchor" "telemetry-stream" >/dev/null 2>&1 || true
+herdr pane run "$OpsAnchor" "python3 -u '$LIB_DIR/telemetry.py' stream '$SESSION_ID' '${PWD}/.herdr-swarm/traces'" >/dev/null 2>&1 || true
 
 # Geometry Guard Floor
 # shellcheck disable=SC2086  # intentional word splitting over collected pane ids
@@ -477,6 +477,18 @@ else
     note "Continuing (non-autonomous mode) — investigate failed seats before dispatching work"
   fi
 fi
+
+# Telemetry: swarm-ready lifecycle event (streams live into the Ops pane)
+TRACE_DIR_PATH="${PWD}/.herdr-swarm/traces"
+mkdir -p "$TRACE_DIR_PATH"
+_ready_payload=$(jq -cn \
+  --arg mode "$MODE" --arg slug "$PROJECT_SLUG" --arg repo "${REPO:-none}" \
+  --argjson seats "$(jq '.seats | length' "${PWD}/.herdr-swarm/seats.json" 2>/dev/null || echo 0)" \
+  '{action:"swarm_ready", mode:$mode, slug:$slug, repo:$repo, seats:$seats,
+    summary:("swarm seated+verified (mode=" + $mode + ", seats=" + ($seats|tostring) + ")")}')
+python3 "$LIB_DIR/telemetry.py" log "$SESSION_ID" swarm.lifecycle "$LOOPER_AGENT" - "$_ready_payload" \
+  --trace-dir "$TRACE_DIR_PATH" >/dev/null 2>&1 || true
+good "Telemetry session: ${SESSION_ID} → ${TRACE_DIR_PATH}"
 
 # Start Kultivait Proxy in Ops pane if not already active
 if ! curl -sf --max-time 2 http://localhost:4114/openapi.json >/dev/null 2>&1; then
@@ -531,5 +543,5 @@ if (( EXTERNAL )); then
 else
   say "Swarm active in tabs: 'herd' (pm, arch, looper) & 'ops' (docs, gh, serve, log)"
 fi
-say "Process log: tail -f /tmp/herdr-process.log"
-say "Telemetry traces: ~/.herdr-loop-swarm/traces/"
+say "Live telemetry: Ops tab 'telemetry-stream' pane"
+say "Telemetry traces: ${PWD}/.herdr-swarm/traces/"

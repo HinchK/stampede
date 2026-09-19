@@ -65,6 +65,9 @@ for seat_key in $SEAT_KEYS; do
   EXPECTED_SEATS+=("${!name_var}")
 done
 
+# Telemetry session (stable per project; shared with the launcher's Ops stream)
+SESSION_ID=$(telemetry_session_id "$STATE_DIR")
+
 if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
   DIM=$(tput dim); RESET=$(tput sgr0)
   GREEN=$(tput setaf 2); YELLOW=$(tput setaf 3); RED=$(tput setaf 1); BLUE=$(tput setaf 4)
@@ -164,6 +167,12 @@ harvest_verdicts() {
       else
         echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
       fi
+
+      # Telemetry: suite verdict event (streams live into the Ops pane)
+      python3 "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" suite.verdict "$seat" "$ticket" \
+        "$(jq -cn --arg s "$suite_ok" --arg sha "$sha" --arg seat "$seat" --arg t "$ticket" \
+          '{suite:$s, sha:$sha, summary:("suite " + $s + " @ " + $sha), details:("seat=" + $seat + " ticket=#" + $t)}')" \
+        --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
       [[ "$suite_ok" == "green" || "$suite_ok" == "skipped" ]] && \
         herdr agent prompt looper "LOOP-BOT: filed verdict for #$ticket @ ${sha} from $seat's pane ($suite_ok)." >/dev/null 2>&1 || true
     done < <(grep -E "ARCH DONE #[0-9]+" <<<"$out" | tail -n 5)

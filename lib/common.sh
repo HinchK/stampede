@@ -24,3 +24,17 @@ slugify() {
   [[ "$s" =~ ^[a-z] ]] || s="s-${s}"
   printf '%s\n' "$s"
 }
+
+# Stable per-project telemetry session id: minted once, persisted in the
+# swarm state dir, shared by launcher + supervisor so one Ops-pane stream
+# shows every event (lifecycle, dispatches, suite verdicts).
+telemetry_session_id() { # STATE_DIR
+  local f="${1}/telemetry-session"
+  if [[ -f "$f" && -s "$f" ]]; then
+    cat "$f"
+    return 0
+  fi
+  mkdir -p "$1"
+  printf 'swarm-%s\n' "$(date +%Y%m%d-%H%M%S)" > "$f"
+  cat "$f"
+}
