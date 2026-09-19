@@ -19,26 +19,26 @@
 
 - **Telemetry Event Engine & Live Ops Streaming (T-009-impl):** Resolved in commit `8b059f2`. Upgraded `lib/telemetry.py` with project-scoped traces (`.herdr-swarm/traces/`), standardized `domain.action` envelope, column-clamped ANSI badge streaming in Ops pane, and unified session logging in launcher and supervisor.
 - **Architecture Decision Records & System Vocabulary:** Resolved in commit `aa06ec4`. `agy-docs` authored ADRs 0001–0005 in `docs/adr/` with index in `README.md`, and system vocabulary with `_Avoid_` anti-patterns in `CONTEXT.md`.
+- **README & User Guide Polish (T-015b):** Resolved in commit `15d61a0`. Documented all lifecycle subcommands (`up`, `down`, `status`, `verify`), live telemetry ANSI streaming engine, dynamic seating, seat verification protocol, ADR index, and repo tree.
+- **Supervisor Anchored Verdict Harvesting & Mode-R Gating (T-007c-fix):** Resolved in commit `5acf8f6`. Fixed root cause H1 (false-green verdict scraping from scrollback) using strict whole-line regex anchoring (`^[[:space:]]*ARCH DONE #[0-9]+[[:space:]]+[0-9a-fA-F]{7,40}[[:space:]]*$`), gated mode `r` fail-closed against unrunnable test commands, routed skipped verdicts to human gate, purged legacy fixture records (#99, #42, #77, #55), and deleted orphan `lib/agent_guard.sh`.
 
 ---
 
 ## 2. Active Status & Open Items
 
-- **Milestones M1 & M2 Complete:**
+- **Milestones M1, M2, M3 Complete:**
   - M1 (Safe entrypoint): Teardown safety (D1), Profile fail-closed (D3/D4), Launcher profile integration (T-INT-1), Re-verdict dedupe (D2), README truth (T-015a).
   - M2 (Generalize): TOML config integration (T-INT-2), Namespacing (T-005), Brief nonce delivery (T-INT-3), Supervisor genericization (T-007b), Preflight verification (T-008).
-- **M3 (Lifecycle & Observability) Progress:**
-  - T-INT-4 (`up`/`down`/`status` subcommands): Complete (`5ca2049`).
-  - T-010 (Seat verification & brief acknowledgment gate): Complete (`33a07b3`).
-  - T-009-impl (Telemetry event engine & live Ops streaming): Complete (`8b059f2`).
-  - Next Up:
-    1. `T-015b`: Complete README & user guide polish (capturing modular architecture, lifecycle subcommands, seat verification, and live telemetry).
-    2. End-to-end swarm rehearsal & live dogfood verification.
+  - M3 (Lifecycle, Observability & Hardening): Lifecycle subcommands (T-INT-4), Seat verification gate (T-010), Telemetry event engine & ANSI streaming (T-009-impl), README polish (T-015b), Supervisor verdict anchoring & mode-r gating (T-007c-fix), Full M1–M3 audit (`docs/audits/2026-09-19-m3-completion-audit.md`).
+- **Phase 2 Frontier (Advanced Swarm Orchestration):**
+  - Item 1: Isolated dogfooding rehearsal against ephemeral scratch workspace (`/tmp/herdr-rehearsal-scratch`) to generate end-to-end receipt.
+  - Item 2: Phase 2 Parallel Worktree Swarm Fan-out (T-016 / `docs/worktree-swarm.md`).
+  - Item 3: GitHub Issues Two-Way Synchronization (T-017 / `agy-gh` activation).
 
 ---
 
 ## 3. Immediate Next Step
 
-- Draft ticket `maps/tickets/readme-and-user-guide-polish.md` for `T-015b`.
-- Dispatch `agy-docs` and `arch` to refine `README.md` and user documentation.
-- Execute full dry-run / live rehearsal of `herdr-loop-swarm.sh`.
+- Execute isolated dogfood rehearsal of `./herdr-loop-swarm.sh up/status/verify/down` in an ephemeral scratch workspace.
+- Draft ticket `maps/tickets/parallel-worktree-swarm-fanout.md` for Phase 2.
+- Dispatch `arch` to design/implement worktree provisioning and `agy-docs` to document ADR 0006 on worktree isolation.

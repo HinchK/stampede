@@ -32,10 +32,8 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - [Preflight Verification and Lifecycle Subcommands in Swarm Launcher](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/launcher-preflight-and-subcommands.md): Integrated lib/preflight.sh 9-point matrix fail-closed prior to any workspace or pane creation, and wired up, down, status CLI subcommands delegating to lib/lifecycle.sh with comprehensive help documentation (T-INT-4, T-008).
 - [Seat Verification Protocol and Brief Acknowledgment Gate](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/seat-verification-protocol.md): Built swarm_verify_seats in lib/lifecycle.sh with .herdr-swarm/seats.json inspection, readiness/brief acknowledgment waiting, fail-closed autonomous mode execution gates, and the verify subcommand in herdr-loop-swarm.sh (T-010).
 - [Telemetry Event Engine and Live Ops Streaming Wiring](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/telemetry-event-engine-wiring.md): Standardized JSONL domain.action event envelope in lib/telemetry.py, stored traces in project-scoped .herdr-swarm/traces/, rewired Ops Anchor to live ANSI badge stream, and connected lifecycle and supervisor verdict logging on shared session files (T-009-impl).
-
-
-
-
+- [README and User Guide Polish](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/readme-and-user-guide-polish.md): Polished README.md with lifecycle subcommands (up, down, status, verify), live telemetry ANSI streaming, dynamic seating, seat verification protocol, ADR index, and current repository structure (T-015b).
+- [Supervisor Anchored Verdict Harvesting and Mode-R Gating](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/supervisor-verdict-anchoring-and-mode-r-gating.md): Hardened supervisor verdict parsing with whole-line regex anchoring to eliminate false-green scrollback matches (H1), gated resume mode r fail-closed against non-runnable test suites, routed skipped verdicts to human review gate, purged legacy fixture records, and deleted orphan lib/agent_guard.sh (T-007c-fix).
 ## Not yet specified
 
 - **Phase 2 Parallel Worktree Swarm Fan-out:** Merging the Claude-PM worktree isolation variant with the Universal Swarm so workers operate in disposable git worktrees for concurrent execution.
