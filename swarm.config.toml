@@ -7,6 +7,7 @@ version = "1.0.0"
 workspace_label = "swarm-dev"
 log_path = "/tmp/herdr-process.log"
 trace_dir = ".herdr-swarm/traces"
+worktree_root = ".herdr-swarm/worktrees"
 
 [proxy]
 enabled = false
@@ -38,6 +39,7 @@ model = "zai/glm-5.3"
 brief = "briefs/arch.md"
 tab = "herd"
 position = "top-right"
+worktree = true
 
 [seats.looper]
 name = "looper"

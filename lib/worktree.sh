@@ -30,6 +30,20 @@ worktree_provision() {
 
   mkdir -p "$(dirname "$wt_path")"
 
+  # Idempotent re-seat: a worktree already registered at this path is
+  # re-locked and reported with its actual branch (no reset, no duplicate —
+  # re-running `up` must not fail or fork a second tree).
+  local wt_real=""
+  [[ -d "$wt_path" ]] && wt_real=$(cd "$wt_path" && pwd -P)
+  if [[ -n "$wt_real" ]] \
+     && git -C "$target_dir" worktree list --porcelain 2>/dev/null | grep -q "^worktree ${wt_real}\$"; then
+    local cur_branch
+    cur_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD)
+    git -C "$target_dir" worktree lock --reason "seated: $seat" "$wt_path" >/dev/null 2>&1 || true
+    printf '%s\n%s\n' "$wt_path" "$cur_branch"
+    return 0
+  fi
+
   # H4 mitigation note: an in-repo worktree root relies on the ecosystem
   # ignoring dot-dirs; warn loudly when the parent is not git-ignored.
   if ! git -C "$target_dir" check-ignore -q "$(dirname "$wt_path")" 2>/dev/null; then

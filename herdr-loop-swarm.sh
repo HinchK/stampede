@@ -24,6 +24,8 @@ source "$LIB_DIR/config.sh"
 # shellcheck disable=SC1091  # dynamically resolved sibling libs
 source "$LIB_DIR/briefs.sh"
 # shellcheck disable=SC1091  # dynamically resolved sibling libs
+source "$LIB_DIR/worktree.sh"
+# shellcheck disable=SC1091  # dynamically resolved sibling libs
 source "$LIB_DIR/preflight.sh"
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -217,7 +219,12 @@ PROJECT_SLUG=$(slugify "$slug_source")
 good "Project slug: ${PROJECT_SLUG}"
 
 # Config binding: seats, kinds, models, tabs — single source of truth
-config_env=$(config_dump_env "$PROJECT_SLUG" "$CONFIG_FILE")
+# (fail-closed: an invalid config aborts before any workspace, pane, or
+# worktree is created)
+if ! config_env=$(config_dump_env "$PROJECT_SLUG" "$CONFIG_FILE"); then
+  printf '  %s✖ FATAL: invalid swarm configuration (%s).%s\n' "$RED" "$CONFIG_FILE" "$RESET" >&2
+  exit 1
+fi
 eval "$config_env"
 good "Config bound: ${SWARM_CONFIG_NAME} — seats: ${SEAT_KEYS}"
 
@@ -399,23 +406,50 @@ for tab_name in herd ops; do
     kind_var="SEAT_KIND_${seat_key}"
     model_var="SEAT_MODEL_${seat_key}"
     brief_var="SEAT_BRIEF_${seat_key}"
+    wt_var="SEAT_WORKTREE_${seat_key}"
     seat_name="${!name_var}"
     seat_kind="${!kind_var}"
     seat_model="${!model_var}"
     seat_brief="${!brief_var}"
+    seat_isolated="${!wt_var:-0}"
 
     # Rendered brief: config "briefs/foo.md" -> .herdr-swarm/briefs/foo.md
     rendered_brief="${PWD}/.herdr-swarm/briefs/$(basename "$seat_brief")"
+
+    # Worktree isolation (ADR 0006): provision BEFORE split_pane — a pane's
+    # cwd is fixed at split time, so the worktree must exist first. Failure
+    # skips this seat, not the herd.
+    seat_cwd="$PWD"
+    wt_branch=""
+    if (( seat_isolated )) && ! agent_alive "$seat_name"; then
+      step "Provisioning worktree for '${seat_name}' (swarm/${PROJECT_SLUG}/${seat_key})..."
+      if prov_out=$(worktree_provision "$seat_name" "$PROJECT_SLUG" "HEAD" "$PWD" 2>/dev/null); then
+        seat_cwd=$(sed -n 1p <<<"$prov_out")
+        wt_branch=$(sed -n 2p <<<"$prov_out")
+        good "Worktree ready: ${seat_cwd} (${wt_branch})"
+      else
+        warn "Worktree provisioning failed for '${seat_name}' — seat skipped"
+        [[ -n "$prev_pane" ]] || prev_pane="$tab_anchor"
+        seat_idx=$((seat_idx + 1))
+        continue
+      fi
+    fi
 
     seat_pane=""
     if agent_alive "$seat_name"; then
       note "Agent '${seat_name}' is already seated"
       seat_pane=$(pane_of_agent "$seat_name")
+      # Carry forward the recorded worktree for an already-live isolated seat
+      if (( seat_isolated )); then
+        seat_cwd=$(git -C "$PWD" worktree list --porcelain 2>/dev/null \
+          | awk -v n="seated: ${seat_name}" '$0 == "locked " n {print wt} /^worktree / {wt = substr($0, 10)}')
+        wt_branch=$(git -C "${seat_cwd:-$PWD}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+      fi
     else
       case "$seat_idx" in
-        0) seat_pane=$(split_pane "$tab_anchor" right 0.5 "$PWD") ;;
-        1) seat_pane=$(split_pane "${prev_pane:-$tab_anchor}" down 0.5 "$PWD") ;;
-        *) seat_pane=$(split_pane "$tab_anchor" down 0.5 "$PWD") ;;
+        0) seat_pane=$(split_pane "$tab_anchor" right 0.5 "$seat_cwd") ;;
+        1) seat_pane=$(split_pane "${prev_pane:-$tab_anchor}" down 0.5 "$seat_cwd") ;;
+        *) seat_pane=$(split_pane "$tab_anchor" down 0.5 "$seat_cwd") ;;
       esac
       if [[ -z "$seat_pane" ]]; then
         warn "No pane available for '${seat_name}' — seating into tab anchor"
@@ -438,7 +472,13 @@ for tab_name in herd ops; do
     fi
 
     if [[ -n "$seat_pane" ]]; then
-      SEAT_LEDGER+="${seat_name}|${seat_kind}|${seat_pane}"$'\n'
+      # v2 ledger entry (jq-built; paths may contain any character)
+      root_branch=$(git -C "$PWD" rev-parse --abbrev-ref HEAD 2>/dev/null || printf '')
+      SEAT_LEDGER+=$(jq -cn \
+        --arg name "$seat_name" --arg kind "$seat_kind" --arg pane "$seat_pane" \
+        --arg wt_dir "${seat_cwd:-$PWD}" --arg branch "${wt_branch:-$root_branch}" \
+        --argjson isolated "$seat_isolated" \
+        '{name: $name, kind: $kind, pane: $pane, worktree_dir: $wt_dir, branch: $branch, isolated: $isolated}')$'\n'
       if [[ "$tab_name" == "ops" ]]; then
         SEATED_OPS_PANES+=" ${seat_pane}"
       else
@@ -467,13 +507,15 @@ check_and_relocate_geometry "$WS_ID" "$OpsAnchor" ${SEATED_OPS_PANES:-}
 
 good "Layout established: Herd Tab (${HerdTab}) & Ops Tab (${OpsTab})"
 
-# Durable seat ledger for selective teardown (lib/lifecycle.sh swarm_down)
+# Durable seat ledger v2 (ADR 0006 §4.B): every seat records where it works
+# (worktree_dir + branch). Consumed by swarm_down/verify; written atomically
+# (tmp + mv).
 mkdir -p "${PWD}/.herdr-swarm"
 if [[ -n "$SEAT_LEDGER" ]]; then
-  printf '%s' "$SEAT_LEDGER" | jq -R -s -c --arg ws "$WS_ID" \
-    'split("\n") | map(select(length > 0) | split("|"))
-     | {workspace_id: $ws, seats: map({name: .[0], kind: .[1], pane: .[2]})}' \
-    > "${PWD}/.herdr-swarm/seats.json"
+  printf '%s' "$SEAT_LEDGER" | jq -s -c --arg ws "$WS_ID" \
+    '{version: 2, workspace_id: $ws, seats: .}' \
+    > "${PWD}/.herdr-swarm/seats.json.tmp" \
+    && mv "${PWD}/.herdr-swarm/seats.json.tmp" "${PWD}/.herdr-swarm/seats.json"
   good "Seat ledger written: ${PWD}/.herdr-swarm/seats.json"
 fi
 

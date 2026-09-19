@@ -123,6 +123,7 @@ emit('SWARM_CONFIG_NAME', swarm.get('name', 'herd'))
 emit('SWARM_WORKSPACE_LABEL', swarm.get('workspace_label', 'herd'))
 emit('SWARM_LOG_PATH', swarm.get('log_path', '/tmp/herdr-process.log'))
 emit('SWARM_TRACE_DIR', swarm.get('trace_dir', '.herdr-swarm/traces'))
+emit('SWARM_WORKTREE_ROOT', swarm.get('worktree_root', '.herdr-swarm/worktrees'))
 emit('PROXY_ENABLED', str(proxy.get('enabled', False)).lower())
 emit('PROXY_ENDPOINT', proxy.get('endpoint', 'http://localhost:4114/v1'))
 emit('GEOM_MIN_COLS', geom.get('min_cols', 80))
@@ -142,6 +143,14 @@ for k in enabled_seats:
     emit(f'SEAT_TAB_{k}', s.get('tab', 'herd'))
     emit(f'SEAT_POS_{k}', s.get('position', ''))
     emit(f'SEAT_ROLE_{k}', s.get('role', ''))
+    # Worktree isolation flag: strict boolean, no truthiness coercion (a
+    # mistyped flag must never silently share the root checkout).
+    wt = s.get('worktree', False)
+    if not isinstance(wt, bool):
+        sys.exit(f"config error: seats.{k}.worktree must be a boolean (got {type(wt).__name__})")
+    if wt and (k in ('looper', 'pm') or s.get('name') in ('looper', 'pm')):
+        sys.exit(f"config error: seats.{k} is a root anchor and cannot set worktree = true (ADR 0006 §4.A)")
+    emit(f'SEAT_WORKTREE_{k}', 1 if wt else 0)
 PYCODE
 }
 
@@ -157,11 +166,11 @@ config_plan_preview() {
   # shellcheck disable=SC2016  # %s is a printf conversion, not a variable
   printf '**Project Slug:** `%s`\n\n' "$slug"
 
-  printf '| Seat Key | Runtime Agent Name | Engine Kind | Model | Tab | Brief File | Role |\n'
-  printf '|---|---|---|---|---|---|---|\n'
+  printf '| Seat Key | Runtime Agent Name | Engine Kind | Model | Tab | Brief File | Worktree | Role |\n'
+  printf '|---|---|---|---|---|---|---|---|\n'
 
   for seat in $(config_get_seats "$toml_path"); do
-    local base_name full_name kind model tab brief role
+    local base_name full_name kind model tab brief role wt wt_disp
     base_name=$(config_get_seat_prop "$seat" "name" "$seat" "$toml_path")
     full_name="${base_name}-${slug}"
     kind=$(config_get_seat_prop "$seat" "default_kind" "agy" "$toml_path")
@@ -169,10 +178,16 @@ config_plan_preview() {
     tab=$(config_get_seat_prop "$seat" "tab" "herd" "$toml_path")
     brief=$(config_get_seat_prop "$seat" "brief" "" "$toml_path")
     role=$(config_get_seat_prop "$seat" "role" "" "$toml_path")
+    wt=$(config_get_seat_prop "$seat" "worktree" "false" "$toml_path")
+    case "$wt" in
+      true)  wt_disp="yes" ;;
+      false) wt_disp="no" ;;
+      *)     wt_disp="?invalid(${wt})" ;;
+    esac
 
     # shellcheck disable=SC2016  # %s conversions, not variables
-    printf '| `%s` | `%s` | %s | `%s` | %s | `%s` | %s |\n' \
-      "$seat" "$full_name" "$kind" "$model" "$tab" "$brief" "$role"
+    printf '| `%s` | `%s` | %s | `%s` | %s | `%s` | %s | %s |\n' \
+      "$seat" "$full_name" "$kind" "$model" "$tab" "$brief" "$wt_disp" "$role"
   done
 
   printf '\n**Ops Services:**\n'
@@ -182,6 +197,9 @@ config_plan_preview() {
   # shellcheck disable=SC2016  # %s is a printf conversion, not a variable
   printf -- '- Telemetry Traces: `%s`\n' "$(config_get "swarm.trace_dir" ".herdr-swarm/traces" "$toml_path")"
 }
+
+# Alias: the markdown plan renderer (P2-2 naming)
+config_plan_markdown() { config_plan_preview "$@"; }
 
 # CLI dispatcher
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
@@ -198,6 +216,9 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
       ;;
     plan|--plan)
       config_plan_preview "${2:-preview}" "${3:-$DEFAULT_CONFIG}"
+      ;;
+    markdown)
+      config_plan_markdown "${2:-preview}" "${3:-$DEFAULT_CONFIG}"
       ;;
     *)
       echo "Usage: $0 [get <path>|seats|dump|--dump-env [slug]|plan [slug]] [config.toml]"
