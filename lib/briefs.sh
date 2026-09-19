@@ -45,10 +45,12 @@ render_all_briefs() {
   local dest_dir="${target_dir}/.herdr-swarm/briefs"
 
   # Load profile variables
+  # shellcheck disable=SC1091  # dynamically resolved sibling lib
   source "${SCRIPT_DIR}/lib/profile.sh"
   ensure_profile "$target_dir" 0 >/dev/null
 
   # Load config variables
+  # shellcheck disable=SC1091  # dynamically resolved sibling lib
   source "${SCRIPT_DIR}/lib/config.sh"
   eval "$(config_dump_env "$slug")"
 

@@ -7,9 +7,7 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-BRIEFS_DIR="$SCRIPT_DIR/briefs"
 LIB_DIR="$SCRIPT_DIR/lib"
-# shellcheck disable=SC2034  # reserved: wired by the TOML config binding integration
 CONFIG_FILE="$SCRIPT_DIR/swarm.config.toml"
 LOG_FILE="/tmp/herdr-process.log"
 # shellcheck disable=SC2034  # reserved: wired by the telemetry integration
@@ -111,11 +109,15 @@ _clear
 printf '\n%s%s  ⚡ Herdr Loop Swarm — Autonomous Multi-Agent Orchestrator%s\n' "$BOLD" "$CYAN" "$RESET"
 printf '%s  AGY (Gemini) · Claude Code · OpenCode (GLM-5.3) · Kultivait Local Proxy%s\n\n' "$DIM" "$RESET"
 
-# Shared swarm libraries (profile detection + lifecycle workspace resolution)
+# Shared swarm libraries (profile, lifecycle, TOML config binding, brief templating)
 # shellcheck disable=SC1091  # dynamically resolved sibling libs
 source "$LIB_DIR/profile.sh"
 # shellcheck disable=SC1091  # dynamically resolved sibling libs
 source "$LIB_DIR/lifecycle.sh"
+# shellcheck disable=SC1091  # dynamically resolved sibling libs
+source "$LIB_DIR/config.sh"
+# shellcheck disable=SC1091  # dynamically resolved sibling libs
+source "$LIB_DIR/briefs.sh"
 
 # ──────────────────────────────────────────────────────────────────────────
 # Project Profile (fail-closed; see lib/profile.sh)
@@ -127,6 +129,26 @@ source "$LIB_DIR/lifecycle.sh"
 # fake-green test command).
 ensure_profile "$PWD" 1
 good "Profile — repo: ${REPO:-none} · test: ${TEST_CMD} · ecosystem: ${ECOSYSTEM} · docs: ${DOCS_DIR}"
+
+# Project slug: namespaces every agent name (Herdr's registry is server-global;
+# grammar ^[a-z][a-z0-9_-]*$ per docs/findings/herdr-semantics.md). Falls back
+# to the directory name for local-only projects so parallel swarms never
+# collide on agent names.
+slug_source="${REPO:-}"
+if [[ -z "$slug_source" || "$slug_source" == "none" ]]; then
+  slug_source=$(basename "$PWD")
+fi
+PROJECT_SLUG=$(slugify "$slug_source")
+good "Project slug: ${PROJECT_SLUG}"
+
+# Config binding: seats, kinds, models, tabs — single source of truth
+config_env=$(config_dump_env "$PROJECT_SLUG" "$CONFIG_FILE")
+eval "$config_env"
+good "Config bound: ${SWARM_CONFIG_NAME} — seats: ${SEAT_KEYS}"
+
+# Namespaced agent handles for kickoff dispatches
+ARCH_AGENT="${SEAT_NAME_arch:-arch}"
+LOOPER_AGENT="${SEAT_NAME_looper:-looper}"
 
 EXTERNAL=0
 if [[ "${HERDR_ENV:-}" != 1 ]]; then
@@ -249,7 +271,7 @@ case "$MODE" in
 esac
 
 # ──────────────────────────────────────────────────────────────────────────
-# Layout Engine: 2-Tab Balanced Topology
+# Layout Engine: 2-Tab Balanced Topology + Dynamic Seating
 # ──────────────────────────────────────────────────────────────────────────
 
 printf '\n%s▸ Building Swarm Topology (Herd & Ops Tabs)%s\n' "$BOLD" "$RESET"
@@ -261,15 +283,90 @@ read -r HerdTab HerdAnchor <<< "$(tab_by_label "$WS_ID" "herd")"
 read -r OpsTab OpsAnchor   <<< "$(tab_by_label "$WS_ID" "ops")"
 
 agent_alive() { herdr agent list 2>/dev/null | grep -q "\"$1\""; }
+pane_of_agent() { herdr agent get "$1" 2>/dev/null | jq -r '.result.agent.pane_id // empty'; }
 
-# Herd Tab Topology
-agent_alive pm     || PM_PANE=$(split_pane "$HerdAnchor" right 0.5 "$PWD") || true
-agent_alive arch   || ARCH_PANE=$(split_pane "${PM_PANE:-$HerdAnchor}" down 0.5 "$PWD") || true
-agent_alive looper || LOOPER_PANE=$(split_pane "$HerdAnchor" down 0.5 "$PWD") || true
+# Render project briefs from briefs/*.in.md templates (profile- & slug-aware)
+printf '\n%s▸ Rendering Standing Briefs%s\n' "$BOLD" "$RESET"
+render_all_briefs "$PWD" "$PROJECT_SLUG"
 
-# Ops Tab Topology
-agent_alive agy-docs || DOCS_PANE=$(split_pane "$OpsAnchor" right 0.5 "$PWD") || true
-agent_alive agy-gh   || GH_PANE=$(split_pane "${DOCS_PANE:-$OpsAnchor}" down 0.5 "$PWD") || true
+printf '\n%s▸ Seating Agents & Delivering Standing Briefs%s\n' "$BOLD" "$RESET"
+
+# Seat ledger lines ("name|kind|pane") + per-tab pane collections
+SEAT_LEDGER=""
+SEATED_HERD_PANES=""
+SEATED_OPS_PANES=""
+
+# Dynamic seating: iterate config seats grouped by tab. Topology per tab:
+# seat 0 splits right of the tab anchor, seat 1 below seat 0, rest below the
+# anchor (reproduces the classic herd/ops floor plan from declaration order).
+for tab_name in herd ops; do
+  tab_anchor="$HerdAnchor"
+  [[ "$tab_name" == "ops" ]] && tab_anchor="$OpsAnchor"
+
+  seat_idx=0
+  prev_pane=""
+  for seat_key in $SEAT_KEYS; do
+    tab_var="SEAT_TAB_${seat_key}"
+    [[ "${!tab_var}" == "$tab_name" ]] || continue
+
+    name_var="SEAT_NAME_${seat_key}"
+    kind_var="SEAT_KIND_${seat_key}"
+    model_var="SEAT_MODEL_${seat_key}"
+    brief_var="SEAT_BRIEF_${seat_key}"
+    seat_name="${!name_var}"
+    seat_kind="${!kind_var}"
+    seat_model="${!model_var}"
+    seat_brief="${!brief_var}"
+
+    # Rendered brief: config "briefs/foo.md" -> .herdr-swarm/briefs/foo.md
+    rendered_brief="${PWD}/.herdr-swarm/briefs/$(basename "$seat_brief")"
+
+    seat_pane=""
+    if agent_alive "$seat_name"; then
+      note "Agent '${seat_name}' is already seated"
+      seat_pane=$(pane_of_agent "$seat_name")
+    else
+      case "$seat_idx" in
+        0) seat_pane=$(split_pane "$tab_anchor" right 0.5 "$PWD") ;;
+        1) seat_pane=$(split_pane "${prev_pane:-$tab_anchor}" down 0.5 "$PWD") ;;
+        *) seat_pane=$(split_pane "$tab_anchor" down 0.5 "$PWD") ;;
+      esac
+      if [[ -z "$seat_pane" ]]; then
+        warn "No pane available for '${seat_name}' — seating into tab anchor"
+        seat_pane="$tab_anchor"
+      fi
+
+      step "Starting agent '${seat_name}' (${seat_kind})..."
+      if [[ "$seat_kind" == "opencode" && -n "$seat_model" && "$seat_model" != "auto" ]]; then
+        herdr agent start "$seat_name" --kind "$seat_kind" --pane "$seat_pane" -- --model "$seat_model" >/dev/null 2>&1 \
+          || { warn "Failed to seat agent '${seat_name}' in pane ${seat_pane}"; seat_pane=""; }
+      else
+        herdr agent start "$seat_name" --kind "$seat_kind" --pane "$seat_pane" >/dev/null 2>&1 \
+          || { warn "Failed to seat agent '${seat_name}' in pane ${seat_pane}"; seat_pane=""; }
+      fi
+      if [[ -n "$seat_pane" ]]; then
+        # Nonce file-path protocol (lib/briefs.sh): never inline brief text
+        deliver_brief_nonce "$seat_name" "$rendered_brief" \
+          || warn "Brief delivery failed for '${seat_name}'"
+      fi
+    fi
+
+    if [[ -n "$seat_pane" ]]; then
+      SEAT_LEDGER+="${seat_name}|${seat_kind}|${seat_pane}"$'\n'
+      if [[ "$tab_name" == "ops" ]]; then
+        SEATED_OPS_PANES+=" ${seat_pane}"
+      else
+        SEATED_HERD_PANES+=" ${seat_pane}"
+      fi
+      prev_pane="$seat_pane"
+    else
+      [[ -n "$prev_pane" ]] || prev_pane="$tab_anchor"
+    fi
+    seat_idx=$((seat_idx + 1))
+  done
+done
+
+# Ops services pane (proxy host) — split below the ops anchor
 SRV_PANE=$(split_pane "$OpsAnchor" down 0.5 "$PWD") || true
 
 # Stream Process Log to Ops Anchor
@@ -277,54 +374,22 @@ herdr pane rename "$OpsAnchor" "herdr-process.log" >/dev/null 2>&1 || true
 herdr pane run "$OpsAnchor" "clear && tail -n 40 -f $LOG_FILE" >/dev/null 2>&1 || true
 
 # Geometry Guard Floor
-check_and_relocate_geometry "$WS_ID" "$HerdAnchor" "${PM_PANE:-}" "${ARCH_PANE:-}" "${LOOPER_PANE:-}"
-check_and_relocate_geometry "$WS_ID" "$OpsAnchor" "${DOCS_PANE:-}" "${GH_PANE:-}"
+# shellcheck disable=SC2086  # intentional word splitting over collected pane ids
+check_and_relocate_geometry "$WS_ID" "$HerdAnchor" ${SEATED_HERD_PANES:-}
+# shellcheck disable=SC2086  # intentional word splitting over collected pane ids
+check_and_relocate_geometry "$WS_ID" "$OpsAnchor" ${SEATED_OPS_PANES:-}
 
 good "Layout established: Herd Tab (${HerdTab}) & Ops Tab (${OpsTab})"
 
-# ──────────────────────────────────────────────────────────────────────────
-# Seating Agents & Standing Briefs
-# ──────────────────────────────────────────────────────────────────────────
-
-printf '\n%s▸ Seating Agents & Delivering Standing Briefs%s\n' "$BOLD" "$RESET"
-
-seat_agent_safe() {
-  local name="$1" pane="$2" kind="$3"
-  shift 3
-  if agent_alive "$name"; then
-    note "Agent '${name}' is already seated"
-    return 0
-  fi
-  step "Starting agent '${name}' (${kind})..."
-  herdr agent start "$name" --kind "$kind" --pane "$pane" -- "$@" >/dev/null 2>&1 || {
-    warn "Failed to seat agent '${name}' in pane ${pane}"
-    return 1
-  }
-}
-
-deliver_brief() {
-  local name="$1" brief_file="$2"
-  if [[ -f "$brief_file" ]]; then
-    # Synchronize readiness before prompting to prevent dropped inputs during boot
-    herdr agent wait "$name" --until idle --timeout 15000 >/dev/null 2>&1 || true
-    herdr agent prompt "$name" "$(cat "$brief_file")" >/dev/null 2>&1 || true
-    good "Brief delivered to '${name}' ($(basename "$brief_file"))"
-  fi
-}
-
-# Seating
-seat_agent_safe looper   "${LOOPER_PANE:-$HerdAnchor}" agy
-seat_agent_safe arch     "${ARCH_PANE:-$HerdAnchor}"   opencode --model zai/glm-5.3
-seat_agent_safe agy-docs "${DOCS_PANE:-$OpsAnchor}"    agy
-seat_agent_safe agy-gh   "${GH_PANE:-$OpsAnchor}"      agy
-seat_agent_safe pm       "${PM_PANE:-$HerdAnchor}"     claude
-
-# Deliver Briefs
-deliver_brief looper   "$BRIEFS_DIR/looper.md"
-deliver_brief arch     "$BRIEFS_DIR/arch.md"
-deliver_brief agy-docs "$BRIEFS_DIR/worker-docs.md"
-deliver_brief agy-gh   "$BRIEFS_DIR/worker-gh.md"
-deliver_brief pm       "$BRIEFS_DIR/overseer-pm.md"
+# Durable seat ledger for selective teardown (lib/lifecycle.sh swarm_down)
+mkdir -p "${PWD}/.herdr-swarm"
+if [[ -n "$SEAT_LEDGER" ]]; then
+  printf '%s' "$SEAT_LEDGER" | jq -R -s -c --arg ws "$WS_ID" \
+    'split("\n") | map(select(length > 0) | split("|"))
+     | {workspace_id: $ws, seats: map({name: .[0], kind: .[1], pane: .[2]})}' \
+    > "${PWD}/.herdr-swarm/seats.json"
+  good "Seat ledger written: ${PWD}/.herdr-swarm/seats.json"
+fi
 
 # Start Kultivait Proxy in Ops pane if not already active
 if ! curl -sf --max-time 2 http://localhost:4114/openapi.json >/dev/null 2>&1; then
@@ -341,26 +406,26 @@ printf '\n%s▸ Dispatching Kickoff%s\n' "$BOLD" "$RESET"
 case "$MODE" in
   w)
     step "Focusing arch for Wayfinder Chartering pass..."
-    herdr agent focus arch >/dev/null 2>&1 || true
-    herdr agent prompt arch "MILESTONE CHARTER: Chart milestone map for '${MILESTONE}' on repo ${REPO}. Follow your seat brief." >/dev/null 2>&1 || true
+    herdr agent focus "$ARCH_AGENT" >/dev/null 2>&1 || true
+    herdr agent prompt "$ARCH_AGENT" "MILESTONE CHARTER: Chart milestone map for '${MILESTONE}' on repo ${REPO}. Follow your seat brief." >/dev/null 2>&1 || true
     good "Arch is ready for your input in the Herd tab"
     ;;
   b)
     step "Focusing arch for Brainstorming & PRD breakdown..."
-    herdr agent focus arch >/dev/null 2>&1 || true
-    herdr agent prompt arch "BRAINSTORM: Direction -> Design -> PRD -> Tickets for '${MILESTONE}'. Follow your seat brief." >/dev/null 2>&1 || true
+    herdr agent focus "$ARCH_AGENT" >/dev/null 2>&1 || true
+    herdr agent prompt "$ARCH_AGENT" "BRAINSTORM: Direction -> Design -> PRD -> Tickets for '${MILESTONE}'. Follow your seat brief." >/dev/null 2>&1 || true
     good "Arch is ready for brainstorming in the Herd tab"
     ;;
   r)
     step "Kicking Looper on Map #${MAP_NUM}..."
-    herdr agent prompt looper "KICKOFF: Work Wayfinder Map #${MAP_NUM} on ${REPO} per your seat brief — drain the frontier in map order until closed, then run milestone closeout and report." >/dev/null 2>&1 || true
-    herdr agent focus looper >/dev/null 2>&1 || true
+    herdr agent prompt "$LOOPER_AGENT" "KICKOFF: Work Wayfinder Map #${MAP_NUM} on ${REPO} per your seat brief — drain the frontier in map order until closed, then run milestone closeout and report." >/dev/null 2>&1 || true
+    herdr agent focus "$LOOPER_AGENT" >/dev/null 2>&1 || true
     good "Looper is active on Map #${MAP_NUM}"
     ;;
   a)
     step "Kicking Looper in autonomous queue mode..."
-    herdr agent prompt looper "KICKOFF: Autonomous queue mode on ${REPO} — pull open unblocked tickets in order, execute through arch/docs/gh, verify with '${TEST_CMD}', and report when queue is empty." >/dev/null 2>&1 || true
-    herdr agent focus looper >/dev/null 2>&1 || true
+    herdr agent prompt "$LOOPER_AGENT" "KICKOFF: Autonomous queue mode on ${REPO} — pull open unblocked tickets in order, execute through arch/docs/gh, verify with '${TEST_CMD}', and report when queue is empty." >/dev/null 2>&1 || true
+    herdr agent focus "$LOOPER_AGENT" >/dev/null 2>&1 || true
     good "Looper is active in autonomous mode"
     ;;
   s)
