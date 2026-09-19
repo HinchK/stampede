@@ -2,10 +2,14 @@
 id: T-INT-2
 title: "Integrate Config Registry, Namespacing, and Templated Brief Delivery"
 type: wayfinder:prototype
-status: in_progress
+status: resolved
 assignee: arch
 prototype_asset: herdr-loop-swarm.sh
 parent: maps/universal-herdr-swarm.md
+resolution:
+  commit: 2455bc5
+  verified_by: looper
+  date: "2026-09-19"
 ---
 
 # Integrate Config Registry, Namespacing, and Templated Brief Delivery (T-INT-2, T-005, T-INT-3)
@@ -31,3 +35,13 @@ How should `herdr-loop-swarm.sh` be integrated with `lib/config.sh` and `lib/bri
    `grep -n 'cat "$brief_file"\|seat_agent_safe looper' herdr-loop-swarm.sh && exit 1 || true`
    and
    `shellcheck herdr-loop-swarm.sh lib/config.sh lib/briefs.sh && echo "PASS: config and brief integration"`
+
+## Verification Log
+
+- Dynamic seating loop over `SEAT_KEYS` integrated into `herdr-loop-swarm.sh`.
+- Hardcoded seat lists and static prompt string dumping (`cat "$brief_file"`) completely deleted.
+- Nonce file-path protocol (`deliver_brief_nonce`) active for all brief dispatches.
+- Durable seat ledger written to `.herdr-swarm/seats.json` matching the schema required for safe teardown.
+- Kickoff prompts parameterized with `${ARCH_AGENT}` and `${LOOPER_AGENT}`.
+- Shellcheck on `herdr-loop-swarm.sh`, `lib/config.sh`, and `lib/briefs.sh` passed cleanly with 0 warnings.
+- Resolved in commit `2455bc5`.
