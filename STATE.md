@@ -34,6 +34,10 @@
 - **ADR 0007 & Swarm Orchestration Retrospective (#T-DOCS-RETRO):** Resolved in commit `4e0a2e3`. `agy-docs` authored ADR 0007 (`docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md`) and `docs/findings/swarm-orchestration-retrospective.md` analyzing multi-agent floor topology, 80%+ token reduction, PTY buffer safety, and human operator ergonomics.
 - **P2-3 Supervisor Worktree Suite Gating Specification (#P2-3-spec):** Resolved in commit `ce17f18`. `pm` authored `docs/audits/2026-09-19-p2-3-supervisor-gating-spec.md` with empirical probes uncovering `-B` branch reset hazard and `--untracked-files=no` drift loophole.
 - **Worktree Config Binding, Ledger v2 & Launcher CWD Integration (#P2-2):** Resolved in commit `5200df5`. `arch` implemented `worktree = true` in `swarm.config.toml`, `SEAT_WORKTREE_<seat>` in `lib/config.sh`, worktree-first pane creation in `herdr-loop-swarm.sh`, and atomic `seats.json` v2 serialization.
+- **ADR 0008 Supervisor Worktree Suite Gating (#T-DOCS-ADR0008):** Resolved in commit `7697000`. `agy-docs` authored `docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md` documenting ledger-first gate resolution, pre/post TOCTOU drift detection, and non-destructive branch re-attachment.
+- **GitHub Issue Sync Validation Report (#T-GH-REPORT):** Resolved in commit `c018177`. `agy-gh` tested `lib/gh_sync.sh` against current tickets, documented zero unconfirmed writes in `docs/findings/gh-sync-validation-report.md`, and drafted P2-4 ticket.
+- **Supervisor Worktree Suite Gating and Drift Validation (#P2-3):** Resolved in commit `420d5e6`. `arch` implemented `resolve_seat_gate()`, pre/post-run drift validation, per-seat `TMPDIR` and gate logging, and fixed the `-B` branch reset bug in `lib/worktree.sh`.
+- **P2-4 Arbiter and Integration PR Specification (#P2-4-spec):** Resolved in commit `fee14b4`. `pm` authored `docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md` specifying partition check, CAS fast-forward merge, PR creation, and teardown integration.
 
 ---
 
@@ -43,14 +47,15 @@
 - **Phase 2 Implementation Progress (Parallel Worktree Swarm Fan-Out):**
   - **P2-1 (Worktree Lifecycle Library `lib/worktree.sh`):** Complete (`99867cf`).
   - **P2-2 (Config, Ledger & Launcher Worktree Integration):** Complete (`5200df5`).
-  - **P2-3 (Supervisor Worktree Suite Gating):** Next up (Active Frontier). Updating `loop-bot-herd.sh` to resolve `GATE_DIR` from `seats.json` v2, check commit ancestry and drift, execute `TEST_CMD` inside the worker's worktree, and fix branch preservation in `lib/worktree.sh`.
-  - **P2-4 (Arbiter Branch Merge):** Queued. Fast-forward compare-and-swap merge into `main` and integration PR creation.
+  - **P2-3 (Supervisor Worktree Suite Gating):** Complete (`420d5e6`).
+  - **P2-4 (Arbiter Branch Merge and PR Reconciliation):** Active Frontier. Implementing `lib/arbiter.sh` (`partition_check`, `arbiter_merge`, `arbiter_pr`).
 
 ---
 
 ## 3. Immediate Next Step
 
-- Draft ticket `maps/tickets/supervisor-worktree-suite-gating.md` for P2-3.
-- Dispatch `arch` to implement P2-3 in `loop-bot-herd.sh` and `lib/worktree.sh`.
-- Dispatch `agy-docs` to update documentation for P2-3 supervisor gating.
-- Dispatch `pm` to oversee P2-3 gating and draft P2-4 specification.
+- Advance ticket `maps/tickets/arbiter-and-branch-reconciliation.md` (P2-4) to `in_progress`.
+- Dispatch `arch` to implement `lib/arbiter.sh` per PM specification `docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md`.
+- Dispatch `agy-docs` to author ADR 0009 (Arbiter Branch Integration and PR Reconciliation).
+- Dispatch `agy-gh` to test PR reconciliation on local scratch repositories.
+

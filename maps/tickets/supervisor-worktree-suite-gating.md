@@ -2,7 +2,8 @@
 id: P2-3
 title: "Supervisor Worktree Suite Gating and Drift Validation"
 type: wayfinder:prototype
-status: in_progress
+status: resolved
+commit: 420d5e6
 assignee: arch
 prototype_asset: loop-bot-herd.sh,lib/worktree.sh
 parent: maps/universal-herdr-swarm.md

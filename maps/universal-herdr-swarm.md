@@ -45,15 +45,19 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - [ADR 0007 & Swarm Retrospective](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md): Authored ADR 0007 and docs/findings/swarm-orchestration-retrospective.md capturing empirical multi-agent topology, 80%+ token reduction, and PTY buffer mechanics (#T-DOCS-RETRO).
 - [Phase 2 Release and Synchronization Validation Checklist](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/phase2-release-checklist.md): Authored release gating matrix, lib/gh_sync.sh verification, and promotion checklist (#T-GH-CHECKLIST).
 - [Supervisor Worktree Suite Gating Specification](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-3-supervisor-gating-spec.md): Defined ledger-first seat directory resolution, commit provenance, and pre/post drift validation with empirical probes uncovering -B branch reset hazard (P2-3).
+- [Supervisor Worktree Suite Gating and Drift Validation](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/supervisor-worktree-suite-gating.md): Implemented loop-bot-herd.sh execution inside worker worktrees with drift validation and fixed -B branch reset bug in lib/worktree.sh (P2-3).
+- [ADR 0008: Supervisor Worktree Suite Gating and Drift](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md): Authored ADR 0008 documenting ledger-first gate resolution, pre/post TOCTOU drift detection, and non-destructive branch re-attachment (#T-DOCS-ADR0008).
+- [GitHub Issue Sync Validation Report](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/gh-sync-validation-report.md): Documented lib/gh_sync.sh verification and zero unconfirmed writes (#T-GH-REPORT).
+- [Phase 2 Arbiter and Integration PR Specification](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md): PM authored specification for partition check, CAS fast-forward merge, PR synthesis, and teardown integration (P2-4).
 
 ## Active Frontier
 
-- [Supervisor Worktree Suite Gating and Drift Validation](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/supervisor-worktree-suite-gating.md): Updating loop-bot-herd.sh to execute real project test suites inside worker worktree directories with drift validation, and fixing branch preservation in lib/worktree.sh (P2-3).
+- [Phase 2 Arbiter and Branch Reconciliation](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/arbiter-and-branch-reconciliation.md): Implementing lib/arbiter.sh providing partition checking, atomic CAS fast-forward merges into main, and GitHub PR creation (P2-4).
 
 ## Not yet specified
 
-- **Phase 2 Arbiter and Branch Reconciliation (P2-4):** Fast-forward compare-and-swap merge into main and integration PR creation.
 - **Cross-LLM Quota and Credit Probing:** Live API credit/rate-limit detection across Anthropic, Google Gemini, and Z.AI backends to gracefully pause or reroute workers before rate limits fail tasks.
+
 
 ## Out of scope
 
