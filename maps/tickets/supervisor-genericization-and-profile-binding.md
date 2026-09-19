@@ -2,10 +2,14 @@
 id: T-007b
 title: "Supervisor Genericization and Profile Binding"
 type: wayfinder:prototype
-status: in_progress
+status: resolved
 assignee: arch
 prototype_asset: loop-bot-herd.sh
 parent: maps/universal-herdr-swarm.md
+resolution:
+  commit: c308f2b
+  verified_by: looper
+  date: "2026-09-19"
 ---
 
 # Supervisor Genericization and Profile Binding (T-007b)
@@ -29,3 +33,13 @@ How should `loop-bot-herd.sh` be genericized to operate in arbitrary repositorie
    `grep -n 'Standard-Pentest\|_KULT_\|uv run pytest' loop-bot-herd.sh && exit 1 || true`
    and
    `shellcheck loop-bot-herd.sh && echo "PASS: supervisor genericization"`
+
+## Verification Log
+
+- Sourced `lib/common.sh`, `lib/profile.sh`, and `lib/config.sh` in `loop-bot-herd.sh`.
+- Bound `REPO`, `TEST_CMD`, `ECOSYSTEM`, and `STATE_DIR` dynamically to `${REPO_DIR}/.herdr-swarm`.
+- Populated `EXPECTED_SEATS` dynamically from `swarm.config.toml` using namespaced seat names.
+- Replaced hardcoded `uv run pytest` suite gate with `(cd "$REPO_DIR" && timeout "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD" >/dev/null 2>&1)`.
+- Verified `grep -n 'Standard-Pentest\|_KULT_\|uv run pytest' loop-bot-herd.sh` returned empty.
+- Verified `shellcheck loop-bot-herd.sh` passed cleanly with 0 warnings.
+- Resolved in commit `c308f2b`.
