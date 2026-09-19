@@ -26,6 +26,7 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - [Profile Validation and Safe Slug Emitter](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/profile-validation-and-safe-slug-emitter.md): Hardened lib/profile.sh test validation (blocking auto-mode on empty/none/true test commands), introduced shared lib/common.sh slugify(), and updated lib/config.sh to safely emit environment bindings via sys.argv and shlex.quote (D3 & D4).
 - [Integrate Profile Detection into Swarm Launcher](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/integrate-profile-into-launcher.md): Sourced lib/profile.sh and lib/lifecycle.sh in herdr-loop-swarm.sh, deleted hardcoded kultivait and TEST_CMD="true" defaults, gated auto-queue mode against non-runnable test commands, and bound workspace lookup to physical CWD (T-INT-1).
 - [Supervisor Re-Verdict Deduplication Protocol](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/supervisor-reverdict-dedupe-protocol.md): Updated loop-bot-herd.sh and briefs/arch.in.md with explicit commit sha protocol (ARCH DONE #<n> <sha>) and (ticket, sha) deduplication, enabling suite re-evaluation on new commits after RED failures (T-007a-fix / D2).
+- [README Truth: Align Documentation with Shipped Architecture](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/readme-truth-and-capabilities.md): Aligned README.md with shipped architecture, striking fictional components and documenting modular libraries, fail-closed profiling, and lifecycle guarantees (T-015a).
 
 
 
