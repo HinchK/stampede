@@ -21,24 +21,28 @@
 - **Architecture Decision Records & System Vocabulary:** Resolved in commit `aa06ec4`. `agy-docs` authored ADRs 0001–0005 in `docs/adr/` with index in `README.md`, and system vocabulary with `_Avoid_` anti-patterns in `CONTEXT.md`.
 - **README & User Guide Polish (T-015b):** Resolved in commit `15d61a0`. Documented all lifecycle subcommands (`up`, `down`, `status`, `verify`), live telemetry ANSI streaming engine, dynamic seating, seat verification protocol, ADR index, and repo tree.
 - **Supervisor Anchored Verdict Harvesting & Mode-R Gating (T-007c-fix):** Resolved in commit `5acf8f6`. Fixed root cause H1 (false-green verdict scraping from scrollback) using strict whole-line regex anchoring (`^[[:space:]]*ARCH DONE #[0-9]+[[:space:]]+[0-9a-fA-F]{7,40}[[:space:]]*$`), gated mode `r` fail-closed against unrunnable test commands, routed skipped verdicts to human gate, purged legacy fixture records (#99, #42, #77, #55), and deleted orphan `lib/agent_guard.sh`.
+- **Launcher Target Directory & SHA Validation (T-016-arch):** Resolved in commit `1030654`. Symmetrical `up [dir]` argument support, git commit SHA object existence check (`git cat-file -e "${sha}^{commit}"`) before suite gating in `loop-bot-herd.sh`, and `interactive-ready` status relabeling in `lib/lifecycle.sh`.
+- **Git Worktree Isolation & Phase 2 Blueprint (T-016-docs / ADR 0006):** Resolved in commit `53dd36d`. `agy-docs` authored ADR 0006 (`docs/adr/0006-git-worktree-worker-isolation.md`) and `docs/worktree-swarm.md` outlining root orchestrator vs isolated worker topologies, ledger tracking in `seats.json`, and arbiter integration.
+- **Phase 2 Concurrency & Worktree Advisory (PM Advisory):** Resolved in commit `6cf36e9`. `pm` (Claude Code) conducted empirical git concurrency tests (CAS ref updates, 0/240 commit failures in separate worktrees vs 4/6 lock failures in shared index) and defined the 8-step Phase 2 roadmap.
+- **Nested Session Workspace Discovery (T-016c):** Resolved in commit `a08c9e8`. Sourced `find_workspace_by_cwd "$PWD"` in `herdr-loop-swarm.sh`, eliminating ambient `$HERDR_WORKSPACE_ID` hijacking and isolating nested/scratch swarms from host sessions.
+- **GitHub Issues Two-Way Synchronization (T-017):** Resolved in commit `0ae36f5`. `agy-gh` authored protocol specification `docs/findings/github-issues-sync.md` and prototype CLI `lib/gh_sync.sh` with fail-closed authentication and zero unconfirmed writes (`--dry-run` default).
+- **Dogfooding Rehearsal Receipt:** Documented in `docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md`. Successfully executed `status` -> `up` (`wR`) -> `status` -> `down --yes` against `/tmp/herdr-dogfood-scratch-rehearsal` from inside `wM` with zero disruption to the host session.
 
 ---
 
 ## 2. Active Status & Open Items
 
-- **Milestones M1, M2, M3 Complete:**
-  - M1 (Safe entrypoint): Teardown safety (D1), Profile fail-closed (D3/D4), Launcher profile integration (T-INT-1), Re-verdict dedupe (D2), README truth (T-015a).
-  - M2 (Generalize): TOML config integration (T-INT-2), Namespacing (T-005), Brief nonce delivery (T-INT-3), Supervisor genericization (T-007b), Preflight verification (T-008).
-  - M3 (Lifecycle, Observability & Hardening): Lifecycle subcommands (T-INT-4), Seat verification gate (T-010), Telemetry event engine & ANSI streaming (T-009-impl), README polish (T-015b), Supervisor verdict anchoring & mode-r gating (T-007c-fix), Full M1–M3 audit (`docs/audits/2026-09-19-m3-completion-audit.md`).
-- **Phase 2 Frontier (Advanced Swarm Orchestration):**
-  - Item 1: Isolated dogfooding rehearsal against ephemeral scratch workspace (`/tmp/herdr-rehearsal-scratch`) to generate end-to-end receipt.
-  - Item 2: Phase 2 Parallel Worktree Swarm Fan-out (T-016 / `docs/worktree-swarm.md`).
-  - Item 3: GitHub Issues Two-Way Synchronization (T-017 / `agy-gh` activation).
+- **Milestones M1, M2, M3 Complete & Audited:**
+  - Full end-to-end receipt attached; all M3 recommendations satisfied.
+- **Phase 2 Implementation Frontier (Parallel Worktree Swarm Fan-Out):**
+  - **P2-1 (Worktree Lifecycle Library `lib/worktree.sh`):** Provisioning, locking, pruning, and dirty checkpointing.
+  - **P2-2 (Config & Ledger Integration):** Per-seat `worktree = true` in `swarm.config.toml` and `"worktree_dir"` in `.herdr-swarm/seats.json`.
+  - **P2-3 (Supervisor Worktree Suite Gating):** Running suite verification inside the worker's worktree.
+  - **P2-4 (Arbiter Branch Merge):** Safe compare-and-swap integration of verified worker branches.
 
 ---
 
 ## 3. Immediate Next Step
 
-- Execute isolated dogfood rehearsal of `./herdr-loop-swarm.sh up/status/verify/down` in an ephemeral scratch workspace.
-- Draft ticket `maps/tickets/parallel-worktree-swarm-fanout.md` for Phase 2.
-- Dispatch `arch` to design/implement worktree provisioning and `agy-docs` to document ADR 0006 on worktree isolation.
+- Draft ticket `maps/tickets/worktree-lifecycle-library.md` for P2-1.
+- Dispatch `arch` to build `lib/worktree.sh` and `agy-docs` to update user guides.
