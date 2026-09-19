@@ -228,27 +228,36 @@ LOOPER_AGENT="${SEAT_NAME_looper:-looper}"
 # Stable telemetry session (shared with loop-bot so the Ops stream sees all)
 SESSION_ID=$(telemetry_session_id "${PWD}/.herdr-swarm")
 
+# Workspace discovery (nested-session-safe): the swarm ALWAYS binds to the
+# workspace whose pane cwd is this directory — never to the caller's ambient
+# $HERDR_WORKSPACE_ID, which may belong to an outer/nested session targeting
+# a different repo. Empty resolution → create a dedicated workspace.
+WS_LABEL=$(basename "$PWD")
+WS_ID=$(find_workspace_by_cwd "$PWD")
+if [[ -z "$WS_ID" ]]; then
+  note "Creating dedicated workspace: ${WS_LABEL} (none bound to this directory)"
+  WS_ID=$(herdr workspace create --cwd "$PWD" --label "$WS_LABEL" --no-focus 2>/dev/null \
+    | jq -r '.result.workspace.workspace_id // .result.workspace_id // empty')
+else
+  note "Reusing existing workspace ${WS_ID} (cwd-bound to this directory)"
+fi
+[[ -n "$WS_ID" ]] || { warn "Failed to initialize workspace"; exit 1; }
+
+# "External" means the target workspace is not the one hosting this shell:
+# either a true external terminal, or a nested Herdr session launched against
+# another repo. Both must drive the swarm through explicit workspace-prefixed
+# pane IDs (T-001 findings) rather than ambient context.
 EXTERNAL=0
 if [[ "${HERDR_ENV:-}" != 1 ]]; then
   EXTERNAL=1
   note "Running in external terminal mode"
-  # (daemon responsiveness + binary presence already verified by preflight)
-  WS_LABEL=$(basename "$PWD")
-  WS_ID=$(find_workspace_by_cwd "$PWD")
-  if [[ -z "$WS_ID" ]]; then
-    note "Creating dedicated workspace: ${WS_LABEL} (none bound to this directory)"
-    WS_ID=$(herdr workspace create --cwd "$PWD" --label "$WS_LABEL" 2>/dev/null \
-      | jq -r '.result.workspace.workspace_id // .result.workspace_id // empty')
-  else
-    note "Reusing existing workspace ${WS_ID} (cwd-bound to this directory)"
-  fi
-  [[ -n "$WS_ID" ]] || { warn "Failed to initialize workspace"; exit 1; }
-  good "Workspace active: ${WS_LABEL} (${WS_ID})"
+elif [[ "$WS_ID" != "${HERDR_WORKSPACE_ID:-}" ]]; then
+  EXTERNAL=1
+  note "Nested Herdr session: target workspace ${WS_ID} differs from host workspace ${HERDR_WORKSPACE_ID:-none}"
 else
-  WS_ID="${HERDR_WORKSPACE_ID:-}"
-  WS_LABEL="${HERDR_WORKSPACE_LABEL:-$(basename "$PWD")}"
-  good "Inside Herdr workspace: ${WS_LABEL} (${WS_ID})"
+  good "Inside the target Herdr workspace: ${WS_LABEL} (${WS_ID})"
 fi
+good "Workspace active: ${WS_LABEL} (${WS_ID})"
 
 # Test validation command comes from the project profile (lib/profile.sh);
 # there is deliberately no ad-hoc ecosystem sniffing or "true" fake-green here.
