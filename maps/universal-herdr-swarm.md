@@ -41,9 +41,18 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - [Dogfooding Rehearsal Receipt](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md): Validated complete swarm lifecycle (status -> up -> verify -> down -y) against an ephemeral scratch repository from within wM with zero disruption to the host session.
 - [Worktree Lifecycle Library: Provisioning, Locking, Pruning & Reconcile](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/worktree-lifecycle-library.md): Implemented lib/worktree.sh supporting worktree_provision, porcelain locking, dirty tracked checkpoints, worktree_prune, and worktree_reconcile, validated by 21/21 assertions in tests/test_worktree.sh (P2-1).
 - [Worktree Config and Ledger Integration Specification](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-2-config-integration-spec.md): Defined swarm.config.toml per-seat worktree schema, lib/config.sh bindings, .herdr-swarm/seats.json v2 ledger, and launcher split_pane CWD ordering contract (P2-2).
+- [Worktree Config Binding, Ledger v2, and Launcher CWD Integration](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/worktree-config-and-ledger-integration.md): Implemented worktree = true in swarm.config.toml, SEAT_WORKTREE_<seat> in lib/config.sh, pre-split worktree provisioning in herdr-loop-swarm.sh, and atomic seats.json v2 serialization (P2-2).
+- [ADR 0007 & Swarm Retrospective](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md): Authored ADR 0007 and docs/findings/swarm-orchestration-retrospective.md capturing empirical multi-agent topology, 80%+ token reduction, and PTY buffer mechanics (#T-DOCS-RETRO).
+- [Phase 2 Release and Synchronization Validation Checklist](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/phase2-release-checklist.md): Authored release gating matrix, lib/gh_sync.sh verification, and promotion checklist (#T-GH-CHECKLIST).
+- [Supervisor Worktree Suite Gating Specification](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-3-supervisor-gating-spec.md): Defined ledger-first seat directory resolution, commit provenance, and pre/post drift validation with empirical probes uncovering -B branch reset hazard (P2-3).
+
+## Active Frontier
+
+- [Supervisor Worktree Suite Gating and Drift Validation](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/supervisor-worktree-suite-gating.md): Updating loop-bot-herd.sh to execute real project test suites inside worker worktree directories with drift validation, and fixing branch preservation in lib/worktree.sh (P2-3).
+
 ## Not yet specified
 
-- **Phase 2 Parallel Worktree Swarm Fan-out:** Merging the Claude-PM worktree isolation variant with the Universal Swarm so workers operate in disposable git worktrees for concurrent execution.
+- **Phase 2 Arbiter and Branch Reconciliation (P2-4):** Fast-forward compare-and-swap merge into main and integration PR creation.
 - **Cross-LLM Quota and Credit Probing:** Live API credit/rate-limit detection across Anthropic, Google Gemini, and Z.AI backends to gracefully pause or reroute workers before rate limits fail tasks.
 
 ## Out of scope
@@ -51,3 +60,4 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - Windows or PowerShell compatibility (POSIX bash 3.2+ and macOS/Linux only).
 - Modifying the upstream `herdr` daemon Go codebase or daemon protocol.
 - Autonomous auto-push of code, branches, or release tags to remote Git origins without explicit human driver authorization.
+

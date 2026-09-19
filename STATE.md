@@ -6,6 +6,8 @@
 **Orchestrator:** `looper` (wM:p1, AGY Flash)  
 **Implementer:** `arch` (wM:p5, OpenCode GLM-5.3)  
 **Overseer:** `pm` (wM:p4, Claude Code)  
+**Documenter:** `agy-docs` (wM:p7, AGY Flash)  
+**GitHub Specialist:** `agy-gh` (wM:p8, AGY Flash)  
 
 ---
 
@@ -16,7 +18,6 @@
 - **Launcher Preflight & Subcommands (T-INT-4 / T-008):** Resolved in commit `5ca2049`. 9-point preflight matrix runs fail-closed before workspace/pane mutation; `up`, `down`, and `status` subcommands delegate directly to `lib/lifecycle.sh`.
 - **Dynamic Seating & Templated Brief Delivery (T-INT-2, T-005, T-INT-3):** Resolved in commit `2455bc5`. Dynamic seating from `swarm.config.toml` with `<seat>-<slug>` namespacing, nonce file-path prompt delivery (<200b), and `.herdr-swarm/seats.json` durable ledger.
 - **Supervisor Genericization & Re-Verdicts (T-007a-fix, T-007b):** Resolved in commits `64170d7` and `94d6534`. Strict `(ticket, sha)` deduplication, `profile.env` binding, and real project test runner gating.
-
 - **Telemetry Event Engine & Live Ops Streaming (T-009-impl):** Resolved in commit `8b059f2`. Upgraded `lib/telemetry.py` with project-scoped traces (`.herdr-swarm/traces/`), standardized `domain.action` envelope, column-clamped ANSI badge streaming in Ops pane, and unified session logging in launcher and supervisor.
 - **Architecture Decision Records & System Vocabulary:** Resolved in commit `aa06ec4`. `agy-docs` authored ADRs 0001–0005 in `docs/adr/` with index in `README.md`, and system vocabulary with `_Avoid_` anti-patterns in `CONTEXT.md`.
 - **README & User Guide Polish (T-015b):** Resolved in commit `15d61a0`. Documented all lifecycle subcommands (`up`, `down`, `status`, `verify`), live telemetry ANSI streaming engine, dynamic seating, seat verification protocol, ADR index, and repo tree.
@@ -29,23 +30,27 @@
 - **Dogfooding Rehearsal Receipt:** Documented in `docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md`. Successfully executed `status` -> `up` (`wR`) -> `status` -> `down --yes` against `/tmp/herdr-dogfood-scratch-rehearsal` from inside `wM` with zero disruption to the host session.
 - **Worktree Lifecycle Library (P2-1):** Resolved in commit `99867cf`. Built `lib/worktree.sh` supporting `worktree_provision`, porcelain locking, dirty tracked checkpoints, `worktree_prune`, and `worktree_reconcile`, validated by 21/21 passing assertions in `tests/test_worktree.sh`.
 - **Worktree Config & Ledger Integration Specification (P2-2 Spec):** Resolved in commit `b01b81f`. `pm` authored `docs/audits/2026-09-19-p2-2-config-integration-spec.md` defining `swarm.config.toml` schema, `lib/config.sh` bindings, `seats.json` v2 schema, and the `split_pane` CWD ordering contract.
+- **Phase 2 Release and Synchronization Validation Checklist (#T-GH-CHECKLIST):** Resolved in commit `9d9f3b7`. `agy-gh` authored `docs/findings/phase2-release-checklist.md` detailing 11-point acceptance criteria matrix, `lib/gh_sync.sh` validation, and promotion protocol.
+- **ADR 0007 & Swarm Orchestration Retrospective (#T-DOCS-RETRO):** Resolved in commit `4e0a2e3`. `agy-docs` authored ADR 0007 (`docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md`) and `docs/findings/swarm-orchestration-retrospective.md` analyzing multi-agent floor topology, 80%+ token reduction, PTY buffer safety, and human operator ergonomics.
+- **P2-3 Supervisor Worktree Suite Gating Specification (#P2-3-spec):** Resolved in commit `ce17f18`. `pm` authored `docs/audits/2026-09-19-p2-3-supervisor-gating-spec.md` with empirical probes uncovering `-B` branch reset hazard and `--untracked-files=no` drift loophole.
+- **Worktree Config Binding, Ledger v2 & Launcher CWD Integration (#P2-2):** Resolved in commit `5200df5`. `arch` implemented `worktree = true` in `swarm.config.toml`, `SEAT_WORKTREE_<seat>` in `lib/config.sh`, worktree-first pane creation in `herdr-loop-swarm.sh`, and atomic `seats.json` v2 serialization.
 
 ---
 
 ## 2. Active Status & Open Items
 
-- **Milestones M1, M2, M3 Complete & Audited:**
-  - Full end-to-end receipt attached; all M3 recommendations satisfied.
+- **Milestones M1, M2, M3 Complete & Audited.**
 - **Phase 2 Implementation Progress (Parallel Worktree Swarm Fan-Out):**
   - **P2-1 (Worktree Lifecycle Library `lib/worktree.sh`):** Complete (`99867cf`).
-  - **P2-2 (Config, Ledger & Launcher Worktree Integration):** Next up. `worktree = true` in `swarm.config.toml`, `SEAT_WORKTREE_<seat>` in `lib/config.sh`, `seats.json` v2 with `"worktree_dir"`, and launcher CWD provisioning.
-  - **P2-3 (Supervisor Worktree Suite Gating):** Running suite verification inside the worker's worktree.
-  - **P2-4 (Arbiter Branch Merge):** Safe compare-and-swap integration of verified worker branches.
+  - **P2-2 (Config, Ledger & Launcher Worktree Integration):** Complete (`5200df5`).
+  - **P2-3 (Supervisor Worktree Suite Gating):** Next up (Active Frontier). Updating `loop-bot-herd.sh` to resolve `GATE_DIR` from `seats.json` v2, check commit ancestry and drift, execute `TEST_CMD` inside the worker's worktree, and fix branch preservation in `lib/worktree.sh`.
+  - **P2-4 (Arbiter Branch Merge):** Queued. Fast-forward compare-and-swap merge into `main` and integration PR creation.
 
 ---
 
 ## 3. Immediate Next Step
 
-- Draft ticket `maps/tickets/worktree-config-and-ledger-integration.md` for P2-2.
-- Dispatch `arch` to implement P2-2 in `swarm.config.toml`, `lib/config.sh`, and `herdr-loop-swarm.sh`.
-- Dispatch `agy-docs` to document the v2 ledger schema and configuration parameters.
+- Draft ticket `maps/tickets/supervisor-worktree-suite-gating.md` for P2-3.
+- Dispatch `arch` to implement P2-3 in `loop-bot-herd.sh` and `lib/worktree.sh`.
+- Dispatch `agy-docs` to update documentation for P2-3 supervisor gating.
+- Dispatch `pm` to oversee P2-3 gating and draft P2-4 specification.
