@@ -14,9 +14,11 @@ ADRs capture significant architectural and design choices, along with the contex
 | [0004](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md) | Safe Workspace Lifecycle, Physical CWD Resolution, and Seat Ledger | Accepted | 2026-09-19 | `lib/lifecycle.sh`, `.herdr-swarm/seats.json`, [T-011-fix](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/lifecycle-safe-teardown-and-targeting.md) |
 | [0005](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0005-preflight-matrix-and-seat-verification.md) | Preflight Dependency Matrix and Post-Seating Readiness Verification Gate | Accepted | 2026-09-19 | `lib/preflight.sh`, `lib/lifecycle.sh`, [T-008](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/preflight-dependency-and-daemon-verification.md), [T-010](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/seat-verification-protocol.md) |
 | [0006](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md) | Git Worktree Worker Isolation and Lifecycle Management | Accepted | 2026-09-19 | `lib/lifecycle.sh`, `docs/worktree-swarm.md`, [T-016-docs](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/worktree-isolation-architecture.md) |
+| [0007](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md) | Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2 | Accepted | 2026-09-19 | `herdr-loop-swarm.sh`, `.herdr-swarm/seats.json`, [P2-2 Spec](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-2-config-integration-spec.md) |
 
 ## Related Documentation
 
+- Swarm Orchestration Retrospective: [swarm-orchestration-retrospective.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/swarm-orchestration-retrospective.md)
 - Phase 2 Worktree Architecture Blueprint: [worktree-swarm.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/worktree-swarm.md)
 - System Vocabulary and Conceptual Invariants: [CONTEXT.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/CONTEXT.md)
 - Wayfinder Master Architecture Map: [universal-herdr-swarm.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/universal-herdr-swarm.md)

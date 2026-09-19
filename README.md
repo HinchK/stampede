@@ -172,6 +172,8 @@ To prevent **kickoff race conditions** (where task prompts arrive while an agent
   - [ADR 0004: Safe Workspace Lifecycle, Physical CWD Resolution, and Seat Ledger](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md)
   - [ADR 0005: Preflight Dependency Matrix and Post-Seating Readiness Verification Gate](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0005-preflight-matrix-and-seat-verification.md)
   - [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md)
+  - [ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)
+- **Swarm Orchestration Retrospective**: See [`docs/findings/swarm-orchestration-retrospective.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/swarm-orchestration-retrospective.md).
 - **Phase 2 Worktree Architecture Blueprint**: See [`docs/worktree-swarm.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/worktree-swarm.md).
 - **Dogfooding Rehearsal Receipt**: See [`docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md).
 - **Wayfinder Architecture Plan**: See [`maps/universal-herdr-swarm.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/universal-herdr-swarm.md) and [`maps/tickets/`](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/).
@@ -209,15 +211,17 @@ loop-bot-herd-agy/
 │   └── tickets/            # Granular milestone prototype tickets
 └── docs/                   # ADRs, findings & audit archives
     ├── worktree-swarm.md   # Phase 2 Worktree Architecture Blueprint
-    ├── adr/                # Architecture Decision Records (0001–0006)
+    ├── adr/                # Architecture Decision Records (0001–0007)
     │   ├── README.md       # ADR catalog & index
     │   ├── 0001-fail-closed-profile-and-test-gating.md
     │   ├── 0002-exact-sha-supervisor-deduplication.md
     │   ├── 0003-dynamic-seating-and-nonce-brief-delivery.md
     │   ├── 0004-safe-workspace-lifecycle-and-seat-ledger.md
     │   ├── 0005-preflight-matrix-and-seat-verification.md
-    │   └── 0006-git-worktree-worker-isolation.md
-    ├── findings/           # Empirical semantics & schema findings
+    │   ├── 0006-git-worktree-worker-isolation.md
+    │   └── 0007-split-pane-cwd-order-and-ledger-v2.md
+    ├── findings/           # Empirical semantics, schemas, and retrospective
+    │   └── swarm-orchestration-retrospective.md
     └── audits/             # PM reviews, advisory, & dogfooding receipts
         ├── 2026-09-19-dogfooding-rehearsal-receipt.md
         └── 2026-09-19-phase2-worktree-advisory.md
