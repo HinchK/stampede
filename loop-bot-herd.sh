@@ -121,8 +121,46 @@ health_pass() {
 # ---- 2. verdict harvest + suite gate -------------------------------------
 # ARCH DONE lines are the herd's completion protocol. Dedup is (ticket, sha):
 # an identical code state is never re-gated, while a RED ticket re-verdicted
-# at a NEW commit sha is re-evaluated through the suite gate. Tickets already
-# gated green/skipped are permanently retired.
+# at a NEW commit sha is re-evaluated through the suite gate. ONLY a green
+# gate permanently retires a ticket; stale/invalidated/unresolvable records
+# never block a later re-verdict at the same sha (P2-3).
+
+# resolve_seat_gate SEAT → sets GATE_DIR, GATE_BRANCH, GATE_ISOLATED.
+# Ledger-first (seats.json v2, read fresh every pass). Isolated seats whose
+# worktree is missing or on the wrong branch return 1 — NEVER fall back to
+# the root (that would gate the wrong tree and false-green it).
+resolve_seat_gate() {
+  local seat="$1"
+  local ledger="${STATE_DIR}/seats.json"
+  local rec
+  GATE_DIR="$REPO_DIR"; GATE_BRANCH=""; GATE_ISOLATED=false
+  [[ -f "$ledger" ]] || return 0
+  rec=$(jq -c --arg s "$seat" '.seats[]? | select(.name == $s)' "$ledger" 2>/dev/null | head -n1)
+  [[ -n "$rec" ]] || return 0
+  GATE_ISOLATED=$(jq -r '.isolated // false' <<<"$rec")
+  GATE_BRANCH=$(jq -r '.branch // empty' <<<"$rec")
+  if [[ "$GATE_ISOLATED" == "true" ]]; then
+    GATE_DIR=$(jq -r '.worktree_dir // empty' <<<"$rec")
+    [[ -n "$GATE_DIR" && -d "$GATE_DIR" ]] || return 1
+    [[ "$(git -C "$GATE_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)" == "$GATE_BRANCH" ]] || return 1
+  else
+    GATE_DIR=$(jq -r --arg d "$REPO_DIR" '.worktree_dir // $d' <<<"$rec")
+  fi
+  return 0
+}
+
+# gate_tree_matches GATE_DIR SHA → 0 when HEAD == sha and tree is pristine
+# (porcelain includes untracked files — an untracked *_test.py would be
+# collected by the runner, so it counts as drift).
+gate_tree_matches() {
+  local dir="$1" want_sha="$2"
+  local head_full sha_full
+  head_full=$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)
+  sha_full=$(git -C "$dir" rev-parse "${want_sha}^{commit}" 2>/dev/null || true)
+  [[ -n "$head_full" && "$head_full" == "$sha_full" ]] || return 1
+  [[ -z "$(git -C "$dir" status --porcelain 2>/dev/null)" ]]
+}
+
 harvest_verdicts() {
   local seat out
   for seat in "${EXPECTED_SEATS[@]}"; do
@@ -138,34 +176,67 @@ harvest_verdicts() {
       [[ -n "$sha" ]] || sha=$(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
       ts=$(date +%s)
       if [[ -f "$SESSION_LOG" ]]; then
-        # Permanent retire: this ticket already gated green or skipped
-        if jq -e -s --argjson t "$ticket" 'any(.[]; .ticket == $t and (.suite == "green" or .suite == "skipped"))' "$SESSION_LOG" >/dev/null 2>&1; then
+        # Permanent retire: this ticket already gated GREEN (only green retires)
+        if jq -e -s --argjson t "$ticket" 'any(.[]; .ticket == $t and .suite == "green")' "$SESSION_LOG" >/dev/null 2>&1; then
           continue
         fi
-        # (ticket, sha) dedup: this exact code state was already evaluated
-        if jq -e -s --argjson t "$ticket" --arg s "$sha" 'any(.[]; .ticket == $t and .sha == $s)' "$SESSION_LOG" >/dev/null 2>&1; then
+        # (ticket, sha) dedup: this exact code state was already CONCLUSIVELY
+        # evaluated. Drift records (stale/invalidated/unresolvable) are excluded
+        # so a cleaned-up re-verdict at the same sha is properly gated.
+        if jq -e -s --argjson t "$ticket" --arg s "$sha" \
+          'any(.[]; .ticket == $t and .sha == $s and (.suite != "stale" and .suite != "invalidated" and .suite != "unresolvable"))' \
+          "$SESSION_LOG" >/dev/null 2>&1; then
           continue
         fi
       fi
-      # Commit reality check: the verdict sha must name an existing commit in
-      # the target repo. Fabricated/stale shas are never suite-gated.
+      # Commit reality check (V1): the verdict sha must exist in the shared
+      # object store. Fabricated/stale shas are never suite-gated.
       if ! git -C "$REPO_DIR" cat-file -e "${sha}^{commit}" 2>/dev/null; then
         warn "verdict for #$ticket @ ${sha}: commit not found in repo — skipped, human evaluation required"
         echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"skipped\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
         herdr agent prompt looper "LOOP-BOT: verdict for #$ticket @ ${sha} names a commit absent from the repo — do NOT retire the ticket; human evaluation required." >/dev/null 2>&1 || true
         continue
       fi
+      # Gate target resolution (ledger v2): isolated seats gate in their own
+      # worktree; a missing/mismatched one is unresolvable, never root-gated.
+      if ! resolve_seat_gate "$seat"; then
+        warn "verdict for #$ticket @ ${sha}: seat '$seat' gate unresolvable (isolated worktree missing or wrong branch) — NOT gated"
+        echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"unresolvable\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        herdr agent prompt looper "LOOP-BOT: verdict for #$ticket @ ${sha} from $seat could not be resolved to a gate directory (worktree missing or on the wrong branch). Do NOT retire the ticket — human evaluation required." >/dev/null 2>&1 || true
+        continue
+      fi
+      local gate_log_dir="${STATE_DIR}/gate-logs"
+      mkdir -p "$gate_log_dir" "${STATE_DIR}/gate-tmp/${seat}"
+      local gate_log="${gate_log_dir}/${seat}-${sha}.log"
+      # Pre-condition drift: the tree must be exactly the verdict's commit.
+      if ! gate_tree_matches "$GATE_DIR" "$sha"; then
+        warn "verdict for #$ticket @ ${sha}: gate tree is STALE (HEAD moved or dirty/untracked files) — not gating"
+        echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"stale\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        herdr agent prompt "$seat" "LOOP-BOT: verdict for #$ticket @ ${sha} rejected as STALE — the gate tree does not match that commit (uncommitted or untracked files, or HEAD moved). Commit your changes or remove stray files (no git stash), then re-verdict 'ARCH DONE #$ticket <new sha>'." >/dev/null 2>&1 || true
+        continue
+      fi
       local suite_ok="skipped"
       if [[ "$(ctl_get suite_gate)" == "true" ]]; then
         if test_cmd_is_runnable "$TEST_CMD"; then
-          log "verdict for #$ticket @ ${sha} — running suite gate: ${TEST_CMD}"
-          if (cd "$REPO_DIR" && timeout "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD" >/dev/null 2>&1); then
-            suite_ok="green"; ok "suite gate GREEN for #$ticket @ ${sha}"
-            echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+          log "verdict for #$ticket @ ${sha} — running suite gate in ${GATE_DIR}: ${TEST_CMD}"
+          local gate_rc=1
+          if (cd "$GATE_DIR" && TMPDIR="${STATE_DIR}/gate-tmp/${seat}" timeout "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD") >"$gate_log" 2>&1; then
+            gate_rc=0
+          fi
+          # Post-condition drift (TOCTOU): the worker must not have touched
+          # the tree while the suite ran — a moved/dirtied tree invalidates
+          # the run regardless of exit code.
+          if ! gate_tree_matches "$GATE_DIR" "$sha"; then
+            suite_ok="invalidated"; bad "suite run for #$ticket @ ${sha} INVALIDATED — tree changed during the gate"
+            echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+            herdr agent prompt "$seat" "LOOP-BOT: suite run for #$ticket @ ${sha} was INVALIDATED — the tree changed during the gate. Re-verdict 'ARCH DONE #$ticket <sha>' from a stable tree." >/dev/null 2>&1 || true
+          elif [[ "$gate_rc" -eq 0 ]]; then
+            suite_ok="green"; ok "suite gate GREEN for #$ticket @ ${sha} (log: $gate_log)"
+            echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
           else
-            suite_ok="RED"; bad "suite gate RED for #$ticket @ ${sha} — NOT filed; arch must fix before done"
-            echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
-            herdr agent prompt "$seat" "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate is structural now)." >/dev/null 2>&1 || true
+            suite_ok="RED"; bad "suite gate RED for #$ticket @ ${sha} — NOT filed; arch must fix before done (log: $gate_log)"
+            echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+            herdr agent prompt "$seat" "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate log: $gate_log)." >/dev/null 2>&1 || true
           fi
         else
           # No runnable suite for this project — never fake-green, record as skipped

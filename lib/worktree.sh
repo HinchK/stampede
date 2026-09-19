@@ -51,9 +51,15 @@ worktree_provision() {
       "$(dirname "$wt_path")" >&2
   fi
 
-  # -B: create the branch at base_ref, or reset it if it already exists
-  # (ADR 0006 §C permits attach-or-create; -B makes re-seating deterministic).
-  git -C "$target_dir" worktree add -B "$branch" "$wt_path" "$base_ref" >/dev/null
+  # Branch creation: -b ONLY for brand-new branches. Never -B — it resets an
+  # existing branch to base_ref, destroying unmerged work (P2-3 spec §0 probe:
+  # 20 unmerged commits → re-seat with -B → 0). An existing branch is attached
+  # as-is, preserving in-flight commits.
+  if git -C "$target_dir" show-ref --verify --quiet "refs/heads/${branch}"; then
+    git -C "$target_dir" worktree add "$wt_path" "$branch" >/dev/null
+  else
+    git -C "$target_dir" worktree add -b "$branch" "$wt_path" "$base_ref" >/dev/null
+  fi
 
   # Lock = live-seat marker: survives `git worktree prune`, refuses remove.
   git -C "$target_dir" worktree lock --reason "seated: $seat" "$wt_path" >/dev/null
