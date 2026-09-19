@@ -2,10 +2,14 @@
 id: T-007a-fix
 title: "Supervisor Re-Verdict Deduplication Protocol"
 type: wayfinder:prototype
-status: in_progress
+status: resolved
 assignee: arch
 prototype_asset: loop-bot-herd.sh
 parent: maps/universal-herdr-swarm.md
+resolution:
+  commit: dd54248
+  verified_by: looper
+  date: "2026-09-19"
 ---
 
 # Supervisor Re-Verdict Deduplication Protocol (T-007a-fix / D2)
@@ -28,3 +32,12 @@ How should `loop-bot-herd.sh` and `briefs/arch.in.md` implement an explicit comm
    Run an automated fixture test:
    Write a RED entry for ticket 99 at sha `aaa1111` in a temporary session log.
    Feed an identical verdict text with sha `bbb2222`. Verify that sha `aaa1111` is skipped, but sha `bbb2222` is processed.
+
+## Verification Log
+
+- `loop-bot-herd.sh` updated to extract and log `sha` in every verdict JSON entry.
+- Deduplication logic rewritten with `jq` to deduplicate on `(ticket, sha)` rather than raw verdict line strings.
+- Standing briefs `briefs/arch.in.md` and `briefs/arch.md` updated with `ARCH DONE #<ticket> <sha>`.
+- Verified via automated harness that repeated verdict at same sha is skipped, while re-verdict with a new sha triggers the suite gate again.
+- Shellcheck on `loop-bot-herd.sh` passed clean (0 warnings).
+- Resolved in commit `dd54248`.
