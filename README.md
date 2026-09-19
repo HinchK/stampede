@@ -175,6 +175,7 @@ To prevent **kickoff race conditions** (where task prompts arrive while an agent
   - [ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)
   - [ADR 0008: Supervisor Worktree Suite Gating, Provenance, and Drift Detection](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md)
   - [ADR 0009: Arbiter Branch Integration, Compare-and-Swap Ref Updates, and Human Promotion Gates](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0009-arbiter-branch-integration-and-cas-merge.md)
+  - [ADR 0010: Worktree Teardown Lifecycle, Untracked File Salvage, and Stale Branch Re-attachment Gating](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0010-worktree-teardown-lifecycle-and-salvage.md)
 - **Swarm Orchestration Retrospective**: See [`docs/findings/swarm-orchestration-retrospective.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/swarm-orchestration-retrospective.md).
 - **Phase 2 Worktree Architecture Blueprint**: See [`docs/worktree-swarm.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/worktree-swarm.md).
 - **Dogfooding Rehearsal Receipt**: See [`docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md).
@@ -213,7 +214,7 @@ loop-bot-herd-agy/
 │   └── tickets/            # Granular milestone prototype tickets
 └── docs/                   # ADRs, findings & audit archives
     ├── worktree-swarm.md   # Phase 2 Worktree Architecture Blueprint
-    ├── adr/                # Architecture Decision Records (0001–0009)
+    ├── adr/                # Architecture Decision Records (0001–0010)
     │   ├── README.md       # ADR catalog & index
     │   ├── 0001-fail-closed-profile-and-test-gating.md
     │   ├── 0002-exact-sha-supervisor-deduplication.md
@@ -223,7 +224,8 @@ loop-bot-herd-agy/
     │   ├── 0006-git-worktree-worker-isolation.md
     │   ├── 0007-split-pane-cwd-order-and-ledger-v2.md
     │   ├── 0008-supervisor-worktree-suite-gating-and-drift.md
-    │   └── 0009-arbiter-branch-integration-and-cas-merge.md
+    │   ├── 0009-arbiter-branch-integration-and-cas-merge.md
+    │   └── 0010-worktree-teardown-lifecycle-and-salvage.md
     ├── findings/           # Empirical semantics, schemas, and retrospective
     │   └── swarm-orchestration-retrospective.md
     └── audits/             # PM reviews, advisory, & dogfooding receipts
