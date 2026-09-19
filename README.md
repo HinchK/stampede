@@ -62,6 +62,33 @@ The swarm operates in a dedicated, multi-tab Herdr workspace:
 
 ---
 
+## Phase 2 Architecture: Parallel Worktree Isolation
+
+Milestone 1 shipped a hardened, fail-closed sequential swarm where all agents operate in the root repository checkout (`$PWD`). **Phase 2** expands this foundation into a **concurrent, parallel worker swarm** powered by Git worktrees.
+
+### 1. Concurrency Resilience (0/240 Empirical Benchmark)
+In sequential herds where multiple agents share a single working checkout, concurrent `git add` and `git commit` operations frequently collide: empirical probes in the [Phase 2 PM Worktree Advisory](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-advisory.md) measured a **4/6 failure rate (`index.lock: File exists`)** under shared-checkout conditions.
+
+By provisioning isolated Git worktrees (`git worktree add`) for each autonomous coding agent:
+- **0/240 failures** across 20 rounds of parallel commits by 12 concurrent workers.
+- **100% clean `git fsck`** verification with zero index corruption or lost commits.
+- **Independent Index & HEAD**: Each worker operates with its own index and branch ref, eliminating lock contention.
+
+### 2. Floor Topology & Lifecycle
+- **Root Anchor Workspace (`$PWD`)**: `looper` (master orchestrator), `pm` (strategic overseer), and `telemetry-stream` (Ops anchor pane) remain anchored in the primary checkout on `main`.
+- **Isolated Worker Worktrees**: Dedicated worker directories (`.herdr-swarm/worktrees/<seat>`) checkout private task branches (`swarm/<slug>/<seat>`), sharing the underlying `.git` object database.
+- **Durable State Accounting**: `.herdr-swarm/seats.json` tracks `"worktree_dir"` and `"branch"` per seat.
+- **Safe Lifecycle Teardown**: `swarm_down` prunes exclusively registered disposable worktrees (`git worktree remove --force`), preserving the root tree and leaving worker branch commits intact in Git history.
+- **Lifecycle Dogfooding Receipt**: Validated in the [Dogfooding Rehearsal Receipt](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md), verifying multi-workspace isolation (`status` → `up` → `verify` → `down`) without host workspace hijacking.
+
+For comprehensive architectural design and technical specifications, see:
+- [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md)
+- [Phase 2 Specification: docs/worktree-swarm.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/worktree-swarm.md)
+- [Phase 2 Advisory: Concurrency Hazards & Ledger v2](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-advisory.md)
+- [Dogfooding Rehearsal Receipt: End-to-End Swarm Lifecycle](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md)
+
+---
+
 ## CLI Usage and Subcommands
 
 The universal launcher binary [`herdr-loop-swarm.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/herdr-loop-swarm.sh) provides a unified CLI interface for managing swarm lifecycles across any repository:
@@ -144,6 +171,9 @@ To prevent **kickoff race conditions** (where task prompts arrive while an agent
   - [ADR 0003: Dynamic Seating from TOML Registry and Nonce Brief Delivery Protocol](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0003-dynamic-seating-and-nonce-brief-delivery.md)
   - [ADR 0004: Safe Workspace Lifecycle, Physical CWD Resolution, and Seat Ledger](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md)
   - [ADR 0005: Preflight Dependency Matrix and Post-Seating Readiness Verification Gate](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0005-preflight-matrix-and-seat-verification.md)
+  - [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md)
+- **Phase 2 Worktree Architecture Blueprint**: See [`docs/worktree-swarm.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/worktree-swarm.md).
+- **Dogfooding Rehearsal Receipt**: See [`docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md).
 - **Wayfinder Architecture Plan**: See [`maps/universal-herdr-swarm.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/universal-herdr-swarm.md) and [`maps/tickets/`](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/).
 
 ---
@@ -178,13 +208,17 @@ loop-bot-herd-agy/
 │   ├── universal-herdr-swarm.md  # Master destination plan
 │   └── tickets/            # Granular milestone prototype tickets
 └── docs/                   # ADRs, findings & audit archives
-    ├── adr/                # Architecture Decision Records (0001–0005)
+    ├── worktree-swarm.md   # Phase 2 Worktree Architecture Blueprint
+    ├── adr/                # Architecture Decision Records (0001–0006)
     │   ├── README.md       # ADR catalog & index
     │   ├── 0001-fail-closed-profile-and-test-gating.md
     │   ├── 0002-exact-sha-supervisor-deduplication.md
     │   ├── 0003-dynamic-seating-and-nonce-brief-delivery.md
     │   ├── 0004-safe-workspace-lifecycle-and-seat-ledger.md
-    │   └── 0005-preflight-matrix-and-seat-verification.md
+    │   ├── 0005-preflight-matrix-and-seat-verification.md
+    │   └── 0006-git-worktree-worker-isolation.md
     ├── findings/           # Empirical semantics & schema findings
-    └── audits/             # PM herd reviews & invariant checks
+    └── audits/             # PM reviews, advisory, & dogfooding receipts
+        ├── 2026-09-19-dogfooding-rehearsal-receipt.md
+        └── 2026-09-19-phase2-worktree-advisory.md
 ```
