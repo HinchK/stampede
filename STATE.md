@@ -118,17 +118,19 @@
 
 ## 3. Open Items & Blockers
 
-- **T-014 (Git Baseline)**: Unblocked; must be executed first so subsequent changes have atomic commits.
-- **T-001 (Herdr Semantics)**: Unblocked once git baseline is committed.
+- **T-014 (Git Baseline)**: [x] **COMPLETED** (Commit `95044cc`: `chore: initial repository baseline (#T-014)`).
+- **T-001 (Herdr Semantics Research Spike)**: **IN PROGRESS** (Dispatched to `arch`).
+- **T-013 (Bats Harness)**: Ready to run in parallel.
 - **Agent Panes Status**:
-  - `arch`: Idle, finished brainstorming, ready for dispatch.
-  - `pm`: In progress running herd audit.
-  - `agy-docs`: Idle, briefed on documentation & ADR duties.
-  - `agy-gh`: Idle, briefed on GitHub issue tracking.
+  - `arch`: Working on T-001.
+  - `pm`: Completing strategic audit (advising with Opus 5).
+  - `agy-docs`: Synced on M1, standing by for ADRs & docs review.
+  - `agy-gh`: Synced on M1, standing by for ticket/remote sync.
 
 ---
 
 ## 4. Next Immediate Action
 
-1. Dispatch **Ticket T-014** to `arch` to initialize git repository and commit baseline.
-2. Once T-014 is verified, dispatch **Ticket T-001** to `arch` for herdr semantics research spike.
+1. `arch` completes **Ticket T-001** (write `docs/findings/herdr-semantics.md` with empirical probe results).
+2. Commit T-001 findings with conventional commit (`docs: research herdr workspace-focus and agent-name semantics (#T-001)`).
+3. Dispatch **Ticket T-004** / **Ticket T-005** based on T-001 empirical findings.
