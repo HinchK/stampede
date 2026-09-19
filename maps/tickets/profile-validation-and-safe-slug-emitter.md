@@ -2,10 +2,14 @@
 id: T-002-fix
 title: "Profile Validation and Safe Slug Emitter"
 type: wayfinder:prototype
-status: in_progress
+status: resolved
 assignee: arch
 prototype_asset: lib/profile.sh
 parent: maps/universal-herdr-swarm.md
+resolution:
+  commit: 44c0d56
+  verified_by: looper
+  date: "2026-09-19"
 ---
 
 # Profile Validation and Safe Slug Emitter (D3 & D4 Fix)
@@ -24,3 +28,11 @@ How should `lib/profile.sh` prevent empty user inputs from silently caching `TES
    - `lib/config.sh`: `config_dump_env` passes arguments via `sys.argv` (no inline string interpolation) and uses `shlex.quote`.
    - Shellcheck on `lib/profile.sh` and `lib/config.sh` passes with 0 warnings.
 3. **Verification Step**: Run `shellcheck lib/profile.sh lib/config.sh && python3 -c "import sys; from subprocess import run; res = run(['./lib/config.sh', '--dump-env', \"a'b\"], capture_output=True, text=True); assert res.returncode == 0 and 'SEAT_' in res.stdout, res.stderr; print('PASS: slug quotes safely emitted')"`
+
+## Verification Log
+
+- Shellcheck: `shellcheck lib/profile.sh lib/config.sh lib/common.sh lib/briefs.sh lib/lifecycle.sh lib/preflight.sh` passed with 0 warnings.
+- Safe slug emitter: Tested `a'b` slug via `./lib/config.sh --dump-env "a'b"`; quotes safely emitted, returncode 0.
+- `test_cmd_is_runnable`: Returns 1 for `""`, `"none"`, `"true"`; returns 0 for `"npm test"`.
+- Empty prompt loop in `prompt_test_cmd`: Correctly redirects prompt warnings to stderr and re-prompts until non-empty input is received.
+- Resolved in commit `44c0d56`.
