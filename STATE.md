@@ -13,23 +13,28 @@
 
 - **Teardown Safety (D1 / T-011-fix):** Resolved in commit `f6cfbc4`. `find_workspace_by_cwd` strictly inspects physical pane CWDs; `swarm_down` uses `.herdr-swarm/seats.json` ledger to close only recorded seats; interactive confirmation gate required.
 - **Fail-Closed Profile & Safe Slug Emitter (D3 & D4 / T-002-fix):** Resolved in commit `44c0d56`. Empty prompts loop until non-empty input; `test_cmd_is_runnable` blocks empty/none/true test gates; `slugify()` normalizes names to `^[a-z][a-z0-9_-]*$`; `lib/config.sh` emits environment variables via `sys.argv` and `shlex.quote`.
-- **Done Means Integrated:** Writing a library in isolation is not sufficient to claim completion. Integration tickets (T-INT-1, T-INT-2, T-INT-3, T-INT-4) require wiring into `herdr-loop-swarm.sh` and deleting obsolete hardcoded fallback paths.
+- **Launcher Preflight & Subcommands (T-INT-4 / T-008):** Resolved in commit `5ca2049`. 9-point preflight matrix runs fail-closed before workspace/pane mutation; `up`, `down`, and `status` subcommands delegate directly to `lib/lifecycle.sh`.
+- **Dynamic Seating & Templated Brief Delivery (T-INT-2, T-005, T-INT-3):** Resolved in commit `2455bc5`. Dynamic seating from `swarm.config.toml` with `<seat>-<slug>` namespacing, nonce file-path prompt delivery (<200b), and `.herdr-swarm/seats.json` durable ledger.
+- **Supervisor Genericization & Re-Verdicts (T-007a-fix, T-007b):** Resolved in commits `64170d7` and `94d6534`. Strict `(ticket, sha)` deduplication, `profile.env` binding, and real project test runner gating.
 
 ---
 
 ## 2. Active Status & Open Items
 
-- **In Progress:** `T-INT-1` (Integrate Profile Detection into Swarm Launcher). `arch` is currently integrating `lib/profile.sh` and `lib/lifecycle.sh` into `herdr-loop-swarm.sh`, deleting `Standard-Pentest/kultivait` and `TEST_CMD="true"` defaults, and enforcing fail-closed execution.
-- **Next Up (Critical Path per `docs/reordered-plan.md`):**
-  1. `T-007a-fix (D2)`: Supervisor re-verdict deduplication protocol (`ARCH DONE #<n> <sha>` + `(ticket, sha)` dedupe).
-  2. `T-INT-2`: Integrate TOML config registry & dynamic seat arrays (`lib/config.sh`).
-  3. `T-INT-3`: Integrate brief templating & nonce file delivery (`lib/briefs.sh`).
-  4. `T-INT-4`: Wire preflight verification and lifecycle commands (`up`, `down`, `status`).
+- **Milestones M1 & M2 Complete:**
+  - M1 (Safe entrypoint): Teardown safety (D1), Profile fail-closed (D3/D4), Launcher profile integration (T-INT-1), Re-verdict dedupe (D2), README truth (T-015a).
+  - M2 (Generalize): TOML config integration (T-INT-2), Namespacing (T-005), Brief nonce delivery (T-INT-3), Supervisor genericization (T-007b), Preflight verification (T-008).
+- **M3 (Lifecycle & Observability) Progress:**
+  - T-INT-4 (`up`/`down`/`status` subcommands): Complete (`5ca2049`).
+  - Next Up:
+    1. `T-010`: Seat verification protocol (`agent start` timeout wait + post-seating readiness / brief acknowledgment check).
+    2. `T-009`: Telemetry event engine wiring (`domain.action` envelope into `.herdr-swarm/`).
+    3. `T-015b`: Complete README & user guide polish.
 
 ---
 
 ## 3. Immediate Next Step
 
-- Monitor `arch` to finish T-INT-1 implementation.
-- Run independent verification checks (`grep -n 'Standard-Pentest\|TEST_CMD="true"' herdr-loop-swarm.sh`, fail-closed scratch execution).
-- Update ticket `maps/tickets/integrate-profile-into-launcher.md` and commit.
+- Draft ticket `maps/tickets/seat-verification-protocol.md` for `T-010`.
+- Dispatch `arch` to implement seat verification and brief acknowledgment checks in `herdr-loop-swarm.sh` / `lib/lifecycle.sh`.
+- Verify with unit checks and commit.
