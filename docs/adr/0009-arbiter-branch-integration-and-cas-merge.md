@@ -1,0 +1,157 @@
+# ADR 0009: Arbiter Branch Integration, Compare-and-Swap Ref Updates, and Human Promotion Gates
+
+- **Status**: Accepted
+- **Date**: 2026-09-19
+- **Deciders**: `arch`, `pm`, `looper`, `agy-docs`
+- **Consulted**: [P2-4 Specification](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md), [Ticket P2-4](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/arbiter-and-branch-reconciliation.md), [Phase 2 Advisory](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-advisory.md), [ADR 0006](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md), [ADR 0007](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md), [ADR 0008](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md)
+
+---
+
+## 1. Context and Problem Statement
+
+In Phase 2, autonomous workers develop in parallel inside isolated Git worktrees (`.herdr-swarm/worktrees/<seat>`) and commit to task-scoped branches (`swarm/<slug>/<seat>`). Once a worker's implementation passes the independent worktree Suite Gate ([ADR 0008](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md)), its commits must be reconciled and integrated into the primary project baseline.
+
+Early designs contemplated having an arbiter process automatically merge or fast-forward green worker commits directly into `main` ([`docs/worktree-swarm.md` §7 Rule 1](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/worktree-swarm.md)). However, empirical testing ([P2-4 Spec §2.3](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md)) revealed critical concurrency hazards and Git index corruption traps when updating checked-out branches:
+
+1. **The Staged Deletion Index Desync Hazard (Probed)**:
+   In the Herdr workspace, the root repository checkout (`$REPO_DIR`) hosts the orchestrator (`looper`), strategic supervisor (`pm`), and human operator on `main`.
+   - Attempting `git branch -f main X` from outside the root checkout is rejected by Git:
+     ```
+     fatal: cannot force update the branch 'main' used by worktree at '/path/to/root'
+     ```
+   - Attempting `git update-ref refs/heads/main X` is **accepted silently by Git**, but leaves the root working tree and `.git/index` un-updated! As an immediate result, `git status` in the root shows every newly integrated file as a **staged deletion (`D <file>`)**. The very next commit made in the root working checkout by an agent or human operator silently commits these deletions, reverting the integrated work.
+2. **Combination Breakdown (Two Greens $\neq$ Combined Green)**:
+   Two isolated branches can each pass their independent test suite gates in isolation (e.g. seat A modifies an internal API, while seat B implements a caller assuming the old API). When merged, the combination breaks. Integrating branches directly into `main` without pre-gating the merged combination causes broken builds on the baseline branch.
+3. **Silent Data Loss via Non-Atomic Ref Updates**:
+   Empirical testing in the [Phase 2 Advisory](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-advisory.md) proved that concurrent plain `git update-ref` calls without expected-old checks silently overwrite each other (11 out of 12 updates lost).
+4. **Tip Drift vs Gated SHA**:
+   Workers frequently continue committing in their worktree after emitting a verdict. Merging the worker's branch tip rather than the explicitly gated commit SHA violates auditability and incorporates untested code.
+
+---
+
+## 2. Decision Drivers
+
+- **Zero Root Checkout Corruption**: The root working tree on `main` must never experience index desynchronization, phantom staged deletions, or uncoordinated ref updates.
+- **Combined State Quality Gating**: No integrated commit may be published or promoted unless the combined merge state is independently tested and verified `green`.
+- **Atomic Concurrency Protection**: Integration ref updates must be protected against concurrent race conditions via Compare-and-Swap (CAS) semantics.
+- **Strict Provenance Alignment**: The arbiter must integrate only the exact commit SHA that was tested and approved by the Suite Gate.
+- **Worker-Owned Conflict Resolution**: The arbiter must never attempt automatic fuzzy conflict resolution (e.g. `-X ours/theirs`); merge conflicts must be resolved explicitly on the worker's branch by the worker agent.
+- **Sovereign Human Promotion**: Moving the primary base branch (`main`) or pushing to remote repositories must remain strictly gated behind human driver authorization.
+
+---
+
+## 3. Considered Options
+
+- **Option A (Direct Fast-Forward into `main`)**: Automatically fast-forward `main` upon verdict approval. (Rejected: causes staged deletion corruption in the root checkout and lacks combined-state gating).
+- **Option B (In-Tree Staging Branch in Root)**: Switch root checkout between `main` and an integration branch. (Rejected: disrupts active orchestrator and operator processes in the root workspace).
+- **Option C (Dedicated Integration Branch, Detached Arbiter Worktree, and CAS Updates)**: Build a dedicated staging ref (`swarm/<slug>/integration`), reconcile and pre-gate candidates in a detached worktree (`.herdr-swarm/worktrees/arbiter-<slug>`), update refs atomically via CAS, and promote to `main` via human-supervised fast-forward or PR.
+
+---
+
+## 4. Decision
+
+We adopted **Option C**. We established the **Arbiter Branch Integration and CAS Reconciliation Architecture** in `lib/arbiter.sh`:
+
+### A. Dedicated Integration Branch (`swarm/<slug>/integration`)
+- All verified isolated worker branches are merged into a dedicated staging ref:
+  ```
+  refs/heads/swarm/<slug>/integration
+  ```
+- The integration branch is initialized from `base_branch` (e.g. `main`) at the first integration of a run.
+- The root checkout on `main` is **never mutated** during automated integration runs.
+
+### B. Serialized Queue and Atomic Locking
+- Gated verdicts from `.herdr-swarm/session-verdicts.jsonl` matching `suite == "green"` and `isolated == true` are enqueued into `.herdr-swarm/integration.jsonl` by calling `arbiter_enqueue <ticket> <seat> <sha>`.
+- The queue is drained oldest-first, serialized by a POSIX-safe directory lock (`.herdr-swarm/arbiter.lock` with PID stamping and stale-process detection).
+- **Supersession**: If a newer green verdict arrives for a ticket while an older verdict is still queued, the older record is marked `superseded`, integrating only the latest verified state.
+
+### C. Off-Branch Candidate Construction in a Detached Worktree
+Integration occurs inside a dedicated, isolated arbiter worktree:
+```
+${TARGET_DIR}/.herdr-swarm/worktrees/arbiter-${slug}
+```
+- **Detached HEAD Operation**: The arbiter worktree operates in detached HEAD mode (`git checkout --detach`), ensuring it never holds a branch checked out that another process might modify.
+- **Merge Construction**:
+  - Let $I_0$ be `git rev-parse swarm/<slug>/integration`.
+  - If $I_0$ is an ancestor of the gated SHA (`is-ancestor(I0, sha)`): the candidate is simply the gated SHA (fast-forward).
+  - If diverged: the arbiter checks out $I_0$ in detached mode and executes:
+    ```bash
+    git merge --no-ff --no-edit -m "integrate #<ticket> (<seat> @ <sha7>)" "$sha"
+    ```
+  - **Conflict Handling**: If merge conflicts arise, the arbiter immediately runs `git merge --abort`, leaves the worktree clean, records `status: "conflict"`, and notifies the worker via the nonce channel to merge `integration` and re-verdict. The arbiter never resolves conflicts autonomously.
+
+### D. Pre-Gating the Combined Candidate
+Before advancing the integration ref:
+1. The arbiter checks out the candidate commit in its detached worktree.
+2. It executes the project test suite (`TEST_CMD`) with an isolated per-arbiter temporary directory:
+   ```bash
+   ( cd "$ARBITER_WT" && \
+     TMPDIR="${STATE_DIR}/arbiter-tmp" \
+     timeout "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD" ) >"${STATE_DIR}/gate-logs/integration-${sha7}.log" 2>&1
+   ```
+3. If the combined test fails (`RED`): the arbiter records `status: "integration_red"` and **does NOT advance the integration ref**. The broken combination is rejected, preserving the integrity of `integration`.
+
+### E. Compare-and-Swap (CAS) Ref Updates
+If and only if the candidate passes the pre-gate:
+The arbiter advances the integration branch using atomic Compare-and-Swap:
+```bash
+git update-ref refs/heads/swarm/<slug>/integration "$candidate" "$I_0"
+```
+- If another process or manual commit moved the integration ref during gating ($I \neq I_0$), `git update-ref` rejects the update loudly with exit code 128.
+- On CAS rejection, the arbiter retries candidate construction from the new tip (up to 3 attempts), completely preventing lost updates without lockups.
+
+### F. Human-Gated Promotion to Base Branch (`arbiter_promote`)
+Advancing `main` is strictly reserved for human-authorized promotion (`lib/arbiter.sh promote [--pr]`):
+
+1. **Local Mode (Repositories without remotes)**:
+   - Must be executed inside the root checkout (`$REPO_DIR`).
+   - Verifies `git status --porcelain` is clean and `main` is an ancestor of `integration`.
+   - Executes:
+     ```bash
+     git -C "$REPO_DIR" merge --ff-only "swarm/${slug}/integration"
+     ```
+   - Running `--ff-only` directly inside the root working tree ensures the index, working tree, and ref advance simultaneously without staged deletion desync.
+   - Updates local tickets frontmatter to `status: resolved`.
+2. **PR Mode (Collaborative / Remote repositories)**:
+   - Pushes `swarm/<slug>/integration` to the remote repository after explicit human driver approval.
+   - Generates and opens a GitHub Pull Request via `gh pr create`:
+     - Base: `main` (or configured `base_branch`).
+     - Head: `swarm/<slug>/integration`.
+     - Body: Itemizes every integrated ticket, commit SHA, merge SHA, test log path, and `Closes #N` directives.
+   - When the human driver merges the PR on GitHub, issues are closed automatically, and subsequent `gh_sync.sh --direction pull` runs mark local tickets `resolved`.
+
+---
+
+## 5. Invariants & Safety Guarantees
+
+1. **Root Ref Inviolability**: Automated tools and background arbiters must never execute `git update-ref` against `refs/heads/main` while it is checked out in the root working tree.
+2. **Gated Tip Invariant**: The arbiter integrates exclusively the verified commit SHA declared in the verdict, never the floating tip of the worker's branch.
+3. **Combined Gating Invariant**: `swarm/<slug>/integration` must never be advanced to a commit that has not passed the full test suite in the arbiter's worktree.
+4. **No-Force Conflict Invariant**: The arbiter must never resolve merge conflicts automatically using `--ours`, `--theirs`, or LLM guessing; conflicts are resolved exclusively by the owning worker on the seat branch.
+5. **Human Push Gate Invariant**: No commits, branches, or PRs may be pushed to remote Git origins without explicit human authorization.
+
+---
+
+## 6. Consequences
+
+### Positive
+- **Elimination of Staged Deletion Desync**: Guarantees the root checkout on `main` is never corrupted by external ref updates.
+- **Combined Build Integrity**: Prevents broken combinations of individually passing branches from landing on the staging ref.
+- **Zero Silent Data Loss**: CAS ref updates guarantee that concurrent updates are either serialized cleanly or retried loudly.
+- **Deterministic Revertability**: Non-fast-forward merges retain `--no-ff` merge commits per ticket, enabling single-ticket rollbacks (`git revert -m 1 <merge_sha>`).
+- **Seamless GitHub Issue Lifecycle**: Automatic generation of `Closes #N` in PR bodies delegates remote issue closure to GitHub's native PR merge events.
+
+### Negative / Trade-offs
+- **Additional Worktree Overhead**: Requires maintaining an arbiter worktree (`.herdr-swarm/worktrees/arbiter-<slug>`) for candidate building and test execution.
+- **Double Test Gating**: Integrated changes are tested twice—once in the worker's worktree and once in the arbiter's combined worktree. (This redundancy is an essential guarantee against cross-ticket semantic breakage).
+
+---
+
+## 7. References
+
+- [P2-4 Specification: Arbiter Branch Merge and PR Reconciliation](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md)
+- [Ticket P2-4: Phase 2 Arbiter and Branch Reconciliation](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/arbiter-and-branch-reconciliation.md)
+- [Phase 2 Advisory: Git Index and Ref Concurrency Hazards](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-advisory.md)
+- [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md)
+- [ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)
+- [ADR 0008: Supervisor Worktree Suite Gating, Provenance, and Drift Detection](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md)
