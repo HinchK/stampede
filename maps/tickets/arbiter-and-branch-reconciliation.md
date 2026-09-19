@@ -2,8 +2,9 @@
 id: P2-4
 title: "Phase 2 Arbiter and Branch Reconciliation"
 type: wayfinder:prototype
-status: backlog
+status: in_progress
 assignee: arch
+prototype_asset: lib/arbiter.sh,tests/test_arbiter.sh
 parent: maps/universal-herdr-swarm.md
 ---
 
@@ -11,22 +12,32 @@ parent: maps/universal-herdr-swarm.md
 
 ## Context & Problem Statement
 
-In Phase 2, multiple worker agents develop in parallel on isolated worktree branches (`swarm/<slug>/<seat>`). Once a worker's task achieves a verified GREEN suite gate in its isolated worktree, the resulting branch must be merged into the base branch (`main`) cleanly.
+In Phase 2, multiple worker agents develop concurrently in isolated Git worktrees (`.herdr-swarm/worktrees/<seat>`). Once a worker's task achieves a verified GREEN suite gate in its isolated worktree, the resulting branch must be merged cleanly without race conditions or corrupting the root working checkout.
 
-The Arbiter engine provides:
-1. **Task Intake & Partition Check:** Rejects overlapping file ownership (`owns`) before any worktree is provisioned.
-2. **Atomic Compare-and-Swap Fast-Forward Merge:** Merges verified worker commits into the base branch without merge conflicts or clobbering root state.
-3. **Integration PR Synthesis:** When direct fast-forward is not possible or remote pull request workflow is enabled, opens an upstream pull request linking to the local ticket (`Closes #<github_issue>`).
+PM's comprehensive specification in [docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md) defines the exact deterministic shell tooling (`lib/arbiter.sh`) for serializing integration into a dedicated `swarm/<slug>/integration` branch using Compare-and-Swap (CAS), gating the combined tree in a detached worktree, and providing human-supervised promotion.
 
 ## Preamble
 
-1. **Intended Outcome**: `arch` implements `lib/arbiter.sh` providing safe branch reconciliation, partition checking, and pull request integration for verified worktree branches.
+1. **Intended Outcome**: `arch` implements `lib/arbiter.sh` and test suite `tests/test_arbiter.sh` following PM's specification in `docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md`.
 2. **Explicit Done-Criteria**:
-   - `lib/arbiter.sh` provides:
-     - `partition_check`: Validates file patterns owned by active seats to ensure conflict-free parallel work.
-     - `arbiter_merge(seat, branch, base_branch)`: Verifies suite verdict, checks fast-forward eligibility, and executes compare-and-swap merge.
-     - `arbiter_pr(seat, branch, repo)`: Creates GitHub pull request via `gh pr create` linked to the associated ticket.
-   - Passes `shellcheck` with 0 warnings.
+   - `lib/arbiter.sh`:
+     - `arbiter_enqueue <ticket> <seat> <sha>`: Appends `{status: "queued"}` to `.herdr-swarm/integration.jsonl`. Handles supersession if newer green verdict arrives for the same ticket.
+     - `arbiter_drain`: Serialized queue processor using atomic directory lock (`.herdr-swarm/arbiter.lock`).
+       - Resolves `I0 = rev-parse swarm/<slug>/integration` (initialized from base branch if missing).
+       - In detached worktree (`.herdr-swarm/worktrees/arbiter-<slug>`):
+         - Fast-forward if `is-ancestor(I0, sha)`, otherwise builds merge commit off-branch (`--no-ff`). On conflict, aborts and records `status: "conflict"`.
+         - Pre-gates candidate: runs `TEST_CMD` with arbiter `TMPDIR`. If RED, records `status: "integration_red"` and ref is not advanced.
+         - CAS ref update: `git update-ref refs/heads/swarm/<slug>/integration <candidate> <I0>`.
+         - Records `status: "integrated"` and emits `arbiter.integrated` telemetry.
+     - `arbiter_promote [--pr]`: Human promotion step.
+       - Local mode: runs `git merge --ff-only swarm/<slug>/integration` in the root working checkout.
+       - PR mode: pushes `swarm/<slug>/integration` and creates GitHub PR linking to resolved tickets.
+   - `tests/test_arbiter.sh`:
+     - Unit test suite verifying queue, CAS merge, conflict rejection, integration gating, and promotion.
+   - Quality checks:
+     - `shellcheck lib/arbiter.sh` passes cleanly with 0 warnings.
+     - `bash tests/test_arbiter.sh` passes all assertions.
 3. **Verification Step**:
+   - Run `bash tests/test_arbiter.sh`.
    - Run `shellcheck lib/arbiter.sh`.
-   - Run integration merge test in scratch git repository.
+   - Commit changes and emit `ARCH DONE #24 <commit_sha>`.
