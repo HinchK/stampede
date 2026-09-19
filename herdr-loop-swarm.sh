@@ -298,6 +298,14 @@ case "$MODE" in
     fi
     ;;
   r)
+    # Suite gate (mirrors mode a): resume drains a whole map through suite
+    # verification — an unrunnable TEST_CMD would fake-green every ticket.
+    if ! test_cmd_is_runnable "${TEST_CMD:-}"; then
+      printf '  %s✖ FATAL: resume-map requires a runnable test validation command (found: "%s").%s\n' \
+        "$RED" "${TEST_CMD:-<empty>}" "$RESET" >&2
+      printf '    Fix: set TEST_CMD in %s/.herdr-swarm/profile.env (e.g. TEST_CMD="make test")\n' "$PWD" >&2
+      exit 1
+    fi
     if [[ -z "$MAP_NUM" ]]; then
       note "Querying open Wayfinder maps on ${REPO}..."
       MAPS_JSON=$(gh issue list -R "$REPO" --label "wayfinder:map" --state open --json number,title 2>/dev/null || echo "[]")

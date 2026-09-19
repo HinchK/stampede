@@ -173,9 +173,16 @@ harvest_verdicts() {
         "$(jq -cn --arg s "$suite_ok" --arg sha "$sha" --arg seat "$seat" --arg t "$ticket" \
           '{suite:$s, sha:$sha, summary:("suite " + $s + " @ " + $sha), details:("seat=" + $seat + " ticket=#" + $t)}')" \
         --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
-      [[ "$suite_ok" == "green" || "$suite_ok" == "skipped" ]] && \
-        herdr agent prompt looper "LOOP-BOT: filed verdict for #$ticket @ ${sha} from $seat's pane ($suite_ok)." >/dev/null 2>&1 || true
-    done < <(grep -E "ARCH DONE #[0-9]+" <<<"$out" | tail -n 5)
+      # Acceptance semantics: only a GREEN gate retires a ticket. RED demands
+      # fix-and-reverdict. SKIPPED (gate off / no runnable TEST_CMD) is never
+      # reported to looper as accepted completion — it escalates to the human.
+      if [[ "$suite_ok" == "green" ]]; then
+        herdr agent prompt looper "LOOP-BOT: filed verdict for #$ticket @ ${sha} from $seat's pane (green)." >/dev/null 2>&1 || true
+      elif [[ "$suite_ok" == "skipped" ]]; then
+        bad "verdict for #$ticket @ ${sha} recorded WITHOUT suite verification — HUMAN EVALUATION REQUIRED"
+        herdr agent prompt looper "LOOP-BOT: verdict for #$ticket @ ${sha} from $seat's pane could NOT be suite-verified (gate off or non-runnable TEST_CMD). Do NOT retire the ticket — human evaluation required." >/dev/null 2>&1 || true
+      fi
+    done < <(grep -E '^[[:space:]]*ARCH DONE #[0-9]+[[:space:]]+[0-9a-fA-F]{7,40}[[:space:]]*$' <<<"$out" | tail -n 5)
   done
 }
 
