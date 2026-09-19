@@ -214,7 +214,7 @@ fi
 
 # ── Python Reconciliation Engine ───────────────────────────────────────────
 RECONCILE_OUTPUT=$(python3 -c '
-import sys, os, glob, re, json, datetime
+import sys, os, glob, re, json
 
 target_dir = sys.argv[1]
 tickets_dir = os.path.join(target_dir, "maps", "tickets")
@@ -222,7 +222,7 @@ repo = sys.argv[2]
 remote_json_str = sys.argv[3]
 direction = sys.argv[4]
 ticket_filter = sys.argv[5].strip()
-is_apply = sys.argv[6] == "true"
+is_apply = (sys.argv[6] == "true")
 
 try:
     remote_issues = json.loads(remote_json_str)
@@ -231,9 +231,7 @@ except Exception as e:
     sys.exit(1)
 
 # Index remote issues
-# 1. By issue number
 remote_by_number = {issue["number"]: issue for issue in remote_issues}
-# 2. By ticket ID in title prefix e.g. [T-017]
 remote_by_ticket_id = {}
 for issue in remote_issues:
     m = re.match(r"^\[([A-Za-z0-9_-]+)\]", issue.get("title", ""))
@@ -304,6 +302,8 @@ summary = {"create": 0, "link": 0, "update_remote": 0, "update_local": 0, "in_sy
 for t in local_tickets:
     t_id = t["id"]
     t_num = t["github_issue"]
+    t_st = t["status"]
+    t_ti = t["title"]
     
     # Case 1: Linked to remote issue number
     if t_num is not None:
@@ -312,7 +312,7 @@ for t in local_tickets:
             plan_items.append({
                 "action": "WARN_MISSING",
                 "ticket_id": t_id,
-                "title": t["title"],
+                "title": t_ti,
                 "file": t["rel_path"],
                 "github_issue": t_num,
                 "detail": f"Local ticket references remote #{t_num}, but #{t_num} was not found on remote."
@@ -320,8 +320,7 @@ for t in local_tickets:
             continue
             
         r_state = remote_issue.get("state", "OPEN").upper()
-        # Local resolved / closed vs remote state
-        local_is_closed = t["status"] in ("resolved", "closed", "done")
+        local_is_closed = t_st in ("resolved", "closed", "done")
         remote_is_closed = (r_state == "CLOSED")
         
         if local_is_closed and not remote_is_closed:
@@ -329,10 +328,10 @@ for t in local_tickets:
                 "action": "UPDATE_REMOTE",
                 "subaction": "close",
                 "ticket_id": t_id,
-                "title": t["title"],
+                "title": t_ti,
                 "file": t["rel_path"],
                 "github_issue": t_num,
-                "detail": f"Local status is \x27{t[\x27status\x27]}\x27, but remote #{t_num} is OPEN -> Close remote issue."
+                "detail": f"Local status is \"{t_st}\", but remote #{t_num} is OPEN -> Close remote issue."
             })
             summary["update_remote"] += 1
         elif not local_is_closed and remote_is_closed:
@@ -341,10 +340,10 @@ for t in local_tickets:
                     "action": "UPDATE_LOCAL",
                     "subaction": "resolve",
                     "ticket_id": t_id,
-                    "title": t["title"],
+                    "title": t_ti,
                     "file": t["rel_path"],
                     "github_issue": t_num,
-                    "detail": f"Remote #{t_num} was closed on GitHub -> Update local status to \x27resolved\x27."
+                    "detail": f"Remote #{t_num} was closed on GitHub -> Update local status to \"resolved\"."
                 })
                 summary["update_local"] += 1
             else:
@@ -352,17 +351,17 @@ for t in local_tickets:
                     "action": "UPDATE_REMOTE",
                     "subaction": "reopen",
                     "ticket_id": t_id,
-                    "title": t["title"],
+                    "title": t_ti,
                     "file": t["rel_path"],
                     "github_issue": t_num,
-                    "detail": f"Local status is active (\x27{t[\x27status\x27]}\x27), but remote #{t_num} is CLOSED -> Reopen remote issue."
+                    "detail": f"Local status is active (\"{t_st}\"), but remote #{t_num} is CLOSED -> Reopen remote issue."
                 })
                 summary["update_remote"] += 1
         else:
             plan_items.append({
                 "action": "IN_SYNC",
                 "ticket_id": t_id,
-                "title": t["title"],
+                "title": t_ti,
                 "file": t["rel_path"],
                 "github_issue": t_num,
                 "detail": f"Local and remote #{t_num} states match ({r_state})."
@@ -371,7 +370,6 @@ for t in local_tickets:
             
     # Case 2: Unlinked (github_issue is empty)
     else:
-        # Check if matching remote issue already exists by [T-XXX] prefix
         matched_remote = remote_by_ticket_id.get(t_id)
         if matched_remote:
             r_num = matched_remote["number"]
@@ -379,7 +377,7 @@ for t in local_tickets:
             plan_items.append({
                 "action": "LINK",
                 "ticket_id": t_id,
-                "title": t["title"],
+                "title": t_ti,
                 "file": t["rel_path"],
                 "github_issue": r_num,
                 "github_url": r_url,
@@ -390,9 +388,9 @@ for t in local_tickets:
             plan_items.append({
                 "action": "CREATE",
                 "ticket_id": t_id,
-                "title": t["title"],
+                "title": t_ti,
                 "file": t["rel_path"],
-                "detail": f"Create new GitHub issue: \"[{t_id}] {t[\x27title\x27]}\"."
+                "detail": f"Create new GitHub issue: \"[{t_id}] {t_ti}\"."
             })
             summary["create"] += 1
 
@@ -430,7 +428,8 @@ items = data["items"]
 summary = data["summary"]
 is_apply = data["is_apply"]
 
-print(f"\n{bold}Discovered Tickets:{reset} {summary[\x27total\x27]} local ticket(s) in maps/tickets/\n")
+total_count = summary["total"]
+print(f"\n{bold}Discovered Tickets:{reset} {total_count} local ticket(s) in maps/tickets/\n")
 print(f"{bold}Planned Synchronization Actions:{reset}")
 
 for item in items:
@@ -438,6 +437,7 @@ for item in items:
     t_id = item["ticket_id"]
     title = item["title"]
     detail = item["detail"]
+    gh_num = item.get("github_issue", "")
     
     if action == "CREATE":
         badge = f"{green}[CREATE]{reset}"
@@ -445,11 +445,11 @@ for item in items:
         print(f"            {dim}{detail}{reset}")
     elif action == "LINK":
         badge = f"{cyan}[LINK]{reset}  "
-        print(f"  {badge}  {bold}{t_id}{reset} -> #{item.get(\x27github_issue\x27)} {title}")
+        print(f"  {badge}  {bold}{t_id}{reset} -> #{gh_num} {title}")
         print(f"            {dim}{detail}{reset}")
     elif action == "UPDATE_REMOTE":
         badge = f"{yellow}[UPDATE]{reset}"
-        print(f"  {badge}  {bold}{t_id}{reset} (remote #{item.get(\x27github_issue\x27)})")
+        print(f"  {badge}  {bold}{t_id}{reset} (remote #{gh_num})")
         print(f"            {dim}{detail}{reset}")
     elif action == "UPDATE_LOCAL":
         badge = f"{yellow}[PULL]{reset}  "
@@ -457,17 +457,22 @@ for item in items:
         print(f"            {dim}{detail}{reset}")
     elif action == "IN_SYNC":
         badge = f"{dim}[IN_SYNC]{reset}"
-        print(f"  {badge} {t_id} (remote #{item.get(\x27github_issue\x27)}) — {detail}")
+        print(f"  {badge} {t_id} (remote #{gh_num}) — {detail}")
     elif action == "WARN_MISSING":
         badge = f"{red}[WARN]{reset}   "
         print(f"  {badge} {t_id} -> {detail}")
 
+to_create = summary["create"]
+to_link = summary["link"]
+to_update = summary["update_remote"] + summary["update_local"]
+in_sync = summary["in_sync"]
+
 print(f"\n{bold}Summary:{reset}")
-print(f"  To Create : {summary[\x27create\x27]}")
-print(f"  To Link   : {summary[\x27link\x27]}")
-print(f"  To Update : {summary[\x27update_remote\x27] + summary[\x27update_local\x27]}")
-print(f"  In Sync   : {summary[\x27in_sync\x27]}")
-print(f"  Total     : {summary[\x27total\x27]}")
+print(f"  To Create : {to_create}")
+print(f"  To Link   : {to_link}")
+print(f"  To Update : {to_update}")
+print(f"  In Sync   : {in_sync}")
+print(f"  Total     : {total_count}")
 
 if not is_apply:
     print(f"\n{green}{bold}DRY RUN:{reset} {green}No remote GitHub changes or local file writes were executed.{reset}")
@@ -541,23 +546,27 @@ for item in data["items"]:
         print(f"✓ Linked {t_id} -> #{gh_num}")
         
     elif action == "CREATE":
-        # Find ticket object
         t_obj = next((t for t in data["tickets"] if t["id"] == t_id), None)
         if not t_obj:
             continue
-        title = f"[{t_id}] {t_obj[\x27title\x27]}"
-        body = f"# [{t_id}] {t_obj[\x27title\x27]}\n\n" \
-               f"**Local Ticket:** `{t_obj[\x27rel_path\x27]}`\n" \
-               f"**Type:** `{t_obj[\x27type\x27]}` · **Status:** `{t_obj[\x27status\x27]}`\n\n---\n\n" \
-               f"{t_obj[\x27body\x27]}"
+        t_ti = t_obj["title"]
+        title = f"[{t_id}] {t_ti}"
+        t_rel = t_obj["rel_path"]
+        t_typ = t_obj["type"]
+        t_st = t_obj["status"]
+        t_bdy = t_obj["body"]
+        body = f"# [{t_id}] {t_ti}\n\n" \
+               f"**Local Ticket:** `{t_rel}`\n" \
+               f"**Type:** `{t_typ}` · **Status:** `{t_st}`\n\n---\n\n" \
+               f"{t_bdy}"
         
         # Build labels
         labels = ["swarm:ticket"]
-        if "prototype" in t_obj.get("type", ""):
+        if "prototype" in t_typ:
             labels.append("type:prototype")
-        elif "milestone" in t_obj.get("type", ""):
+        elif "milestone" in t_typ:
             labels.append("type:milestone")
-        elif "task" in t_obj.get("type", ""):
+        elif "task" in t_typ:
             labels.append("type:task")
             
         cmd = [
@@ -572,7 +581,6 @@ for item in data["items"]:
         try:
             res = subprocess.run(cmd, capture_output=True, text=True, check=True)
             url = res.stdout.strip()
-            # Extract number from URL
             m_num = re.search(r"/issues/(\d+)$", url)
             gh_num = int(m_num.group(1)) if m_num else None
             

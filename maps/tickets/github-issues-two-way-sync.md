@@ -2,7 +2,7 @@
 id: T-017
 title: "GitHub Issues Two-Way Synchronization Protocol & Tooling"
 type: wayfinder:prototype
-status: in_progress
+status: resolved
 assignee: agy-gh
 prototype_asset: docs/findings/github-issues-sync.md,lib/gh_sync.sh
 parent: maps/universal-herdr-swarm.md
@@ -14,18 +14,18 @@ parent: maps/universal-herdr-swarm.md
 
 How should the Universal Herdr Swarm synchronize local markdown tickets in `maps/tickets/*.md` with remote GitHub Issues when an upstream Git remote is connected via `gh`, preserving offline-first local operation while allowing team visibility on GitHub?
 
-## Preamble
+## Resolution
 
-1. **Intended Outcome**: `agy-gh` authors `docs/findings/github-issues-sync.md` documenting the bi-directional mapping between local YAML-frontmatter markdown tickets and GitHub Issues, and prototypes a non-destructive dry-run sync script `lib/gh_sync.sh`.
-2. **Explicit Done-Criteria**:
-   - `docs/findings/github-issues-sync.md`:
-     - Documents frontmatter schema mapping: `id`, `title`, `status` (`backlog` | `in_progress` | `resolved` | `blocked`), `assignee`, `labels`.
-     - Details sync rules: Local is source of truth for architecture; GitHub issue number is recorded in local ticket frontmatter (`github_issue: <number>`).
-     - Zero unconfirmed writes: dry-run mode by default, fail-closed if `gh auth status` or remote origin is absent.
-   - `lib/gh_sync.sh`:
-     - Validates `gh` authentication and remote existence.
-     - Supports `--dry-run` listing proposed issue creations or status updates.
-     - Passes shellcheck cleanly.
-3. **Verification Step**:
-   - Run `shellcheck lib/gh_sync.sh` with 0 warnings.
-   - Run `bash lib/gh_sync.sh --dry-run` to test fail-closed handling in repos without a remote.
+Built and validated prototype in [`docs/findings/github-issues-sync.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/github-issues-sync.md) and [`lib/gh_sync.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/gh_sync.sh):
+1. **Bi-Directional Schema Mapping:**
+   - Documented frontmatter schema mapping (`id`, `title`, `status`, `type`, `assignee`, `github_issue`, `github_url`, `synced_at`, `synced_sha`).
+   - Mapped local status lifecycle (`backlog`, `in_progress`, `resolved`, `closed`, `blocked`) to GitHub state, stateReason, and `status:*` labels.
+   - Established local tickets as canonical single source of truth for architecture and criteria, with remote issue numbers anchored in YAML frontmatter.
+2. **Fail-Closed Remote Policies:**
+   - Enforced preflight validation matrix: `gh` CLI presence, active authentication (`gh auth status`), and canonical repository resolution via `lib/profile.sh` `detect_repo`.
+   - Zero unconfirmed writes: `--dry-run` is active by default; explicit `--apply` required for remote mutations or frontmatter updates.
+3. **Synchronization Tooling Prototype (`lib/gh_sync.sh`):**
+   - Implemented `lib/gh_sync.sh` supporting `--dry-run`, `--apply`, `--repo`, `--target-dir`, `--direction`, `--ticket`, and `--json`.
+   - Reconciles unlinked tickets (`[CREATE]`), matching remote titles (`[LINK]`), and drifted statuses (`[UPDATE]`).
+   - ShellCheck compliant with 0 warnings.
+   - Verified fail-closed handling when invoked without a configured remote origin.
