@@ -4,9 +4,7 @@ title: "Workspace Lifecycle and Clean Teardown Protocol"
 type: wayfinder:grilling
 status: open
 assignee: unassigned
-blocked_by:
-  - "maps/tickets/profile-detection-and-fail-closed-target-policy.md"
-  - "maps/tickets/herdr-workspace-routing-and-agent-namespacing.md"
+blocked_by: []
 parent: maps/universal-herdr-swarm.md
 ---
 

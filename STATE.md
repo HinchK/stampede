@@ -119,18 +119,20 @@
 ## 3. Open Items & Blockers
 
 - **T-014 (Git Baseline)**: [x] **COMPLETED** (Commit `95044cc`: `chore: initial repository baseline (#T-014)`).
-- **T-001 (Herdr Semantics Research Spike)**: **IN PROGRESS** (Dispatched to `arch`).
-- **T-013 (Bats Harness)**: Ready to run in parallel.
+- **T-001 (Herdr Semantics Research Spike)**: [x] **COMPLETED** (Commits `97b67d0` & `6ad4afe`: `docs/findings/herdr-semantics.md`).
+- **T-009 (Telemetry Schema Research Spike)**: [x] **COMPLETED** (Commit `c6ccc78`: `docs/findings/telemetry-schema.md`).
+- **T-002 (Profile Detection & Fail-Closed Policy)**: [x] **COMPLETED** (Prototype asset `lib/profile.sh` validated across ecosystems).
 - **Agent Panes Status**:
-  - `arch`: Working on T-001.
-  - `pm`: Completing strategic audit (advising with Opus 5).
-  - `agy-docs`: Synced on M1, standing by for ADRs & docs review.
-  - `agy-gh`: Synced on M1, standing by for ticket/remote sync.
+  - `arch`: Idle, finished T-001, awaiting next dispatch.
+  - `pm`: Completed strategic audit on branch `worktree-pm-audit`.
+  - `agy-docs`: Synced on M1, standing by for ADRs & documentation tasks.
+  - `agy-gh`: Synced on M1, standing by for remote GitHub issue synchronization.
 
 ---
 
 ## 4. Next Immediate Action
 
-1. `arch` completes **Ticket T-001** (write `docs/findings/herdr-semantics.md` with empirical probe results).
-2. Commit T-001 findings with conventional commit (`docs: research herdr workspace-focus and agent-name semantics (#T-001)`).
-3. Dispatch **Ticket T-004** / **Ticket T-005** based on T-001 empirical findings.
+1. Choose next frontier decision ticket:
+   - **[Supervisor Bug Fixes and Re-Verdict Logic](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/supervisor-bug-fixes-and-re-verdict-logic.md)** (`T-007a`)
+   - **[TOML Configuration Schema and Shell Binding](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/toml-configuration-schema-and-shell-binding.md)** (`T-003`)
+   - **[Workspace Lifecycle and Clean Teardown Protocol](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/workspace-lifecycle-and-clean-teardown-protocol.md)** (`T-011`)

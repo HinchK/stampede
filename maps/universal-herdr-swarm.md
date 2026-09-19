@@ -16,6 +16,7 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - [Foundations: Git Baseline Initialization](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/git-baseline-initialization.md): Initialized standalone Git repository on `main` with comprehensive `.gitignore` and baseline commit `95044cc`.
 - [Herdr Semantics: Workspace Routing and Agent Namespacing](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/herdr-workspace-routing-and-agent-namespacing.md): Confirmed pane commands route via workspace-prefixed pane IDs (never `--current`), agent names are server-global requiring `seat-<slug>` format, and separator must be `-` or `_` (`·` is rejected).
 - [Telemetry Event Schema and Live Ops Streaming](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/telemetry-event-schema-and-live-ops-streaming.md): Defined standard JSONL event contract (domain.action envelope), resolved 5 launcher/supervisor/guard disconnections, and specified a 1-line ANSI streaming engine in telemetry.py for the Ops pane.
+- [Profile Detection and Fail-Closed Target Policy](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/profile-detection-and-fail-closed-target-policy.md): Built and validated prototype in lib/profile.sh establishing multi-manifest detection, fail-closed remotes (no kultivait default), and fail-closed test validation (no fake-green "true" fallback).
 
 ## Not yet specified
 
