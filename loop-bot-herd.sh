@@ -147,6 +147,14 @@ harvest_verdicts() {
           continue
         fi
       fi
+      # Commit reality check: the verdict sha must name an existing commit in
+      # the target repo. Fabricated/stale shas are never suite-gated.
+      if ! git -C "$REPO_DIR" cat-file -e "${sha}^{commit}" 2>/dev/null; then
+        warn "verdict for #$ticket @ ${sha}: commit not found in repo — skipped, human evaluation required"
+        echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"skipped\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        herdr agent prompt looper "LOOP-BOT: verdict for #$ticket @ ${sha} names a commit absent from the repo — do NOT retire the ticket; human evaluation required." >/dev/null 2>&1 || true
+        continue
+      fi
       local suite_ok="skipped"
       if [[ "$(ctl_get suite_gate)" == "true" ]]; then
         if test_cmd_is_runnable "$TEST_CMD"; then

@@ -9,7 +9,6 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 LIB_DIR="$SCRIPT_DIR/lib"
 CONFIG_FILE="$SCRIPT_DIR/swarm.config.toml"
-ENV_FILE="${PWD}/.env"
 
 # ──────────────────────────────────────────────────────────────────────────
 # Shared swarm libraries (loaded before dispatch so subcommands inherit them)
@@ -84,12 +83,13 @@ while [[ $# -gt 0 ]]; do
       CLI_MODE="s"; shift ;;
     -h|--help)
       cat <<EOF
-Usage: $(basename "$0") [up] [OPTIONS] | status [dir] | down [dir] [FLAGS]
+Usage: $(basename "$0") [up [dir]] [OPTIONS] | [dir] [OPTIONS] | status [dir] | verify [dir] [ms] | down [dir] [FLAGS]
 
 Autonomous Multi-Agent Orchestration Swarm (Herdr + AGY + Claude Code + OpenCode + Kultivait)
 
 Subcommands:
   up (default)            Launch or re-attach the swarm for the current repo
+                          (optionally: up <dir> — operate on that repo instead)
   status [dir]            Show workspace, seats, profile, and recent activity
   verify [dir] [ms]       Check every seat is alive and brief-ready (default 30000ms)
   down [dir] [FLAGS]      Tear down the swarm tied to a directory
@@ -110,9 +110,19 @@ Options (launch):
 EOF
       exit 0 ;;
     *)
-      shift ;;
+      # First bare token is the target repo directory (up [dir] / [dir])
+      CLI_DIR="${CLI_DIR:-$1}"; shift ;;
   esac
 done
+
+# Target directory: swarm operates on the repo named by [dir] (default: cwd)
+if [[ -n "$CLI_DIR" ]]; then
+  if ! cd "$CLI_DIR" 2>/dev/null; then
+    printf '✖ FATAL: cannot enter target directory: %s\n' "$CLI_DIR" >&2
+    exit 1
+  fi
+fi
+ENV_FILE="${PWD}/.env"
 
 # Terminal Formatting
 if [[ -t 1 ]] && command -v tput >/dev/null 2>&1 && [[ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]]; then

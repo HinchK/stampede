@@ -309,7 +309,7 @@ swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
       continue
     fi
     if herdr agent wait "$name" --until idle --until "done" --until working --timeout "$timeout_ms" >/dev/null 2>&1; then
-      printf '  %s✓ %s (%s in %s): ready%s\n' "$GREEN" "$name" "$kind" "$pane" "$RESET"
+      printf '  %s✓ %s (%s in %s): interactive-ready%s\n' "$GREEN" "$name" "$kind" "$pane" "$RESET"
     else
       printf '  %s✖ %s: not ready within %sms%s\n' "$RED" "$name" "$timeout_ms" "$RESET"
       failures=1
