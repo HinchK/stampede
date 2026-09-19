@@ -125,9 +125,21 @@ while [[ $# -gt 0 ]]; do
       exit 0
       ;;
     *)
-      echo "${RED}ERROR: Unknown option '$1'${RESET}" >&2
-      echo "Run 'lib/gh_sync.sh --help' for available options." >&2
-      exit 1
+      if [[ -d "$1" ]]; then
+        if [[ "$1" == "maps/tickets" || "$1" == */maps/tickets || "$1" == "maps/tickets/" || "$1" == */maps/tickets/ ]]; then
+          TARGET_DIR="$(cd "$1/../.." && pwd)"
+        else
+          TARGET_DIR="$(cd "$1" && pwd)"
+        fi
+        shift
+      elif [[ -f "$1" || "$1" =~ ^[A-Za-z0-9_-]+$ ]]; then
+        TICKET_FILTER="$1"
+        shift
+      else
+        echo "${RED}ERROR: Unknown option or path '$1'${RESET}" >&2
+        echo "Run 'lib/gh_sync.sh --help' for available options." >&2
+        exit 1
+      fi
       ;;
   esac
 done
@@ -290,7 +302,13 @@ for tf in ticket_files:
     }
     
     if ticket_filter:
-        if ticket_filter != t_id and ticket_filter not in tf:
+        filters = [f.strip() for f in ticket_filter.split(",") if f.strip()]
+        matched = False
+        for f in filters:
+            if f == t_id or f in tf or t_id.startswith(f + "-") or (f.endswith("*") and t_id.startswith(f[:-1])):
+                matched = True
+                break
+        if not matched:
             continue
             
     local_tickets.append(ticket_data)
