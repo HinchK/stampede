@@ -32,13 +32,12 @@ UNPUSHED_NUDGE_S=$((60 * 60))       # one unpushed reminder per hour
 CREDIT_WARN_USD="${CREDIT_WARN_USD:-1.00}"
 SUITE_TIMEOUT_S="${SUITE_TIMEOUT_S:-300}"
 EXPECTED_SEATS=(looper arch agy-docs agy-gh)
-declare -a NUDGED=()
 
 if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
-  BOLD=$(tput bold); DIM=$(tput dim); RESET=$(tput sgr0)
+  DIM=$(tput dim); RESET=$(tput sgr0)
   GREEN=$(tput setaf 2); YELLOW=$(tput setaf 3); RED=$(tput setaf 1); BLUE=$(tput setaf 4)
 else
-  BOLD=""; DIM=""; RESET=""; GREEN=""; YELLOW=""; RED=""; BLUE=""
+  DIM=""; RESET=""; GREEN=""; YELLOW=""; RED=""; BLUE=""
 fi
 
 log()  { printf '%s[%s]%s %s\n' "$DIM" "$(date '+%H:%M:%S')" "$RESET" "$1"; }
@@ -72,8 +71,11 @@ health_pass() {
       warn "seat absent: $seat (seat it: ../kultivait-internals/herdr-briefs/ has its brief; herdr-kultivait-session.sh recovers)"
     fi
   done
-  (( alive == ${#EXPECTED_SEATS[@]} )) && ok "herd healthy (${alive}/${#EXPECTED_SEATS[@]} seats)" \
-    || warn "herd partial: ${alive}/${#EXPECTED_SEATS[@]}"
+  if (( alive == ${#EXPECTED_SEATS[@]} )); then
+    ok "herd healthy (${alive}/${#EXPECTED_SEATS[@]} seats)"
+  else
+    warn "herd partial: ${alive}/${#EXPECTED_SEATS[@]}"
+  fi
   if curl -sf --max-time 3 http://localhost:11434/api/tags >/dev/null 2>&1; then
     : # ollama up — say nothing unless it's down (quiet loop)
   else
@@ -82,46 +84,50 @@ health_pass() {
 }
 
 # ---- 2. verdict harvest + suite gate -------------------------------------
-# ARCH DONE lines are the herd's completion protocol; once harvested they
-# are logged with a timestamp so nothing is filed twice.
+# ARCH DONE lines are the herd's completion protocol. Dedup is (ticket, sha):
+# an identical code state is never re-gated, while a RED ticket re-verdicted
+# at a NEW commit sha is re-evaluated through the suite gate. Tickets already
+# gated green/skipped are permanently retired.
 harvest_verdicts() {
   local seat out
   for seat in "${EXPECTED_SEATS[@]}"; do
     out=$(herdr agent read "$seat" 2>/dev/null || true)
     [[ -n "$out" ]] || continue
     while IFS= read -r line; do
-      local ticket verdict_line ts
+      local ticket verdict_line ts sha
       verdict_line="$line"
       ticket=$(sed -nE 's/.*ARCH DONE #([0-9]+).*/\1/p' <<<"$verdict_line" | tail -n1)
       [[ -n "$ticket" ]] || continue
+      # Commit sha: carried in the verdict line (ARCH DONE #N <sha>), else repo HEAD
+      sha=$(sed -nE 's/.*ARCH DONE #[0-9]+[[:space:]]+([0-9a-fA-F]{7,40}).*/\1/p' <<<"$verdict_line" | tail -n1)
+      [[ -n "$sha" ]] || sha=$(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
       ts=$(date +%s)
-      # dedupe with exact ticket matching; allow re-verdicts if verdict line changed
       if [[ -f "$SESSION_LOG" ]]; then
-        # Skip if ticket already passed (green or skipped)
+        # Permanent retire: this ticket already gated green or skipped
         if jq -e -s --argjson t "$ticket" 'any(.[]; .ticket == $t and (.suite == "green" or .suite == "skipped"))' "$SESSION_LOG" >/dev/null 2>&1; then
           continue
         fi
-        # Skip if this exact verdict line was already evaluated
-        if jq -e -s --argjson t "$ticket" --arg v "$verdict_line" 'any(.[]; .ticket == $t and .verdict == $v)' "$SESSION_LOG" >/dev/null 2>&1; then
+        # (ticket, sha) dedup: this exact code state was already evaluated
+        if jq -e -s --argjson t "$ticket" --arg s "$sha" 'any(.[]; .ticket == $t and .sha == $s)' "$SESSION_LOG" >/dev/null 2>&1; then
           continue
         fi
       fi
       local suite_ok="skipped"
       if [[ "$(ctl_get suite_gate)" == "true" ]]; then
-        log "verdict for #$ticket — running the suite gate"
+        log "verdict for #$ticket @ ${sha} — running the suite gate"
         if (cd "$REPO_DIR" && timeout "$SUITE_TIMEOUT_S" uv run pytest -q >/dev/null 2>&1); then
-          suite_ok="green"; ok "suite gate GREEN for #$ticket"
-          echo "{\"ts\": $ts, \"ticket\": $ticket, \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+          suite_ok="green"; ok "suite gate GREEN for #$ticket @ ${sha}"
+          echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
         else
-          suite_ok="RED"; bad "suite gate RED for #$ticket — NOT filed; arch must fix before done"
-          echo "{\"ts\": $ts, \"ticket\": $ticket, \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
-          herdr agent prompt "$seat" "LOOP-BOT: verdict for #$ticket harvested but the suite is RED — fix and re-verdict (gate is structural now)." >/dev/null 2>&1 || true
+          suite_ok="RED"; bad "suite gate RED for #$ticket @ ${sha} — NOT filed; arch must fix before done"
+          echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+          herdr agent prompt "$seat" "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate is structural now)." >/dev/null 2>&1 || true
         fi
       else
-        echo "{\"ts\": $ts, \"ticket\": $ticket, \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
       fi
       [[ "$suite_ok" == "green" || "$suite_ok" == "skipped" ]] && \
-        herdr agent prompt looper "LOOP-BOT: filed verdict for #$ticket from $seat's pane ($suite_ok)." >/dev/null 2>&1 || true
+        herdr agent prompt looper "LOOP-BOT: filed verdict for #$ticket @ ${sha} from $seat's pane ($suite_ok)." >/dev/null 2>&1 || true
     done < <(grep -E "ARCH DONE #[0-9]+" <<<"$out" | tail -n 5)
   done
 }
@@ -215,7 +221,7 @@ cmd_status() {
   echo "control: $(cat "$CONTROL" 2>/dev/null || echo '(defaults)')"
   echo "verdicts filed: $(grep -c . "$SESSION_LOG" 2>/dev/null || echo 0)"
   echo "unpushed: $(cd "$REPO_DIR" && git rev-list --count origin/main..HEAD 2>/dev/null || echo '?') commit(s)"
-  echo "channel dir: $CHANNEL_DIR ($(ls "$CHANNEL_DIR" 2>/dev/null | wc -l | tr -d ' ') file(s))"
+  echo "channel dir: $CHANNEL_DIR ($(find "$CHANNEL_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ') file(s))"
 }
 
 case "${1:-watch}" in

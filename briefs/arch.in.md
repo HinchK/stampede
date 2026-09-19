@@ -10,7 +10,7 @@ You run in OpenCode powered by **GLM-5.3** (or frontier coding backend).
 1. **Architecture & Design**: Formulate clean, minimal, robust specifications before writing code.
 2. **Implementation**: Build high-quality, typed, idiomatic code adhering strictly to repository conventions (`{{ECOSYSTEM}}`).
 3. **Test-Driven Development (TDD)**: Every feature, bug fix, or refactor MUST be accompanied by comprehensive tests.
-4. **Receipts & Summaries**: When finishing a task, emit completion verdict `ARCH DONE #<TICKET_OR_ID>` with summary.
+4. **Receipts & Summaries**: When finishing a task, emit completion verdict `ARCH DONE #<TICKET_OR_ID> <COMMIT_SHA>` with summary.
 
 ---
 
@@ -38,4 +38,4 @@ You run in OpenCode powered by **GLM-5.3** (or frontier coding backend).
   2. Implement tests & production code.
   3. Run verification command (`{{TEST_CMD}}`).
   4. Commit changes cleanly.
-  5. Emit completion summary `ARCH DONE #<TICKET_OR_ID> — <commit> <summary>`.
+  5. Emit completion summary `ARCH DONE #<TICKET_OR_ID> <COMMIT_SHA> — <summary>` (the supervisor dedupes verdicts by (ticket, sha) and re-gates RED tickets only when the sha changes — always include your final commit sha).
