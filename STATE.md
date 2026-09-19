@@ -17,7 +17,8 @@
 - **Dynamic Seating & Templated Brief Delivery (T-INT-2, T-005, T-INT-3):** Resolved in commit `2455bc5`. Dynamic seating from `swarm.config.toml` with `<seat>-<slug>` namespacing, nonce file-path prompt delivery (<200b), and `.herdr-swarm/seats.json` durable ledger.
 - **Supervisor Genericization & Re-Verdicts (T-007a-fix, T-007b):** Resolved in commits `64170d7` and `94d6534`. Strict `(ticket, sha)` deduplication, `profile.env` binding, and real project test runner gating.
 
-- **Seat Verification & Readiness Gate (T-010):** Resolved in commit `33a07b3`. `swarm_verify_seats` inspects seat ledger or live agents, verifies interactive readiness, enforces fail-closed execution in autonomous mode, and provides the `verify` CLI subcommand.
+- **Telemetry Event Engine & Live Ops Streaming (T-009-impl):** Resolved in commit `8b059f2`. Upgraded `lib/telemetry.py` with project-scoped traces (`.herdr-swarm/traces/`), standardized `domain.action` envelope, column-clamped ANSI badge streaming in Ops pane, and unified session logging in launcher and supervisor.
+- **Architecture Decision Records & System Vocabulary:** Resolved in commit `aa06ec4`. `agy-docs` authored ADRs 0001–0005 in `docs/adr/` with index in `README.md`, and system vocabulary with `_Avoid_` anti-patterns in `CONTEXT.md`.
 
 ---
 
@@ -29,14 +30,15 @@
 - **M3 (Lifecycle & Observability) Progress:**
   - T-INT-4 (`up`/`down`/`status` subcommands): Complete (`5ca2049`).
   - T-010 (Seat verification & brief acknowledgment gate): Complete (`33a07b3`).
+  - T-009-impl (Telemetry event engine & live Ops streaming): Complete (`8b059f2`).
   - Next Up:
-    1. `T-009`: Telemetry event engine wiring (`domain.action` envelope into `.herdr-swarm/traces/`).
-    2. `T-015b`: Complete README & user guide polish.
+    1. `T-015b`: Complete README & user guide polish (capturing modular architecture, lifecycle subcommands, seat verification, and live telemetry).
+    2. End-to-end swarm rehearsal & live dogfood verification.
 
 ---
 
 ## 3. Immediate Next Step
 
-- Create ticket `maps/tickets/telemetry-event-engine-wiring.md` for `T-009`.
-- Dispatch `arch` to wire structured JSONL telemetry logging (`domain.action` envelope) into `.herdr-swarm/traces/` across the launcher and supervisor.
-- Monitor `agy-docs` completion of ADRs and `CONTEXT.md`.
+- Draft ticket `maps/tickets/readme-and-user-guide-polish.md` for `T-015b`.
+- Dispatch `agy-docs` and `arch` to refine `README.md` and user documentation.
+- Execute full dry-run / live rehearsal of `herdr-loop-swarm.sh`.
