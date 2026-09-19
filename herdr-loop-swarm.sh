@@ -14,6 +14,57 @@ LOG_FILE="/tmp/herdr-process.log"
 SESSION_ID="swarm-$(date +%Y%m%d-%H%M%S)"
 ENV_FILE="${PWD}/.env"
 
+# ──────────────────────────────────────────────────────────────────────────
+# Shared swarm libraries (loaded before dispatch so subcommands inherit them)
+# ──────────────────────────────────────────────────────────────────────────
+# shellcheck disable=SC1091  # dynamically resolved sibling libs
+source "$LIB_DIR/common.sh"
+# shellcheck disable=SC1091  # dynamically resolved sibling libs
+source "$LIB_DIR/profile.sh"
+# shellcheck disable=SC1091  # dynamically resolved sibling libs
+source "$LIB_DIR/lifecycle.sh"
+# shellcheck disable=SC1091  # dynamically resolved sibling libs
+source "$LIB_DIR/config.sh"
+# shellcheck disable=SC1091  # dynamically resolved sibling libs
+source "$LIB_DIR/briefs.sh"
+# shellcheck disable=SC1091  # dynamically resolved sibling libs
+source "$LIB_DIR/preflight.sh"
+
+# ──────────────────────────────────────────────────────────────────────────
+# Lifecycle subcommands (delegating to lib/lifecycle.sh)
+# ──────────────────────────────────────────────────────────────────────────
+case "${1:-}" in
+  status)
+    swarm_status "${2:-$PWD}"
+    exit $?
+    ;;
+  down)
+    shift
+    down_dir="$PWD"; down_yes=0; down_keep=0
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -y|--yes)               down_yes=1 ;;
+        --keep-ws|--keep-workspace) down_keep=1 ;;
+        -h|--help)
+          printf 'Usage: %s down [dir] [-y|--yes] [--keep-ws|--keep-workspace]\n' "$(basename "$0")"
+          exit 0 ;;
+        -*) printf 'unknown flag: %s\n' "$1" >&2; exit 2 ;;
+        *)  down_dir="$1" ;;
+      esac
+      shift
+    done
+    swarm_down "$down_dir" "$down_yes" "$down_keep"
+    exit $?
+    ;;
+  up)
+    # explicit launch; consume the subcommand token
+    shift
+    ;;
+  -*|"")
+    # flags or bare invocation: default to launch
+    ;;
+esac
+
 # Command-Line Flags
 CLI_MODE=""
 CLI_MAP=""
@@ -31,11 +82,18 @@ while [[ $# -gt 0 ]]; do
       CLI_MODE="s"; shift ;;
     -h|--help)
       cat <<EOF
-Usage: $(basename "$0") [OPTIONS]
+Usage: $(basename "$0") [up] [OPTIONS] | status [dir] | down [dir] [FLAGS]
 
 Autonomous Multi-Agent Orchestration Swarm (Herdr + AGY + Claude Code + OpenCode + Kultivait)
 
-Options:
+Subcommands:
+  up (default)            Launch or re-attach the swarm for the current repo
+  status [dir]            Show workspace, seats, profile, and recent activity
+  down [dir] [FLAGS]      Tear down the swarm tied to a directory
+                            -y, --yes                      skip confirmation
+                            --keep-ws, --keep-workspace    close seat panes only
+
+Options (launch):
   -m, --mode <w|b|r|a|s>  Swarm mode:
                             w = Wayfinder Map (interactive chartering)
                             b = Brainstorm (PRD & ticket breakdown)
@@ -109,15 +167,19 @@ _clear
 printf '\n%s%s  ⚡ Herdr Loop Swarm — Autonomous Multi-Agent Orchestrator%s\n' "$BOLD" "$CYAN" "$RESET"
 printf '%s  AGY (Gemini) · Claude Code · OpenCode (GLM-5.3) · Kultivait Local Proxy%s\n\n' "$DIM" "$RESET"
 
-# Shared swarm libraries (profile, lifecycle, TOML config binding, brief templating)
-# shellcheck disable=SC1091  # dynamically resolved sibling libs
-source "$LIB_DIR/profile.sh"
-# shellcheck disable=SC1091  # dynamically resolved sibling libs
-source "$LIB_DIR/lifecycle.sh"
-# shellcheck disable=SC1091  # dynamically resolved sibling libs
-source "$LIB_DIR/config.sh"
-# shellcheck disable=SC1091  # dynamically resolved sibling libs
-source "$LIB_DIR/briefs.sh"
+# ──────────────────────────────────────────────────────────────────────────
+# Preflight: 9-point dependency & daemon verification (lib/preflight.sh)
+# ──────────────────────────────────────────────────────────────────────────
+
+# Runs before ANY workspace creation, pane split, or profile prompt. Silent on
+# success; on failure the full matrix + remediation goes to stderr and we
+# abort fail-closed.
+preflight_run
+if ! preflight_exit_code; then
+  preflight_report_text >&2
+  printf '  %s✖ FATAL: preflight verification failed — resolve the errors above before launching.%s\n' "$RED" "$RESET" >&2
+  exit 1
+fi
 
 # ──────────────────────────────────────────────────────────────────────────
 # Project Profile (fail-closed; see lib/profile.sh)
@@ -154,16 +216,7 @@ EXTERNAL=0
 if [[ "${HERDR_ENV:-}" != 1 ]]; then
   EXTERNAL=1
   note "Running in external terminal mode"
-  command -v herdr >/dev/null 2>&1 || {
-    warn "herdr is not installed on PATH"
-    say  "Install via: curl -fsSL https://herdr.dev/install.sh | sh"
-    exit 1
-  }
-  if ! herdr workspace list >/dev/null 2>&1; then
-    warn "Herdr daemon is not responding. Starting background server..."
-    herdr server >/dev/null 2>&1 &
-    sleep 2
-  fi
+  # (daemon responsiveness + binary presence already verified by preflight)
   WS_LABEL=$(basename "$PWD")
   WS_ID=$(find_workspace_by_cwd "$PWD")
   if [[ -z "$WS_ID" ]]; then
