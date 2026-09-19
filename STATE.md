@@ -17,6 +17,8 @@
 - **Dynamic Seating & Templated Brief Delivery (T-INT-2, T-005, T-INT-3):** Resolved in commit `2455bc5`. Dynamic seating from `swarm.config.toml` with `<seat>-<slug>` namespacing, nonce file-path prompt delivery (<200b), and `.herdr-swarm/seats.json` durable ledger.
 - **Supervisor Genericization & Re-Verdicts (T-007a-fix, T-007b):** Resolved in commits `64170d7` and `94d6534`. Strict `(ticket, sha)` deduplication, `profile.env` binding, and real project test runner gating.
 
+- **Seat Verification & Readiness Gate (T-010):** Resolved in commit `33a07b3`. `swarm_verify_seats` inspects seat ledger or live agents, verifies interactive readiness, enforces fail-closed execution in autonomous mode, and provides the `verify` CLI subcommand.
+
 ---
 
 ## 2. Active Status & Open Items
@@ -26,15 +28,15 @@
   - M2 (Generalize): TOML config integration (T-INT-2), Namespacing (T-005), Brief nonce delivery (T-INT-3), Supervisor genericization (T-007b), Preflight verification (T-008).
 - **M3 (Lifecycle & Observability) Progress:**
   - T-INT-4 (`up`/`down`/`status` subcommands): Complete (`5ca2049`).
+  - T-010 (Seat verification & brief acknowledgment gate): Complete (`33a07b3`).
   - Next Up:
-    1. `T-010`: Seat verification protocol (`agent start` timeout wait + post-seating readiness / brief acknowledgment check).
-    2. `T-009`: Telemetry event engine wiring (`domain.action` envelope into `.herdr-swarm/`).
-    3. `T-015b`: Complete README & user guide polish.
+    1. `T-009`: Telemetry event engine wiring (`domain.action` envelope into `.herdr-swarm/traces/`).
+    2. `T-015b`: Complete README & user guide polish.
 
 ---
 
 ## 3. Immediate Next Step
 
-- Draft ticket `maps/tickets/seat-verification-protocol.md` for `T-010`.
-- Dispatch `arch` to implement seat verification and brief acknowledgment checks in `herdr-loop-swarm.sh` / `lib/lifecycle.sh`.
-- Verify with unit checks and commit.
+- Create ticket `maps/tickets/telemetry-event-engine-wiring.md` for `T-009`.
+- Dispatch `arch` to wire structured JSONL telemetry logging (`domain.action` envelope) into `.herdr-swarm/traces/` across the launcher and supervisor.
+- Monitor `agy-docs` completion of ADRs and `CONTEXT.md`.
