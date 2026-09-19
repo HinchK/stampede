@@ -13,9 +13,11 @@ ADRs capture significant architectural and design choices, along with the contex
 | [0003](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0003-dynamic-seating-and-nonce-brief-delivery.md) | Dynamic Seating from TOML Registry and Nonce Brief Delivery Protocol | Accepted | 2026-09-19 | `swarm.config.toml`, `lib/config.sh`, `lib/briefs.sh`, [T-INT-2](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/integrate-config-and-briefs-into-launcher.md), [T-005](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/herdr-workspace-routing-and-agent-namespacing.md) |
 | [0004](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md) | Safe Workspace Lifecycle, Physical CWD Resolution, and Seat Ledger | Accepted | 2026-09-19 | `lib/lifecycle.sh`, `.herdr-swarm/seats.json`, [T-011-fix](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/lifecycle-safe-teardown-and-targeting.md) |
 | [0005](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0005-preflight-matrix-and-seat-verification.md) | Preflight Dependency Matrix and Post-Seating Readiness Verification Gate | Accepted | 2026-09-19 | `lib/preflight.sh`, `lib/lifecycle.sh`, [T-008](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/preflight-dependency-and-daemon-verification.md), [T-010](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/seat-verification-protocol.md) |
+| [0006](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md) | Git Worktree Worker Isolation and Lifecycle Management | Accepted | 2026-09-19 | `lib/lifecycle.sh`, `docs/worktree-swarm.md`, [T-016-docs](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/worktree-isolation-architecture.md) |
 
 ## Related Documentation
 
+- Phase 2 Worktree Architecture Blueprint: [worktree-swarm.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/worktree-swarm.md)
 - System Vocabulary and Conceptual Invariants: [CONTEXT.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/CONTEXT.md)
 - Wayfinder Master Architecture Map: [universal-herdr-swarm.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/universal-herdr-swarm.md)
 - Herdr Semantics & Empirical Findings: [herdr-semantics.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/herdr-semantics.md)
