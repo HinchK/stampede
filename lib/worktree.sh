@@ -53,12 +53,27 @@ worktree_provision() {
 
   # Branch creation: -b ONLY for brand-new branches. Never -B — it resets an
   # existing branch to base_ref, destroying unmerged work (P2-3 spec §0 probe:
-  # 20 unmerged commits → re-seat with -B → 0). An existing branch is attached
-  # as-is, preserving in-flight commits.
+  # 20 unmerged commits → re-seat with -B → 0).
+  #
+  # Stale branch gate (ADR 0007 §C / P2-H H1): attaching to an existing branch
+  # is allowed only when it carries NO commits unmerged into base_ref —
+  # otherwise this run would silently inherit a previous run's leftover work.
+  # Override deliberately with WORKTREE_ADOPT_BRANCHES=1.
   if git -C "$target_dir" show-ref --verify --quiet "refs/heads/${branch}"; then
-    git -C "$target_dir" worktree add "$wt_path" "$branch" >/dev/null
+    local unmerged
+    unmerged=$(git -C "$target_dir" rev-list --count "${base_ref}..${branch}" 2>/dev/null || printf '0')
+    if [[ "$unmerged" -gt 0 && "${WORKTREE_ADOPT_BRANCHES:-0}" != "1" ]]; then
+      printf 'worktree: REFUSING stale branch %s (%s commit(s) not on %s); integrate or delete it, or set WORKTREE_ADOPT_BRANCHES=1 to adopt\n' \
+        "$branch" "$unmerged" "$base_ref" >&2
+      return 1
+    fi
+    # one retry: concurrent provisions can transiently collide on git's
+    # worktree/refs locks
+    git -C "$target_dir" worktree add "$wt_path" "$branch" >/dev/null 2>&1 \
+      || { sleep 0.3; git -C "$target_dir" worktree add "$wt_path" "$branch" >/dev/null; }
   else
-    git -C "$target_dir" worktree add -b "$branch" "$wt_path" "$base_ref" >/dev/null
+    git -C "$target_dir" worktree add -b "$branch" "$wt_path" "$base_ref" >/dev/null 2>&1 \
+      || { sleep 0.3; git -C "$target_dir" worktree add -b "$branch" "$wt_path" "$base_ref" >/dev/null; }
   fi
 
   # Lock = live-seat marker: survives `git worktree prune`, refuses remove.
@@ -89,8 +104,10 @@ worktree_is_dirty() {
 }
 
 # worktree_prune SEAT SLUG [FORCE=0] [TARGET_DIR]
-#   Unlocks, checkpoints dirty tracked work (H8: add -u, never -A), removes the
-#   worktree. The seat branch (and checkpoint ref, if any) always survives.
+#   Unlocks, checkpoints dirty tracked work (H8: add -u, never -A), salvages
+#   untracked files (P2-H H2: `remove --force` would destroy them), then
+#   removes the worktree. The seat branch (and checkpoint ref, if any) always
+#   survives.
 worktree_prune() {
   local seat="$1"
   local slug="$2"
@@ -129,7 +146,24 @@ worktree_prune() {
     printf 'worktree: checkpointed %s dirty state -> %s\n' "$seat" "$cp_branch" >&2
   fi
 
-  # 3. Remove (branch survives; ADR 0006 §D)
+  # 3. Salvage untracked files (always, forced or not): `worktree remove
+  #    --force` deletes them outright — copy them out so worker output,
+  #    scratch scripts, and reports are never lost.
+  local untracked
+  untracked=$(git -C "$wt_path" ls-files --others --exclude-standard 2>/dev/null || true)
+  if [[ -n "$untracked" ]]; then
+    local salvage_dir
+    salvage_dir="${target_dir}/.herdr-swarm/salvage/${seat}-$(date +%s)"
+    local f
+    while IFS= read -r f; do
+      [[ -n "$f" ]] || continue
+      mkdir -p "${salvage_dir}/$(dirname "$f")"
+      cp -R "${wt_path}/${f}" "${salvage_dir}/${f}"
+    done <<<"$untracked"
+    printf 'worktree: salvaged untracked files from %s -> %s\n' "$seat" "$salvage_dir" >&2
+  fi
+
+  # 4. Remove (branch survives; ADR 0006 §D)
   git -C "$target_dir" worktree remove --force "$wt_path" >/dev/null
 }
 

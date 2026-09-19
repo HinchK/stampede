@@ -26,6 +26,8 @@ set -euo pipefail
 
 # shellcheck disable=SC1091  # dynamically resolved sibling lib
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+# shellcheck disable=SC1091  # dynamically resolved sibling lib
+source "$(dirname "${BASH_SOURCE[0]}")/worktree.sh"
 
 # Terminal colors
 if [[ -t 1 ]] && command -v tput >/dev/null 2>&1 && [[ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]]; then
@@ -174,10 +176,35 @@ lifecycle_confirm() { # PROMPT
   [[ "$reply" =~ ^[Yy] ]]
 }
 
+# Retire isolated worktrees listed in the seat ledger: unlock, then prune
+# (prune itself checkpoints tracked edits and salvages untracked files;
+# branches always survive). Only ledger-recorded paths under the swarm root
+# are touched.
+_swarm_retire_worktrees() { # ABS_TARGET ISOLATED_SEATS(tab-separated records)
+  local abs_target="$1" records="$2"
+  local wname wdir wbranch
+  while IFS=$'\t' read -r wname wdir wbranch; do
+    [[ -n "$wname" ]] || continue
+    [[ -n "$wdir" && -d "$wdir" ]] || continue
+    # Root checkout is inviolable; ledger dirs outside the swarm root are not ours
+    [[ "$wdir" == "$abs_target" ]] && continue
+    [[ "$wdir" == "${abs_target}/.herdr-swarm/worktrees/"* ]] || continue
+    printf '  %s• Retiring isolated worktree %s (%s)...%s\n' "$DIM" "$wname" "$wbranch" "$RESET"
+    git -C "$abs_target" worktree unlock "$wdir" >/dev/null 2>&1 || true
+    # Derive the slug from the recorded branch (swarm/<slug>/<seat>)
+    local slug="${wbranch#swarm/}"
+    slug="${slug%/*}"
+    worktree_prune "$wname" "${slug:-herd}" 0 "$abs_target" || \
+      printf '  %s⚠ prune failed for %s (inspect manually)%s\n' "$YELLOW" "$wdir" "$RESET"
+  done <<<"$records"
+}
+
 # Graceful Swarm Teardown.
 # Closes only panes recorded in .herdr-swarm/seats.json (when the ledger is
 # fresh for the matched workspace); otherwise closes agent panes registered in
 # the matched workspace. Never touches panes of unrelated workspaces.
+# Isolated worktrees from the ledger are unlocked + pruned (checkpoint and
+# salvage inside; branches retained) unless --keep-workspace is set.
 swarm_down() { # TARGET_DIR ASSUME_YES KEEP_WS
   local target_dir="$1" assume_yes="$2" keep_ws="$3"
   local abs_target
@@ -188,16 +215,30 @@ swarm_down() { # TARGET_DIR ASSUME_YES KEEP_WS
 
   printf '\n%s▸ Swarm Teardown — %s%s\n' "$BOLD" "$(basename "$abs_target")" "$RESET"
 
+  # Isolated worktree retirement (P2-H H3): ledger v2 seats with
+  # isolated == true get unlocked + pruned (checkpoint/salvage inside).
+  # Runs regardless of workspace state so locked trees never leak; skipped
+  # under --keep-workspace (retention semantics keep the whole session).
+  local seats_file="${abs_target}/.herdr-swarm/seats.json"
+  local isolated_seats=""
+  if [[ -f "$seats_file" ]] && (( ! keep_ws )); then
+    isolated_seats=$(jq -r '.seats[]? | select(.isolated == true)
+      | "\(.name)\t\(.worktree_dir // empty)\t\(.branch // empty)"' "$seats_file" 2>/dev/null || true)
+  fi
+
   local ws_id
   ws_id=$(find_workspace_by_cwd "$abs_target")
   if [[ -z "$ws_id" ]]; then
+    if [[ -n "$isolated_seats" ]]; then
+      printf '  %s• No active workspace; retiring isolated worktrees only%s\n' "$DIM" "$RESET"
+      _swarm_retire_worktrees "$abs_target" "$isolated_seats"
+    fi
     rm -rf "${abs_target}/.herdr-swarm/channel"
     printf '  %s✓ No active workspace found for %s. Already clean.%s\n\n' "$GREEN" "$abs_target" "$RESET"
     return 0
   fi
 
   # Build the retirement plan: recorded seats first, live registry as fallback
-  local seats_file="${abs_target}/.herdr-swarm/seats.json"
   local panes="" pane_source=""
   if [[ -f "$seats_file" ]] \
      && [[ "$(jq -r '.workspace_id // empty' "$seats_file" 2>/dev/null)" == "$ws_id" ]]; then
@@ -222,6 +263,12 @@ swarm_down() { # TARGET_DIR ASSUME_YES KEEP_WS
   else
     printf '  %s• Panes to close:%s (none recorded)\n' "$DIM" "$RESET"
   fi
+  if [[ -n "$isolated_seats" ]]; then
+    printf '  %s• Worktrees to retire (unlock + prune, branches kept):%s\n' "$DIM" "$RESET"
+    while IFS=$'\t' read -r wname wdir _wb; do
+      [[ -n "$wname" ]] && printf '      - %s\n' "$wdir"
+    done <<<"$isolated_seats"
+  fi
   if (( keep_ws )); then
     printf '  %s• Workspace %s will be RETAINED (--keep-workspace)%s\n' "$DIM" "$ws_id" "$RESET"
   else
@@ -245,6 +292,9 @@ swarm_down() { # TARGET_DIR ASSUME_YES KEEP_WS
       herdr pane close "$pane" >/dev/null 2>&1 || true
     done <<<"$panes"
   fi
+
+  # Execute: retire isolated worktrees (checkpoint + salvage + prune)
+  [[ -n "$isolated_seats" ]] && _swarm_retire_worktrees "$abs_target" "$isolated_seats"
 
   # Close the workspace itself unless retention requested
   if (( keep_ws )); then

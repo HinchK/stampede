@@ -22,6 +22,8 @@ check(){ if eval "$2"; then ok "$1"; else bad "$1"; fi; }
 
 # shellcheck disable=SC1091  # sibling lib under test
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/worktree.sh"
+# shellcheck disable=SC1091  # sibling lib under teardown test
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/lifecycle.sh"
 
 echo "── worktree lifecycle suite (scratch: $REPO)"
 
@@ -117,6 +119,99 @@ check "unlocked stale entry is pruned" \
   '! git -C "$REPO" worktree list --porcelain | grep -q "^worktree $WT4\$"'
 check "stale-probe branch survives reconcile" \
   'git -C "$REPO" rev-parse --verify --quiet "refs/heads/swarm/myproj/stale-probe" >/dev/null'
+
+# ── 7. stale branch gate (P2-H H1) ────────────────────────────────────────
+OUT=$(worktree_provision stale1 myproj HEAD "$REPO" 2>/dev/null)
+WT5=$(sed -n 1p <<<"$OUT")
+(cd "$WT5" && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m "leftover run commit")
+git -C "$REPO" worktree unlock "$WT5" >/dev/null 2>&1 || true
+git -C "$REPO" worktree remove --force "$WT5" >/dev/null 2>&1 || true
+if worktree_provision stale1 myproj HEAD "$REPO" >/dev/null 2>&1; then
+  bad "stale branch (unmerged commits) refused without adopt"
+else
+  ok "stale branch (unmerged commits) refused without adopt"
+fi
+if WORKTREE_ADOPT_BRANCHES=1 worktree_provision stale1 myproj HEAD "$REPO" >/dev/null 2>&1; then
+  ok "WORKTREE_ADOPT_BRANCHES=1 adopts stale branch"
+  [[ $(git -C "$REPO" rev-list --count "main..swarm/myproj/stale1") == 1 ]] \
+    && ok "adopted branch retains its unmerged commit (no reset)"
+else
+  bad "WORKTREE_ADOPT_BRANCHES=1 adopts stale branch"
+fi
+git -C "$REPO" worktree unlock "$REPO/.herdr-swarm/worktrees/stale1" >/dev/null 2>&1 || true
+git -C "$REPO" worktree remove --force "$REPO/.herdr-swarm/worktrees/stale1" >/dev/null 2>&1 || true
+
+# clean branch (0 unmerged) still attaches without adopt
+OUT=$(worktree_provision stale2 myproj HEAD "$REPO" 2>/dev/null)
+WT6=$(sed -n 1p <<<"$OUT")
+check "clean pre-existing branch attaches without adopt" \
+  '[[ -d "$WT6" ]]'
+worktree_prune stale2 myproj 1 "$REPO" >/dev/null 2>&1
+
+# ── 8. untracked file salvage (P2-H H2) ───────────────────────────────────
+OUT=$(worktree_provision salv myproj HEAD "$REPO" 2>/dev/null)
+WT7=$(sed -n 1p <<<"$OUT")
+mkdir -p "$WT7/reports"
+printf 'precious worker output\n' > "$WT7/reports/findings.md"
+printf 'scratch\n' > "$WT7/scratch.sh"
+worktree_prune salv myproj 0 "$REPO" 2>/dev/null
+check "prune removed the worktree after salvage" '[[ ! -d "$WT7" ]]'
+SALV=$(find "$REPO/.herdr-swarm/salvage" -maxdepth 1 -type d -name 'salv-*' 2>/dev/null | sort | head -n1)
+if [[ -n "$SALV" ]]; then
+  ok "salvage directory created"
+  [[ "$(cat "$SALV/reports/findings.md")" == "precious worker output" ]] \
+    && ok "nested untracked file content preserved"
+  [[ -f "$SALV/scratch.sh" ]] && ok "flat untracked file preserved"
+else
+  bad "salvage directory created"
+fi
+
+# forced prune ALSO salvages (insurance is unconditional)
+OUT=$(worktree_provision salv2 myproj HEAD "$REPO" 2>/dev/null)
+WT8=$(sed -n 1p <<<"$OUT")
+printf 'force-salvage me\n' > "$WT8/keeper.txt"
+worktree_prune salv2 myproj 1 "$REPO" 2>/dev/null
+SALV2=$(find "$REPO/.herdr-swarm/salvage" -maxdepth 1 -type d -name 'salv2-*' 2>/dev/null | sort | head -n1)
+if [[ -n "$SALV2" && "$(cat "$SALV2/keeper.txt")" == "force-salvage me" ]]; then
+  ok "forced prune still salvages untracked files"
+else
+  bad "forced prune still salvages untracked files"
+fi
+
+# ── 9. teardown unlocks + prunes isolated ledger seats (P2-H H3) ──────────
+OUT=$(worktree_provision iso-seat myproj HEAD "$REPO" 2>/dev/null)
+WT9=$(sed -n 1p <<<"$OUT")
+BR9=$(sed -n 2p <<<"$OUT")
+printf 'iso v1\n' > "$WT9/iso.txt"
+git -C "$WT9" add iso.txt
+git -C "$WT9" -c user.email=t@t -c user.name=t commit -q -m "track iso.txt"
+printf 'iso edit\n' > "$WT9/iso.txt"          # tracked, uncommitted modification
+printf 'loose notes\n' > "$WT9/notes.txt"     # untracked → salvage path
+jq -cn --arg ws "wTEST" \
+  '{version: 2, workspace_id: $ws, seats: [
+     {name: "iso-seat", kind: "opencode", pane: "wTEST:p9",
+      worktree_dir: "'"$WT9"'", branch: "'"${BR9}"'", isolated: true},
+     {name: "root-seat", kind: "agy", pane: "wTEST:p1",
+      worktree_dir: "'"${REPO}"'", branch: "main", isolated: false}]}' \
+  > "$REPO/.herdr-swarm/seats.json"
+if swarm_down "$REPO" 1 0 >/dev/null 2>&1; then
+  ok "swarm_down completes with isolated ledger seats (headless --yes)"
+else
+  bad "swarm_down completes with isolated ledger seats (headless --yes)"
+fi
+check "teardown pruned the isolated worktree" '[[ ! -d "$WT9" ]]'
+check "teardown kept the seat branch" \
+  'git -C "$REPO" rev-parse --verify --quiet "refs/heads/'"$BR9"'" >/dev/null'
+check "teardown checkpointed the dirty tracked edit" '
+  git -C "$REPO" for-each-ref --format="%(refname:short)" -- "refs/heads/'"$BR9"'-checkpoint-*" | grep -q .'
+CP9=$(git -C "$REPO" for-each-ref --format="%(refname:short)" -- "refs/heads/${BR9}-checkpoint-*" | head -n1)
+[[ "$(git -C "$REPO" show "$CP9:iso.txt" 2>/dev/null)" == "iso edit" ]] \
+  && ok "checkpoint preserves the isolated seat's tracked edit"
+SALV9=$(find "$REPO/.herdr-swarm/salvage" -maxdepth 1 -type d -name 'iso-seat-*' 2>/dev/null | head -n1)
+[[ -n "$SALV9" && "$(cat "$SALV9/notes.txt" 2>/dev/null)" == "loose notes" ]] \
+  && ok "teardown salvaged the isolated seat's untracked file"
+check "root checkout untouched by teardown" \
+  '[[ -z "$(git -C "$REPO" status --porcelain | grep -v "^?? .herdr-swarm")" ]]'
 
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
