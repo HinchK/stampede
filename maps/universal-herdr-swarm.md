@@ -49,14 +49,18 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - [ADR 0008: Supervisor Worktree Suite Gating and Drift](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md): Authored ADR 0008 documenting ledger-first gate resolution, pre/post TOCTOU drift detection, and non-destructive branch re-attachment (#T-DOCS-ADR0008).
 - [GitHub Issue Sync Validation Report](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/gh-sync-validation-report.md): Documented lib/gh_sync.sh verification and zero unconfirmed writes (#T-GH-REPORT).
 - [Phase 2 Arbiter and Integration PR Specification](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md): PM authored specification for partition check, CAS fast-forward merge, PR synthesis, and teardown integration (P2-4).
+- [Phase 2 Arbiter and Branch Reconciliation](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/arbiter-and-branch-reconciliation.md): Implemented lib/arbiter.sh providing partition checking, atomic CAS fast-forward merges into swarm/<slug>/integration, and human-promoted PRs (P2-4).
+- [ADR 0009: Arbiter Branch Integration and CAS Merge](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0009-arbiter-branch-integration-and-cas-merge.md): Authored ADR 0009 documenting off-branch integration, detached worktree candidate pre-gating, and CAS atomic ref updates (#T-DOCS-ADR0009).
+- [Phase 2 Worktree Swarm Milestone Audit](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-milestone-audit.md): Comprehensive empirical audit validating P2-1 through P2-4, proving false-green elimination and zero data loss, while defining hardening items H1-H5 (#P2-AUDIT).
 
 ## Active Frontier
 
-- [Phase 2 Arbiter and Branch Reconciliation](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/arbiter-and-branch-reconciliation.md): Implementing lib/arbiter.sh providing partition checking, atomic CAS fast-forward merges into main, and GitHub PR creation (P2-4).
+- [Phase 2 Worktree Teardown and Untracked Salvage](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/worktree-lifecycle-teardown-and-salvage.md): Wiring worktree unlocking and safe pruning into lib/lifecycle.sh (swarm_down), adding untracked file salvage, and enforcing stale-branch gates in lib/worktree.sh (P2-H).
 
 ## Not yet specified
 
 - **Cross-LLM Quota and Credit Probing:** Live API credit/rate-limit detection across Anthropic, Google Gemini, and Z.AI backends to gracefully pause or reroute workers before rate limits fail tasks.
+
 
 
 ## Out of scope

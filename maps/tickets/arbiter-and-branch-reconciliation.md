@@ -2,7 +2,8 @@
 id: P2-4
 title: "Phase 2 Arbiter and Branch Reconciliation"
 type: wayfinder:prototype
-status: in_progress
+status: resolved
+commit: 3c4a584
 assignee: arch
 prototype_asset: lib/arbiter.sh,tests/test_arbiter.sh
 parent: maps/universal-herdr-swarm.md

@@ -38,24 +38,32 @@
 - **GitHub Issue Sync Validation Report (#T-GH-REPORT):** Resolved in commit `c018177`. `agy-gh` tested `lib/gh_sync.sh` against current tickets, documented zero unconfirmed writes in `docs/findings/gh-sync-validation-report.md`, and drafted P2-4 ticket.
 - **Supervisor Worktree Suite Gating and Drift Validation (#P2-3):** Resolved in commit `420d5e6`. `arch` implemented `resolve_seat_gate()`, pre/post-run drift validation, per-seat `TMPDIR` and gate logging, and fixed the `-B` branch reset bug in `lib/worktree.sh`.
 - **P2-4 Arbiter and Integration PR Specification (#P2-4-spec):** Resolved in commit `fee14b4`. `pm` authored `docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md` specifying partition check, CAS fast-forward merge, PR creation, and teardown integration.
+- **Phase 2 Release Notes & Migration Guide (#T-GH-RELEASE):** Resolved in commit `2092cb5`. `agy-gh` authored `docs/findings/phase2-release-notes-draft.md` with feature summary, migration guide, and operational instructions.
+- **ADR 0009 Arbiter Branch Integration & CAS Merge (#T-DOCS-ADR0009):** Resolved in commit `9d5eaea`. `agy-docs` authored `docs/adr/0009-arbiter-branch-integration-and-cas-merge.md` capturing the off-branch integration architecture, CAS atomic updates, and human-promoted base merges.
+- **Arbiter Branch Merge and Integration PR Engine (#P2-4):** Resolved in commit `3c4a584`. `arch` implemented `lib/arbiter.sh` (`arbiter_enqueue`, `arbiter_drain`, `arbiter_promote`) with 26/26 unit tests passing in `tests/test_arbiter.sh` and 0 shellcheck warnings.
+- **Phase 2 Worktree Swarm Milestone Audit (#P2-AUDIT):** Resolved in commit `af18758`. `pm` conducted comprehensive empirical audit validating P2-1 through P2-4, confirming structural false green elimination and data loss closure, while identifying hardening items (H1-H5).
 
 ---
 
 ## 2. Active Status & Open Items
 
 - **Milestones M1, M2, M3 Complete & Audited.**
-- **Phase 2 Implementation Progress (Parallel Worktree Swarm Fan-Out):**
-  - **P2-1 (Worktree Lifecycle Library `lib/worktree.sh`):** Complete (`99867cf`).
+- **Phase 2 Parallel Worktree Swarm Fan-Out: COMPLETE!**
+  - **P2-1 (Worktree Lifecycle Library `lib/worktree.sh`):** Complete (`99867cf`, 21/21 tests pass).
   - **P2-2 (Config, Ledger & Launcher Worktree Integration):** Complete (`5200df5`).
   - **P2-3 (Supervisor Worktree Suite Gating):** Complete (`420d5e6`).
-  - **P2-4 (Arbiter Branch Merge and PR Reconciliation):** Active Frontier. Implementing `lib/arbiter.sh` (`partition_check`, `arbiter_merge`, `arbiter_pr`).
+  - **P2-4 (Arbiter Branch Merge and PR Reconciliation):** Complete (`3c4a584`, 26/26 tests pass).
+- **Active Frontier: Phase 2 Hardening & Live Dogfooding:**
+  - **H1 (Stale Branch Gate):** Enforce ADR 0007 §C in `lib/worktree.sh` to refuse attaching to stale branches with unmerged commits unless `--adopt-branches`.
+  - **H2 (Untracked File Salvage):** Preserve untracked worker files to `.herdr-swarm/salvage/` during worktree prune rather than running destructive `git worktree remove --force`.
+  - **H3 (Lifecycle Teardown Prune):** Wire worktree unlocking and safe pruning into `lib/lifecycle.sh` (`swarm_down`) so teardown leaves zero dangling worktrees.
 
 ---
 
 ## 3. Immediate Next Step
 
-- Advance ticket `maps/tickets/arbiter-and-branch-reconciliation.md` (P2-4) to `in_progress`.
-- Dispatch `arch` to implement `lib/arbiter.sh` per PM specification `docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md`.
-- Dispatch `agy-docs` to author ADR 0009 (Arbiter Branch Integration and PR Reconciliation).
-- Dispatch `agy-gh` to test PR reconciliation on local scratch repositories.
+- Initialize hardening ticket `maps/tickets/worktree-lifecycle-teardown-and-salvage.md` (P2-H).
+- Dispatch `arch` to implement teardown pruning in `lib/lifecycle.sh` and untracked salvage in `lib/worktree.sh`.
+- Dispatch `agy-docs` to document Phase 2 operational runbook and lifecycle cleanup.
+
 
