@@ -21,7 +21,7 @@ flowchart TD
         subgraph TabOps ["Tab 2: Ops"]
             Docs["📝 agy-docs (AGY / Gemini Flash)\nADRs, Documentation, Context"]
             GH["🐙 agy-gh (AGY / Gemini Flash)\nGitHub Issues, Labels, Pull Requests"]
-            Log["📜 process.log (tail -f)\nLive Stream & Event Logs"]
+            Telemetry["📊 telemetry-stream (lib/telemetry.py)\nLive 1-Line ANSI Event Stream"]
         end
     end
     
@@ -31,46 +31,120 @@ flowchart TD
     PM -->|Strategic Sparring & Audit| Looper
 ```
 
+The swarm operates in a dedicated, multi-tab Herdr workspace:
+- **Tab 1 (`Herd`)**: Hosts the primary execution trio — `pm` (strategic overseer), `arch` (lead implementation engine), and `looper` (master coordinator and test verifier).
+- **Tab 2 (`Ops`)**: Hosts operational support agents (`agy-docs` for documentation and ADRs, `agy-gh` for GitHub issue management) and the **Ops Anchor Pane**, which runs [`lib/telemetry.py`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/telemetry.py) streaming real-time, terminal-width clamped ANSI badges (`DISPATCH`, `VERDICT:✓/✗`, `BREAKER:⚠`, `LIFECYCLE`, `VERIFY:✓/✗`) directly from `.herdr-swarm/traces/`.
+
 ---
 
 ## Shipped Core Capabilities
 
-1. **Fail-Closed Project Profiling (`lib/profile.sh`)**:
-   - Inspects the active repository to detect ecosystem (Python, Rust, Node, Go) and canonical remote.
-   - **Fail-Closed Guarantee**: Never defaults to hardcoded repositories or fake-green `true` test runners. Interactive prompt re-prompts until explicit non-empty input is received. Auto-queue mode aborts if tests are unrunnable.
-2. **Deterministic Workspace Lifecycle & Safe Teardown (`lib/lifecycle.sh`)**:
-   - `find_workspace_by_cwd` strictly keys workspaces by physical directory CWD (resolving symlinks and inspecting pane CWDs).
-   - Safe `down` routine records and closes exclusively herd-seated panes recorded in `.herdr-swarm/seats.json`, preserving external operator panes and enforcing confirmation gates.
-3. **Supervisor Re-Verdict Deduplication Protocol (`loop-bot-herd.sh`)**:
-   - Completion verdicts use the explicit `ARCH DONE #<ticket> <commit-sha>` protocol.
-   - Supervisor deduplicates on `(ticket, sha)` via `jq`, ensuring that bugfixes committed after a `RED` test failure are automatically re-evaluated through the test gate.
-4. **Shared Slug Sanitizer & Shell-Safe Emitter (`lib/common.sh`, `lib/config.sh`)**:
-   - `slugify()` normalizes project names into Herdr-compliant agent identifiers (`^[a-z][a-z0-9_-]*$`).
-   - `config_dump_env` passes parameters via `sys.argv` and quotes environment variable exports safely with Python's `shlex.quote`.
-5. **9-Point Preflight Validation Matrix (`lib/preflight.sh`)**:
-   - Validates Herdr daemon responsiveness, essential CLIs (`git`, `jq`, `gh`, `python3`+`tomllib`), and agent binaries (`agy`, `claude`, `opencode`) before any panes or workspaces are created.
-6. **Templated Briefs & Compact Delivery Protocol (`lib/briefs.sh`, `briefs/*.in.md`)**:
-   - Dynamic templates substitute repository facts (`{{REPO}}`, `{{TEST_CMD}}`, `{{SLUG}}`) into `.herdr-swarm/briefs/`, delivering instructions via file path rather than massive prompt strings.
-7. **Geometry Guard Floor (`lib/layout_engine.sh`)**:
-   - Enforces minimum terminal geometry (80 columns × 20 rows), automatically relocating cramped splits into dedicated tabs.
+1. **Fail-Closed Project Profiling & Test Gate ([`lib/profile.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/profile.sh), [ADR 0001](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0001-fail-closed-profile-and-test-gating.md))**:
+   - Inspects target repository manifests to auto-detect toolchains (Python/uv/pytest, Rust/cargo, Node/pnpm/npm, Go) and GitHub remotes without hardcoded defaults.
+   - **Fail-Closed Invariant**: Rejects synthetic test bypasses (`TEST_CMD="true"`). Auto-queue mode aborts immediately if no runnable test runner is configured.
+2. **Supervisor Re-Verdict Deduplication Protocol ([`loop-bot-herd.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/loop-bot-herd.sh), [ADR 0002](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0002-exact-sha-supervisor-deduplication.md))**:
+   - Completion signals adhere to the `ARCH DONE #<ticket> <commit-sha>` protocol.
+   - Supervisor uses `jq` to deduplicate on exact `(ticket, sha)` tuples, eliminating `#23` vs `#230` substring collisions and enabling self-healing fix-and-reverdict loops on new commits after `RED` test failures.
+3. **Dynamic TOML Seating & Slug Namespacing ([`swarm.config.toml`](file:///Users/hinchk/Fun/loop-bot-herd-agy/swarm.config.toml), [`lib/config.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/config.sh), [ADR 0003](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0003-dynamic-seating-and-nonce-brief-delivery.md))**:
+   - Declarative seat registry in `swarm.config.toml` dynamically parsed via Python `tomllib`.
+   - `slugify()` normalizes project directories into Herdr-compliant agent identifiers (`seat-<slug>` matching `^[a-z][a-z0-9_-]*$`), enabling multiple swarms to run concurrently without agent name collisions.
+4. **Nonce Brief Delivery Protocol ([`lib/briefs.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/briefs.sh), [ADR 0003](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0003-dynamic-seating-and-nonce-brief-delivery.md))**:
+   - Renders brief templates (`briefs/*.in.md`) to disk with project variables, delivering instructions via ultra-compact (<200 bytes) file pointers. Eliminates PTY buffer overflow and corrupted prompt injections.
+5. **Deterministic Workspace Lifecycle & Durable Seat Ledger ([`lib/lifecycle.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/lifecycle.sh), [ADR 0004](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md))**:
+   - `find_workspace_by_cwd` resolves workspaces strictly by matching physical pane working directories.
+   - Durably tracks seated agents in `.herdr-swarm/seats.json`, retiring only swarm-managed panes while preserving human operator shells and dev servers.
+6. **9-Point Preflight Dependency Matrix ([`lib/preflight.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/preflight.sh), [ADR 0005](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0005-preflight-matrix-and-seat-verification.md))**:
+   - Validates daemon liveness, core utilities (`jq`, `git`, `python3`+`tomllib`, `gh`), GitHub authentication, and agent runtimes before any workspace mutation begins.
+7. **Post-Seating Readiness Verification Gate ([`lib/lifecycle.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/lifecycle.sh), [ADR 0005](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0005-preflight-matrix-and-seat-verification.md))**:
+   - `swarm_verify_seats` actively polls all seated agents until they settle into `idle` or `done` states after ingesting their briefs, preventing race conditions before kickoff task prompts dispatch.
+8. **Real-Time ANSI Telemetry Engine ([`lib/telemetry.py`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/telemetry.py))**:
+   - Structured JSONL event logging and live stream renderer displaying color-coded status badges clamped to terminal width in the Ops pane.
 
 ---
 
-## Quickstart
+## CLI Usage and Subcommands
 
-Run directly from any project directory:
+The universal launcher binary [`herdr-loop-swarm.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/herdr-loop-swarm.sh) provides a unified CLI interface for managing swarm lifecycles across any repository:
 
 ```bash
-# Launch swarm orchestrator
-./herdr-loop-swarm.sh
+./herdr-loop-swarm.sh [up] [OPTIONS] | status [dir] | down [dir] [FLAGS] | verify [dir] [timeout_ms]
 ```
 
-### Modes Supported:
-- `w` — **Wayfinder Map**: Interactive milestone charting with `arch`
-- `b` — **Brainstorm**: Rapid PRD and ticket decomposition
-- `r` — **Resume Map**: Automatically drain an active Wayfinder Map issue
-- `a` — **Auto-Queue**: Continuous loop pulling unblocked backlog tickets (fail-closed if `TEST_CMD` is not runnable)
-- `s` — **Seat Only**: Initialize topology and deliver standing briefs without auto-dispatch
+### 1. `up` (Default) — Launch or Re-attach Swarm
+Initializes the workspace, runs preflight verification, configures profiling, seats agents, verifies readiness, and dispatches initial tasks.
+
+```bash
+./herdr-loop-swarm.sh [up] [dir] [OPTIONS]
+```
+
+**Options**:
+- `-m, --mode <w|b|r|a|s>`: Swarm operational mode:
+  - `w` — **Wayfinder Map**: Interactive milestone charting with `arch`
+  - `b` — **Brainstorm**: Rapid PRD and ticket decomposition
+  - `r` — **Resume Map**: Automatically drain an active Wayfinder Map issue
+  - `a` — **Auto-Queue**: Continuous autonomous loop pulling unblocked backlog tickets (fail-closed if tests unrunnable)
+  - `s` — **Seat Only**: Initialize topology, render briefs, and verify readiness without auto-dispatching work
+- `-n, --map <NUM>`: Map issue number to resume (for mode `r`)
+- `-t, --topic <DESC>`: Milestone description or brainstorm topic (for modes `w` or `b`)
+- `-s, --seat-only`: Shorthand for `--mode s`
+- `-h, --help`: Display CLI usage and help
+
+### 2. `status` — Swarm State and Observability Inspection
+Inspects the active Herdr workspace, seated agents, detected profile, test suite configuration, and recent trace events for a target directory (defaults to `$PWD`):
+
+```bash
+./herdr-loop-swarm.sh status [dir]
+```
+
+### 3. `down` — Non-Destructive Selective Teardown
+Gracefully retires seated agent processes by reading `.herdr-swarm/seats.json`, closing exclusively swarm-allocated panes while protecting operator panes, and preserving audit logs:
+
+```bash
+./herdr-loop-swarm.sh down [dir] [-y|--yes] [--keep-ws|--keep-workspace]
+```
+
+**Flags**:
+- `-y, --yes`: Bypass interactive confirmation prompt (required for non-interactive scripting)
+- `--keep-ws, --keep-workspace`: Close only swarm seat panes, keeping the Herdr workspace container and operator shells open
+
+### 4. `verify` — Post-Seating Readiness Verification Gate
+Asserts that every agent defined in `.herdr-swarm/seats.json` is alive, responsive, and has completed reading its standing brief:
+
+```bash
+./herdr-loop-swarm.sh verify [dir] [timeout_ms]
+```
+- Exits `0` if all seats reach `idle` or `done` within `timeout_ms` (default: 30,000 ms).
+- Exits non-zero (`1`) if any agent times out, crashes, or is missing.
+
+---
+
+## Seat Verification and Fail-Closed Guarantees
+
+Seating agents inside terminal multiplexers is fundamentally asynchronous. Spawning an LLM agent process requires time to load model configurations, initialize tools, and ingest standing briefs. 
+
+To prevent **kickoff race conditions** (where task prompts arrive while an agent is still booting), the swarm enforces the `swarm_verify_seats` protocol:
+
+1. **Roster Lookup**: Inspects `.herdr-swarm/seats.json` (or live workspace agents).
+2. **Readiness Probe**: For each seat, issues:
+   ```bash
+   herdr agent wait "$name" --until "idle" --until "done" --timeout "$timeout_ms"
+   ```
+3. **Fail-Closed Autonomous Gate**:
+   - In interactive mode (`s`), warnings are printed for unready seats.
+   - In autonomous queue mode (`a`), the launcher **fails closed** and aborts execution immediately if core implementation seats (`arch`, `pm`) fail to settle, ensuring tasks are never dispatched into void panes.
+
+---
+
+## System Vocabulary and Architecture Decisions
+
+- **System Vocabulary & Invariants**: See [`CONTEXT.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/CONTEXT.md) for definitions of foundational concepts (**Fail-Closed**, **Nonce Delivery**, **Seat Ledger**, **Slug Namespacing**, **Suite Gate**, **Wayfinder Map**, **Supervisor Gate**) and explicit `_Avoid_` warnings.
+- **Architecture Decision Records (ADRs)**: See [`docs/adr/`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/README.md) for full decision histories:
+  - [ADR 0001: Fail-Closed Profile Detection and Test Gating Policy](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0001-fail-closed-profile-and-test-gating.md)
+  - [ADR 0002: Exact-SHA Supervisor Protocol and Re-Verdict Deduplication](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0002-exact-sha-supervisor-deduplication.md)
+  - [ADR 0003: Dynamic Seating from TOML Registry and Nonce Brief Delivery Protocol](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0003-dynamic-seating-and-nonce-brief-delivery.md)
+  - [ADR 0004: Safe Workspace Lifecycle, Physical CWD Resolution, and Seat Ledger](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md)
+  - [ADR 0005: Preflight Dependency Matrix and Post-Seating Readiness Verification Gate](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0005-preflight-matrix-and-seat-verification.md)
+- **Wayfinder Architecture Plan**: See [`maps/universal-herdr-swarm.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/universal-herdr-swarm.md) and [`maps/tickets/`](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/).
 
 ---
 
@@ -78,28 +152,39 @@ Run directly from any project directory:
 
 ```
 loop-bot-herd-agy/
-├── herdr-loop-swarm.sh     # Master executable launcher & wizard
-├── loop-bot-herd.sh        # Background supervisor & suite test gate
+├── herdr-loop-swarm.sh     # Master universal executable launcher & CLI
+├── loop-bot-herd.sh        # Background supervisor daemon & exact-SHA suite gate
 ├── swarm.config.toml       # Declarative agent seats & swarm configuration
-├── README.md               # Architecture guide & documentation
+├── CONTEXT.md              # System vocabulary, invariants & _Avoid_ warnings
+├── README.md               # User guide, CLI documentation & architecture
 ├── STATE.md                # Real-time state & checkpoint ledger
-├── briefs/                 # Standing agent briefs & input templates
-│   ├── looper.md           # Master orchestrator brief (Preamble rule)
+├── briefs/                 # Standing agent brief templates & master prompts
+│   ├── looper.md           # Master orchestrator brief (3-line preamble rule)
 │   ├── arch.in.md          # Lead architect & code engine template (GLM-5.3)
 │   ├── worker-docs.in.md   # ADR & documentation specialist template (Flash)
 │   ├── worker-gh.in.md     # GitHub & CI operations specialist template (Flash)
 │   ├── overseer-pm.in.md   # Claude Code PM strategic overseer template
 │   └── reviewer.in.md      # Code & security reviewer template
-├── lib/                    # Modular swarm libraries
+├── lib/                    # Modular swarm libraries & engines
 │   ├── common.sh           # Shared utilities & slugify() normalizer
 │   ├── profile.sh          # Universal project profiling & fail-closed test gate
-│   ├── lifecycle.sh        # Workspace lookup by CWD & safe teardown
+│   ├── lifecycle.sh        # Workspace CWD lookup, safe down & verify_seats gate
 │   ├── preflight.sh        # 9-point preflight dependency & daemon verification
 │   ├── config.sh           # TOML parser & safe shlex argv emitter
-│   ├── briefs.sh           # Template renderer & brief delivery engine
+│   ├── briefs.sh           # Template renderer & nonce delivery engine
+│   ├── telemetry.py        # Structured JSONL event logging & live ANSI badge stream
 │   └── layout_engine.sh    # Multi-tab layout & 80x20 geometry guard floor
 ├── maps/                   # Wayfinder maps & ticket ledgers
-│   ├── universal-herdr-swarm.md  # Plan of record
-│   └── tickets/            # Granular milestone tickets
-└── docs/                   # Audits, findings & reordered execution plans
+│   ├── universal-herdr-swarm.md  # Master destination plan
+│   └── tickets/            # Granular milestone prototype tickets
+└── docs/                   # ADRs, findings & audit archives
+    ├── adr/                # Architecture Decision Records (0001–0005)
+    │   ├── README.md       # ADR catalog & index
+    │   ├── 0001-fail-closed-profile-and-test-gating.md
+    │   ├── 0002-exact-sha-supervisor-deduplication.md
+    │   ├── 0003-dynamic-seating-and-nonce-brief-delivery.md
+    │   ├── 0004-safe-workspace-lifecycle-and-seat-ledger.md
+    │   └── 0005-preflight-matrix-and-seat-verification.md
+    ├── findings/           # Empirical semantics & schema findings
+    └── audits/             # PM herd reviews & invariant checks
 ```
