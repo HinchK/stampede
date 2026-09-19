@@ -20,8 +20,8 @@ wait_agent_with_circuit_breaker() {
   local timeout_ms=$(( timeout_secs * 1000 ))
   local res status
 
-  # Use native event-driven herdr agent wait (zero polling overhead)
-  res=$(herdr agent wait "$agent" --until idle --until done --until blocked --timeout "$timeout_ms" 2>/dev/null) || {
+  # Use native event-driven herdr agent wait (defaults to idle | done | blocked)
+  res=$(herdr agent wait "$agent" --timeout "$timeout_ms" 2>/dev/null) || {
     printf '  \033[33m⚠ Agent %s timed out after %ds\033[0m\n' "$agent" "$timeout_secs"
     return 1
   }

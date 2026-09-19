@@ -20,6 +20,8 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - [Supervisor Bug Fixes and Re-Verdict Logic](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/supervisor-bug-fixes-and-re-verdict-logic.md): Rewrote loop-bot-herd.sh dedupe logic with jq exact matching to support re-verdicts after RED, fixed substring collisions (#23 vs #230), and defined missing note/step helpers.
 - [TOML Configuration Schema and Shell Binding](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/toml-configuration-schema-and-shell-binding.md): Implemented lib/config.sh using python3 tomllib to parse swarm.config.toml into shell bindings, dynamic seat arrays, namespaced agent names, and dry-run markdown plans.
 - [Brief Templating Syntax and Nonce File Protocol](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/brief-templating-syntax-and-nonce-file-protocol.md): Authored briefs/*.in.md templates and lib/briefs.sh renderer to dynamically inject {{REPO}}, {{TEST_CMD}}, and namespaced seats into .herdr-swarm/briefs/, delivered via compact file-path prompts.
+- [Workspace Lifecycle and Clean Teardown Protocol](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/workspace-lifecycle-and-clean-teardown-protocol.md): Implemented lib/lifecycle.sh with workspace auto-discovery, safe per-pane agent teardown, audit log retention, and rich terminal status inspection.
+
 
 ## Not yet specified
 
