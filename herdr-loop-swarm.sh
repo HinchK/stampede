@@ -9,8 +9,10 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 BRIEFS_DIR="$SCRIPT_DIR/briefs"
 LIB_DIR="$SCRIPT_DIR/lib"
+# shellcheck disable=SC2034  # reserved: wired by the TOML config binding integration
 CONFIG_FILE="$SCRIPT_DIR/swarm.config.toml"
 LOG_FILE="/tmp/herdr-process.log"
+# shellcheck disable=SC2034  # reserved: wired by the telemetry integration
 SESSION_ID="swarm-$(date +%Y%m%d-%H%M%S)"
 ENV_FILE="${PWD}/.env"
 
@@ -109,6 +111,23 @@ _clear
 printf '\n%s%s  ⚡ Herdr Loop Swarm — Autonomous Multi-Agent Orchestrator%s\n' "$BOLD" "$CYAN" "$RESET"
 printf '%s  AGY (Gemini) · Claude Code · OpenCode (GLM-5.3) · Kultivait Local Proxy%s\n\n' "$DIM" "$RESET"
 
+# Shared swarm libraries (profile detection + lifecycle workspace resolution)
+# shellcheck disable=SC1091  # dynamically resolved sibling libs
+source "$LIB_DIR/profile.sh"
+# shellcheck disable=SC1091  # dynamically resolved sibling libs
+source "$LIB_DIR/lifecycle.sh"
+
+# ──────────────────────────────────────────────────────────────────────────
+# Project Profile (fail-closed; see lib/profile.sh)
+# ──────────────────────────────────────────────────────────────────────────
+
+# Resolves REPO / TEST_CMD / ECOSYSTEM / DOCS_DIR before any workspace or pane
+# is created. Prompts interactively when possible; aborts fail-closed when a
+# required fact cannot be established (never defaults to a fake repo or a
+# fake-green test command).
+ensure_profile "$PWD" 1
+good "Profile — repo: ${REPO:-none} · test: ${TEST_CMD} · ecosystem: ${ECOSYSTEM} · docs: ${DOCS_DIR}"
+
 EXTERNAL=0
 if [[ "${HERDR_ENV:-}" != 1 ]]; then
   EXTERNAL=1
@@ -124,11 +143,13 @@ if [[ "${HERDR_ENV:-}" != 1 ]]; then
     sleep 2
   fi
   WS_LABEL=$(basename "$PWD")
-  WS_ID=$(herdr workspace list 2>/dev/null | jq -r --arg l "$WS_LABEL" '.result.workspaces[]? | select(.label == $l) | .workspace_id' | head -n1 || true)
+  WS_ID=$(find_workspace_by_cwd "$PWD")
   if [[ -z "$WS_ID" ]]; then
-    note "Creating dedicated workspace: ${WS_LABEL}"
+    note "Creating dedicated workspace: ${WS_LABEL} (none bound to this directory)"
     WS_ID=$(herdr workspace create --cwd "$PWD" --label "$WS_LABEL" 2>/dev/null \
       | jq -r '.result.workspace.workspace_id // .result.workspace_id // empty')
+  else
+    note "Reusing existing workspace ${WS_ID} (cwd-bound to this directory)"
   fi
   [[ -n "$WS_ID" ]] || { warn "Failed to initialize workspace"; exit 1; }
   good "Workspace active: ${WS_LABEL} (${WS_ID})"
@@ -138,22 +159,8 @@ else
   good "Inside Herdr workspace: ${WS_LABEL} (${WS_ID})"
 fi
 
-# Detect Project Ecosystem & Test Runner
-TEST_CMD="true"
-if [[ -f "pyproject.toml" ]]; then
-  note "Python project detected"
-  if command -v uv >/dev/null 2>&1; then TEST_CMD="uv run pytest -q"; else TEST_CMD="pytest -q"; fi
-elif [[ -f "Cargo.toml" ]]; then
-  note "Rust project detected"
-  TEST_CMD="cargo test --quiet"
-elif [[ -f "package.json" ]]; then
-  note "Node.js project detected"
-  if [[ -f "pnpm-lock.yaml" ]]; then TEST_CMD="pnpm test"; elif [[ -f "yarn.lock" ]]; then TEST_CMD="yarn test"; else TEST_CMD="npm test"; fi
-elif [[ -f "go.mod" ]]; then
-  note "Go project detected"
-  TEST_CMD="go test ./..."
-fi
-good "Test validation command: ${TEST_CMD}"
+# Test validation command comes from the project profile (lib/profile.sh);
+# there is deliberately no ad-hoc ecosystem sniffing or "true" fake-green here.
 
 # Check Model Runtimes
 if curl -sf --max-time 2 http://localhost:11434/api/tags >/dev/null 2>&1; then
@@ -173,18 +180,10 @@ else
   note "Kultivait proxy is not running on :4114 (will launch in Ops tab)"
 fi
 
-# Detect Canonical Git Repository (prefer upstream for forks)
-REPO=""
-if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  UPSTREAM_URL=$(git config --get remote.upstream.url 2>/dev/null || true)
-  ORIGIN_URL=$(git config --get remote.origin.url 2>/dev/null || true)
-  TARGET_URL="${UPSTREAM_URL:-$ORIGIN_URL}"
-  if [[ -n "$TARGET_URL" ]]; then
-    REPO=$(printf '%s' "$TARGET_URL" | sed -E 's/.*github.com[:\/]([^\/]+\/[^\/\.]+).*/\1/' | sed 's/\.git$//')
-  fi
-fi
-REPO="${REPO:-Standard-Pentest/kultivait}"
-good "Target GitHub repository: ${REPO}"
+# Canonical GitHub repository comes from the project profile (lib/profile.sh,
+# resolved fail-closed above — prefer upstream over origin, never a hardcoded
+# default). "none" means local-only operation; gh-dependent features degrade.
+good "Target GitHub repository: ${REPO:-none}"
 
 # ──────────────────────────────────────────────────────────────────────────
 # Swarm Mode Selection
@@ -234,6 +233,14 @@ case "$MODE" in
     MAP_NUM="${MAP_NUM#\#}"
     ;;
   a)
+    # Suite gate: auto-queue loops verify every ticket with TEST_CMD; a
+    # non-runnable command would fake-green the loop — abort fail-closed.
+    if ! test_cmd_is_runnable "${TEST_CMD:-}"; then
+      printf '  %s✖ FATAL: auto-queue requires a runnable test validation command (found: "%s").%s\n' \
+        "$RED" "${TEST_CMD:-<empty>}" "$RESET" >&2
+      printf '    Fix: set TEST_CMD in %s/.herdr-swarm/profile.env (e.g. TEST_CMD="make test")\n' "$PWD" >&2
+      exit 1
+    fi
     note "Autonomous queue mode: will poll issues labeled 'loop:ready' or backlog"
     ;;
   s)
@@ -247,6 +254,7 @@ esac
 
 printf '\n%s▸ Building Swarm Topology (Herd & Ops Tabs)%s\n' "$BOLD" "$RESET"
 
+# shellcheck disable=SC1091  # dynamically resolved sibling lib
 source "$LIB_DIR/layout_engine.sh"
 
 read -r HerdTab HerdAnchor <<< "$(tab_by_label "$WS_ID" "herd")"
