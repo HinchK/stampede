@@ -21,17 +21,49 @@
 
 set -euo pipefail
 
-REPO_DIR="${REPO_DIR:-$HOME/seeds/_KULT_/kultivait}"
-REPO="Standard-Pentest/kultivait"
-STATE_DIR="${STATE_DIR:-$HOME/.kultivait/loop-bot}"
+# ── project binding ────────────────────────────────────────────────────────
+# The supervisor is project-agnostic: REPO_DIR defaults to the invocation
+# directory; REPO / TEST_CMD come from the project's rendered profile; seats
+# come from the swarm distribution's swarm.config.toml; ALL session state
+# lives inside <REPO_DIR>/.herdr-swarm/ (portable, teardown-aware).
+REPO_DIR="${REPO_DIR:-$PWD}"
+STATE_DIR="${STATE_DIR:-${REPO_DIR}/.herdr-swarm}"
 CONTROL="$STATE_DIR/control.json"
 SESSION_LOG="$STATE_DIR/session-verdicts.jsonl"
-CHANNEL_DIR="/tmp/herdr-channel"
+CHANNEL_DIR="${STATE_DIR}/channel"
 POLL_S="${POLL_S:-30}"
 UNPUSHED_NUDGE_S=$((60 * 60))       # one unpushed reminder per hour
 CREDIT_WARN_USD="${CREDIT_WARN_USD:-1.00}"
 SUITE_TIMEOUT_S="${SUITE_TIMEOUT_S:-300}"
-EXPECTED_SEATS=(looper arch agy-docs agy-gh)
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck disable=SC1091  # dynamically resolved sibling libs
+source "$SCRIPT_DIR/lib/common.sh"
+# shellcheck disable=SC1091  # dynamically resolved sibling libs
+source "$SCRIPT_DIR/lib/profile.sh"
+# shellcheck disable=SC1091  # dynamically resolved sibling libs
+source "$SCRIPT_DIR/lib/config.sh"
+
+# Project profile (rendered by the launcher's ensure_profile pass)
+PROFILE_ENV="${REPO_DIR}/.herdr-swarm/profile.env"
+REPO=$(read_profile_var "REPO" "$PROFILE_ENV")
+TEST_CMD=$(read_profile_var "TEST_CMD" "$PROFILE_ENV")
+
+# Namespaced seat roster from swarm.config.toml (Herdr's agent registry is
+# server-global, so seat names carry the project slug)
+slug_source="${REPO:-}"
+if [[ -z "$slug_source" || "$slug_source" == "none" ]]; then
+  slug_source=$(basename "$REPO_DIR")
+fi
+PROJECT_SLUG=$(slugify "$slug_source")
+config_env=$(config_dump_env "$PROJECT_SLUG")
+eval "$config_env"
+
+EXPECTED_SEATS=()
+for seat_key in $SEAT_KEYS; do
+  name_var="SEAT_NAME_${seat_key}"
+  EXPECTED_SEATS+=("${!name_var}")
+done
 
 if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
   DIM=$(tput dim); RESET=$(tput sgr0)
@@ -114,14 +146,20 @@ harvest_verdicts() {
       fi
       local suite_ok="skipped"
       if [[ "$(ctl_get suite_gate)" == "true" ]]; then
-        log "verdict for #$ticket @ ${sha} — running the suite gate"
-        if (cd "$REPO_DIR" && timeout "$SUITE_TIMEOUT_S" uv run pytest -q >/dev/null 2>&1); then
-          suite_ok="green"; ok "suite gate GREEN for #$ticket @ ${sha}"
-          echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        if test_cmd_is_runnable "$TEST_CMD"; then
+          log "verdict for #$ticket @ ${sha} — running suite gate: ${TEST_CMD}"
+          if (cd "$REPO_DIR" && timeout "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD" >/dev/null 2>&1); then
+            suite_ok="green"; ok "suite gate GREEN for #$ticket @ ${sha}"
+            echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+          else
+            suite_ok="RED"; bad "suite gate RED for #$ticket @ ${sha} — NOT filed; arch must fix before done"
+            echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+            herdr agent prompt "$seat" "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate is structural now)." >/dev/null 2>&1 || true
+          fi
         else
-          suite_ok="RED"; bad "suite gate RED for #$ticket @ ${sha} — NOT filed; arch must fix before done"
+          # No runnable suite for this project — never fake-green, record as skipped
+          warn "TEST_CMD not runnable (${TEST_CMD:-<empty>}) — recording verdict for #$ticket without suite gate"
           echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
-          herdr agent prompt "$seat" "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate is structural now)." >/dev/null 2>&1 || true
         fi
       else
         echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
@@ -173,6 +211,8 @@ EOF
 # ---- 5. optional frontier drain (looper remains dispatcher unless enabled) --
 frontier_drain() {
   [[ "$(ctl_get frontier_drain)" == "true" ]] || return 0
+  # Local-only projects have no GitHub frontier to drain
+  [[ -n "${REPO:-}" && "$REPO" != "none" ]] || return 0
   local next
   next=$(gh issue list -R "$REPO" --state open --json number,title,assignees \
     --jq '[.[] | select((.assignees | length) == 0)] | sort_by(.number) | .[0] // empty | "#\(.number) \(.title)"' 2>/dev/null || true)
