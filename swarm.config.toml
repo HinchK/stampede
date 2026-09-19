@@ -6,10 +6,10 @@ name = "loop-bot-herd-agy"
 version = "1.0.0"
 workspace_label = "swarm-dev"
 log_path = "/tmp/herdr-process.log"
-trace_dir = "~/.herdr-loop-swarm/traces"
+trace_dir = ".herdr-swarm/traces"
 
 [proxy]
-enabled = true
+enabled = false
 endpoint = "http://localhost:4114/v1"
 model_override = "auto"
 health_check_url = "http://localhost:4114/openapi.json"

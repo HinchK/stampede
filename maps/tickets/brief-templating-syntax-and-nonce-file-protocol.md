@@ -4,9 +4,7 @@ title: "Brief Templating Syntax and Nonce File Protocol"
 type: wayfinder:prototype
 status: open
 assignee: unassigned
-blocked_by:
-  - "maps/tickets/profile-detection-and-fail-closed-target-policy.md"
-  - "maps/tickets/toml-configuration-schema-and-shell-binding.md"
+blocked_by: []
 parent: maps/universal-herdr-swarm.md
 ---
 

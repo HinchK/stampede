@@ -18,6 +18,7 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - [Telemetry Event Schema and Live Ops Streaming](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/telemetry-event-schema-and-live-ops-streaming.md): Defined standard JSONL event contract (domain.action envelope), resolved 5 launcher/supervisor/guard disconnections, and specified a 1-line ANSI streaming engine in telemetry.py for the Ops pane.
 - [Profile Detection and Fail-Closed Target Policy](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/profile-detection-and-fail-closed-target-policy.md): Built and validated prototype in lib/profile.sh establishing multi-manifest detection, fail-closed remotes (no kultivait default), and fail-closed test validation (no fake-green "true" fallback).
 - [Supervisor Bug Fixes and Re-Verdict Logic](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/supervisor-bug-fixes-and-re-verdict-logic.md): Rewrote loop-bot-herd.sh dedupe logic with jq exact matching to support re-verdicts after RED, fixed substring collisions (#23 vs #230), and defined missing note/step helpers.
+- [TOML Configuration Schema and Shell Binding](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/toml-configuration-schema-and-shell-binding.md): Implemented lib/config.sh using python3 tomllib to parse swarm.config.toml into shell bindings, dynamic seat arrays, namespaced agent names, and dry-run markdown plans.
 
 ## Not yet specified
 
