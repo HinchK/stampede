@@ -22,6 +22,8 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - [Brief Templating Syntax and Nonce File Protocol](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/brief-templating-syntax-and-nonce-file-protocol.md): Authored briefs/*.in.md templates and lib/briefs.sh renderer to dynamically inject {{REPO}}, {{TEST_CMD}}, and namespaced seats into .herdr-swarm/briefs/, delivered via compact file-path prompts.
 - [Workspace Lifecycle and Clean Teardown Protocol](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/workspace-lifecycle-and-clean-teardown-protocol.md): Implemented lib/lifecycle.sh with workspace auto-discovery, safe per-pane agent teardown, audit log retention, and rich terminal status inspection.
 - [Preflight Dependency and Daemon Verification](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/preflight-dependency-and-daemon-verification.md): Implemented lib/preflight.sh with 9-point validation matrix (daemon, core CLIs, python tomllib, gh auth, agent CLIs, git repo) and actionable human remediation hints.
+- [Lifecycle Safe Teardown and Target Disambiguation](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/lifecycle-safe-teardown-and-targeting.md): Hardened lib/lifecycle.sh with physical pane CWD matching, confirmation gate, and seats.json selective pane retirement to eliminate destructive teardown hazards (D1).
+
 
 
 
