@@ -45,6 +45,8 @@ log()  { printf '%s[%s]%s %s\n' "$DIM" "$(date '+%H:%M:%S')" "$RESET" "$1"; }
 ok()   { log "${GREEN}✓${RESET} $1"; }
 warn() { log "${YELLOW}⚠${RESET} $1"; }
 bad()  { log "${RED}✗${RESET} $1"; }
+note() { log "${DIM}•${RESET} $1"; }
+step() { log "${BLUE}▸${RESET} $1"; }
 
 mkdir -p "$STATE_DIR" "$CHANNEL_DIR"
 
@@ -93,9 +95,16 @@ harvest_verdicts() {
       ticket=$(sed -nE 's/.*ARCH DONE #([0-9]+).*/\1/p' <<<"$verdict_line" | tail -n1)
       [[ -n "$ticket" ]] || continue
       ts=$(date +%s)
-      # dedupe on ticket number
-      if [[ -f "$SESSION_LOG" ]] && grep -q "\"ticket\": $ticket" "$SESSION_LOG" 2>/dev/null; then
-        continue
+      # dedupe with exact ticket matching; allow re-verdicts if verdict line changed
+      if [[ -f "$SESSION_LOG" ]]; then
+        # Skip if ticket already passed (green or skipped)
+        if jq -e -s --argjson t "$ticket" 'any(.[]; .ticket == $t and (.suite == "green" or .suite == "skipped"))' "$SESSION_LOG" >/dev/null 2>&1; then
+          continue
+        fi
+        # Skip if this exact verdict line was already evaluated
+        if jq -e -s --argjson t "$ticket" --arg v "$verdict_line" 'any(.[]; .ticket == $t and .verdict == $v)' "$SESSION_LOG" >/dev/null 2>&1; then
+          continue
+        fi
       fi
       local suite_ok="skipped"
       if [[ "$(ctl_get suite_gate)" == "true" ]]; then
@@ -105,11 +114,11 @@ harvest_verdicts() {
           echo "{\"ts\": $ts, \"ticket\": $ticket, \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
         else
           suite_ok="RED"; bad "suite gate RED for #$ticket — NOT filed; arch must fix before done"
-          echo "{\"ts\": $ts, \"ticket\": $ticket, \"seat\": \"$seat\", \"suite\": \"$suite_ok\"}" >> "$SESSION_LOG"
+          echo "{\"ts\": $ts, \"ticket\": $ticket, \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
           herdr agent prompt "$seat" "LOOP-BOT: verdict for #$ticket harvested but the suite is RED — fix and re-verdict (gate is structural now)." >/dev/null 2>&1 || true
         fi
       else
-        echo "{\"ts\": $ts, \"ticket\": $ticket, \"seat\": \"$seat\", \"suite\": \"$suite_ok\"}" >> "$SESSION_LOG"
+        echo "{\"ts\": $ts, \"ticket\": $ticket, \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
       fi
       [[ "$suite_ok" == "green" || "$suite_ok" == "skipped" ]] && \
         herdr agent prompt looper "LOOP-BOT: filed verdict for #$ticket from $seat's pane ($suite_ok)." >/dev/null 2>&1 || true
