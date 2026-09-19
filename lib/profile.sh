@@ -12,6 +12,9 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091  # dynamically resolved sibling lib
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+
 # Safe key-value writer for profile.env
 save_profile_var() {
   local key="$1"
@@ -163,6 +166,26 @@ detect_docs_dir() {
   fi
 }
 
+# Gate for suite-dependent modes (auto-queue, suite-gated verdicts): a test
+# command is runnable only when it is a real command. "", "none", and "true"
+# all mean "no suite gate" and must block those modes (never fake-green).
+test_cmd_is_runnable() {
+  local cmd="${1:-}"
+  [[ -n "$cmd" && "$cmd" != "none" && "$cmd" != "true" ]]
+}
+
+# Prompt for the test validation command. Empty input re-prompts forever —
+# "none" is honored only when explicitly typed, never silently substituted.
+prompt_test_cmd() { # PROMPT
+  local input=""
+  while [[ -z "$input" ]]; do
+    printf '%s' "$1" >&2
+    read -r input || return 1
+    [[ -n "$input" ]] || printf '  \033[33m!\033[0m Empty command not allowed — enter a command, or "none" to skip suite gates.\n' >&2
+  done
+  printf '%s\n' "$input"
+}
+
 # Orchestrator entrypoint: Ensures a valid profile exists or prompts / exits fail-closed
 ensure_profile() {
   local target_dir="${1:-$PWD}"
@@ -194,9 +217,7 @@ ensure_profile() {
   if ! test_cmd=$(detect_test_cmd "$target_dir"); then
     if (( interactive )) && [[ -t 0 ]]; then
       printf '  \033[33m?\033[0m No test framework auto-detected for %s (%s).\n' "$(basename "$target_dir")" "$eco"
-      printf '    Enter test validation command or "none" to skip suite gates: '
-      read -r test_cmd || true
-      [[ -z "$test_cmd" ]] && test_cmd="none"
+      test_cmd=$(prompt_test_cmd '    Enter test validation command or "none" to skip suite gates: ')
       save_profile_var "TEST_CMD" "$test_cmd" "$env_file"
     else
       printf '  \033[31m✖ FATAL: Could not auto-detect test command for %s.\033[0m\n' "$eco" >&2
@@ -232,6 +253,9 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     detect-ecosystem)
       detect_ecosystem "${2:-$PWD}"
       ;;
+    is-runnable)
+      if test_cmd_is_runnable "${2:-}"; then echo "runnable"; else echo "not-runnable"; exit 1; fi
+      ;;
     ensure)
       ensure_profile "${2:-$PWD}" "${3:-0}"
       ;;
@@ -241,7 +265,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
       cat "${target}/.herdr-swarm/profile.env"
       ;;
     *)
-      echo "Usage: $0 [detect-repo|detect-test|detect-ecosystem|ensure|dump] [dir] [interactive(0|1)]"
+      echo "Usage: $0 [detect-repo|detect-test|detect-ecosystem|is-runnable <cmd>|ensure|dump] [dir] [interactive(0|1)]"
       exit 1
       ;;
   esac

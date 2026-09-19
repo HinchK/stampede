@@ -24,6 +24,9 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091  # dynamically resolved sibling lib
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+
 # Terminal colors
 if [[ -t 1 ]] && command -v tput >/dev/null 2>&1 && [[ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]]; then
   BOLD=$(tput bold 2>/dev/null || true); DIM=$(tput dim 2>/dev/null || true); RESET=$(tput sgr0 2>/dev/null || true)

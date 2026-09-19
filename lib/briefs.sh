@@ -7,6 +7,9 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091  # dynamically resolved sibling lib
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 BRIEFS_SRC_DIR="${SCRIPT_DIR}/briefs"
 
