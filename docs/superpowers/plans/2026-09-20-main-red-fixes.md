@@ -35,63 +35,63 @@
 **Files:** `lib/partition.sh:29`, `tests/test_partition.sh` (already has failing [8d]), `maps/tickets/bash32-platform-floor.md` (new)
 
 - [x] RED reproduced: `/bin/bash tests/test_partition.sh` → [8d] fails, exit 1 (25/26)
-- [ ] Apply `local s=/` fix in `owns_normalize`
-- [ ] GREEN: suite 26/26 under `/bin/bash` AND bash 5
-- [ ] Ticket file + commit `fix: (#BASH32-FLOOR)`
+- [x] Apply `local s=/` fix in `owns_normalize`
+- [x] GREEN: suite 26/26 under `/bin/bash` AND bash 5
+- [x] Ticket file + commit `fix: (#BASH32-FLOOR)`
 
 ### Task 2: Fix test_worktree.sh 5c early-EXIT-trap under bash 3.2 (same ticket)
 
 **Files:** `tests/test_worktree.sh` (5c block)
 
 - [x] RED reproduced 4/4 + minimal repro: kill+wait fires EXIT trap early on 3.2
-- [ ] Replace kill+wait with natural expiry (short sleep + `kill -0` poll), keep dead-pid semantics
-- [ ] GREEN: 42/42 under `/bin/bash` AND bash 5
-- [ ] Commit `fix: (#BASH32-FLOOR)`
+- [x] Replace kill+wait with natural expiry (short sleep + `kill -0` poll), keep dead-pid semantics
+- [x] GREEN: 42/42 under `/bin/bash` AND bash 5
+- [x] Commit `fix: (#BASH32-FLOOR)`
 
 ### Task 3: Aggregate Makefile (issue 2)
 
 **Files:** `Makefile` (new)
 
-- [ ] `test` target: every `tests/test_*.sh` under `/bin/bash`, failure-propagating (set -e loop)
-- [ ] `lint` target: shellcheck 0-warning gate + bash -n + py_compile
-- [ ] `check` = lint + test; verify propagation with synthetic broken suite
-- [ ] Commit `feat: aggregate test/lint/check targets (#TEST-AGG)`
+- [x] `test` target: every `tests/test_*.sh` under `/bin/bash`, failure-propagating (set -e loop)
+- [x] `lint` target: shellcheck 0-warning gate + bash -n + py_compile
+- [x] `check` = lint + test; verify propagation with synthetic broken suite
+- [x] Commit `feat: aggregate test/lint/check targets (#TEST-AGG)`
 
 ### Task 4: Self-dogfood profile detection (issue 3)
 
 **Files:** `lib/profile.sh` (`detect_ecosystem`, `detect_test_cmd`), `profile.env.example` (new), `tests/test_profile.sh` (new, TDD)
 
-- [ ] TDD: makefile-with-test-target → ecosystem `make` → `make test`; run_all.sh → `bash run_all.sh`; generic still returns 1; marker precedence preserved
-- [ ] `profile.env.example` documenting REPO/TEST_CMD/ECOSYSTEM/DOCS_DIR
-- [ ] Dogfood: `lib/profile.sh detect-test .` prints `make test` on this repo (clean-clone semantics)
-- [ ] Refresh runtime `.herdr-swarm/profile.env` (REPO=HinchK/stampede)
-- [ ] Commit `feat: (#PROFILE-MAKE)`
+- [x] TDD: makefile-with-test-target → ecosystem `make` → `make test`; run_all.sh → `bash run_all.sh`; generic still returns 1; marker precedence preserved
+- [x] `profile.env.example` documenting REPO/TEST_CMD/ECOSYSTEM/DOCS_DIR
+- [x] Dogfood: `lib/profile.sh detect-test .` prints `make test` on this repo (clean-clone semantics)
+- [x] Refresh runtime `.herdr-swarm/profile.env` (REPO=HinchK/stampede)
+- [x] Commit `feat: (#PROFILE-MAKE)`
 
 ### Task 5: Arbiter string ticket ids (issue 5 enabler)
 
 **Files:** `lib/arbiter.sh` (`arbiter_enqueue`, `_arb_set_status`), `tests/test_arbiter.sh`
 
-- [ ] TDD: enqueue/drain/promote with `"P3-4-spec"`-style id; numeric ids unchanged (26 existing + new green)
-- [ ] Commit `feat: (#P3-4-arbiter-strings)`
+- [x] TDD: enqueue/drain/promote with `"P3-4-spec"`-style id; numeric ids unchanged (26 existing + new green)
+- [x] Commit `feat: (#P3-4-arbiter-strings)`
 
 ### Task 6: Branch reconciliation via arbiter (issue 5)
 
-- [ ] Two-dot analysis → integrate list (pm-p3-4-spec, pm-p3-3-spec residual, pm-reordered-plan, worktree-pm-audit, pm-p2-4-spec residual) vs delete list (verified patch-equivalent)
-- [ ] Per branch: `arbiter enqueue <id> pm <sha>` → `drain` (gate: `make test`) → `promote` (ff-only, clean root — deletions committed first)
-- [ ] Delete fully-applied branches (`-D` only after `git cherry` proves equivalence)
-- [ ] Unlock + remove `.claude/worktrees/pm-audit`; reconcile integration worktree
+- [x] Two-dot analysis → integrate list (pm-p3-4-spec, pm-p3-3-spec residual, pm-reordered-plan, worktree-pm-audit, pm-p2-4-spec residual) vs delete list (verified patch-equivalent)
+- [x] Per branch: `arbiter enqueue <id> pm <sha>` → `drain` (gate: `make test`) → `promote` (ff-only, clean root — deletions committed first)
+- [x] Delete fully-applied branches (`-D` only after `git cherry` proves equivalence)
+- [x] Unlock + remove `.claude/worktrees/pm-audit`; reconcile integration worktree
 
 ### Task 7: STATE.md + CLAUDE.md truth pass (issue 4)
 
-- [ ] §1/§2/§3 updated: P3-3 resolved, P3-4 spec integrated, real test totals (37+26+26+17+profile), P3-2 red→fixed, next steps
-- [ ] CLAUDE.md commands: `make check`, four suites
-- [ ] Commit `docs: (#STATE-TRUTH)`
+- [x] §1/§2/§3 updated: P3-3 resolved, P3-4 spec integrated, real test totals (37+26+26+17+profile), P3-2 red→fixed, next steps
+- [x] CLAUDE.md commands: `make check`, four suites
+- [x] Commit `docs: (#STATE-TRUTH)`
 
 ### Task 8: De-hardcode kultivait (issue 6)
 
 **Files:** `herdr-loop-swarm.sh` (~566), `lib/config.sh` (emit `PROXY_HEALTH_URL`), `swarm.config.toml` (`enabled = false` default), `loop-bot-herd.sh` (~117 recovery pointer, ~429 credits_watch gate), commit stray deletions `loop-bot-herd-claude/`
 
-- [ ] Launcher: start proxy only when `PROXY_ENABLED=true`; probe `PROXY_HEALTH_URL`
-- [ ] Supervisor: recovery pointer → this repo's `herdr-loop-swarm.sh up`; credits probe only when proxy enabled
-- [ ] `chore: remove loop-bot-herd-claude/ legacy variant` + commit `fix: (#PROXY-GATE)`
-- [ ] Final `make check` green
+- [x] Launcher: start proxy only when `PROXY_ENABLED=true`; probe `PROXY_HEALTH_URL`
+- [x] Supervisor: recovery pointer → this repo's `herdr-loop-swarm.sh up`; credits probe only when proxy enabled
+- [x] `chore: remove loop-bot-herd-claude/ legacy variant` + commit `fix: (#PROXY-GATE)`
+- [x] Final `make check` green
