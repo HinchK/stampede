@@ -43,6 +43,8 @@ source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/profile.sh"
 # shellcheck disable=SC1091  # dynamically resolved sibling libs
 source "$SCRIPT_DIR/lib/config.sh"
+# shellcheck disable=SC1091  # dynamically resolved sibling lib (arbiter enqueue at reap)
+source "$SCRIPT_DIR/lib/arbiter.sh"
 
 # Project profile (rendered by the launcher's ensure_profile pass)
 PROFILE_ENV="${REPO_DIR}/.herdr-swarm/profile.env"
@@ -64,6 +66,15 @@ for seat_key in $SEAT_KEYS; do
   name_var="SEAT_NAME_${seat_key}"
   EXPECTED_SEATS+=("${!name_var}")
 done
+
+# ── asynchronous gate engine (ADR 0013) ────────────────────────────────────
+# gate_concurrency: [fanout] config > env override; default 2; clamped 1–8;
+# 0 = legacy inline gating (config-level rollback path).
+GATE_CONCURRENCY="${GATE_CONCURRENCY:-${FANOUT_GATE_CONCURRENCY:-2}}"
+case "$GATE_CONCURRENCY" in
+  ''|*[!0-9]*) GATE_CONCURRENCY=2 ;;
+esac
+if (( GATE_CONCURRENCY > 8 )); then GATE_CONCURRENCY=8; fi
 
 # Telemetry session (stable per project; shared with the launcher's Ops stream)
 SESSION_ID=$(telemetry_session_id "$STATE_DIR")
@@ -161,6 +172,125 @@ gate_tree_matches() {
   [[ -z "$(git -C "$dir" status --porcelain 2>/dev/null)" ]]
 }
 
+# ── async gate job engine (ADR 0013: durable jobs, bounded, non-blocking) ──
+# Job records:   ${STATE_DIR}/gates/<seat>-<sha7>.job  (atomic tmp+mv, pid inside)
+# Completion:    <job>.rc written atomically by the job itself — the ONLY
+#                completion signal; a half-written rc is impossible.
+# Logs:          ${STATE_DIR}/gate-logs/<seat>-<sha7>.log (kept after reap)
+# Crash rule:    dead pid without rc = discarded, re-harvested next pass.
+#                NEVER inferred green.
+# bash 3.2 safe: no wait -n, no associative arrays — file polling only.
+
+gate_spawn() { # SEAT TICKET SHA GATE_DIR VERDICT_LINE ISOLATED
+  local seat="$1" ticket="$2" sha="$3" dir="$4" vline="$5" isolated="${6:-false}"
+  local jid="${seat}-${sha:0:7}"
+  local jdir="${STATE_DIR}/gates"
+  local jlog="${STATE_DIR}/gate-logs/${jid}.log"
+  local jrc="${jdir}/${jid}.rc"
+  mkdir -p "$jdir" "${STATE_DIR}/gate-logs" "${STATE_DIR}/gate-tmp/${seat}"
+  (
+    set +e
+    if ! cd "$dir" 2>/dev/null; then
+      printf '127' > "${jrc}.tmp" && mv "${jrc}.tmp" "$jrc"
+      exit 0
+    fi
+    TMPDIR="${STATE_DIR}/gate-tmp/${seat}" timeout "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD" > "$jlog" 2>&1
+    local rc=$?
+    printf '%s' "$rc" > "${jrc}.tmp" && mv "${jrc}.tmp" "$jrc"
+  ) >/dev/null 2>&1 &
+  local gpid=$!
+  jq -cn --arg s "$seat" --argjson t "$ticket" --arg sha "$sha" --arg d "$dir" \
+    --arg st "$(date -u +%FT%TZ)" --argjson pid "$gpid" --arg v "$vline" --arg iso "$isolated" \
+    '{version: 1, seat: $s, ticket: $t, sha: $sha, dir: $d, start_time: $st,
+      pid: $pid, isolated: ($iso == "true"), verdict_line: $v}' \
+    > "${jdir}/${jid}.job.tmp" && mv "${jdir}/${jid}.job.tmp" "${jdir}/${jid}.job"
+  log "gate job spawned: ${jid} (pid ${gpid}, cap ${GATE_CONCURRENCY})"
+}
+
+# running jobs = .job files whose .rc has not landed yet
+gate_running_count() {
+  local j n=0
+  for j in "$STATE_DIR"/gates/*.job; do
+    [[ -e "$j" ]] || continue
+    [[ -f "${j%.job}.rc" ]] || n=$((n + 1))
+  done
+  printf '%s' "$n"
+}
+
+# one job per (ticket, sha): a duplicate verdict line never double-spawns
+gate_job_running() { # TICKET SHA
+  local j
+  for j in "$STATE_DIR"/gates/*.job; do
+    [[ -e "$j" ]] || continue
+    jq -e --argjson t "$1" --arg s "$2" '.ticket == $t and .sha == $s' "$j" >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
+
+# Non-blocking reap: for every finished job, post-check drift → verdict
+# record → telemetry → (green && isolated) arbiter_enqueue → cleanup.
+gate_reap() {
+  local job jrc jid meta seat ticket sha dir iso rc_val suite_ok ts gate_log
+  for job in "$STATE_DIR"/gates/*.job; do
+    [[ -e "$job" ]] || continue
+    jrc="${job%.job}.rc"
+    [[ -f "$jrc" ]] || continue
+    meta=$(cat "$job" 2>/dev/null || true)
+    if [[ -z "$meta" ]]; then
+      rm -f "$job" "$jrc"
+      continue
+    fi
+    seat=$(jq -r '.seat // empty' <<<"$meta")
+    ticket=$(jq -r '.ticket // empty' <<<"$meta")
+    sha=$(jq -r '.sha // empty' <<<"$meta")
+    dir=$(jq -r '.dir // empty' <<<"$meta")
+    iso=$(jq -r '.isolated // false' <<<"$meta")
+    [[ -n "$seat" && -n "$ticket" && -n "$sha" && -n "$dir" ]] || { rm -f "$job" "$jrc"; continue; }
+    rc_val=$(cat "$jrc" 2>/dev/null || printf '1')
+    ts=$(date +%s)
+    jid=$(basename "$job" .job)
+    gate_log="${STATE_DIR}/gate-logs/${jid}.log"
+
+    if ! gate_tree_matches "$dir" "$sha"; then
+      suite_ok="invalidated"; bad "gate job ${jid}: INVALIDATED — tree drifted during the background run"
+      herdr agent prompt "$seat" "LOOP-BOT: suite run for #$ticket @ ${sha} was INVALIDATED — the tree changed during the gate. Re-verdict 'ARCH DONE #$ticket <sha>' from a stable tree." >/dev/null 2>&1 || true
+    elif [[ "$rc_val" == "0" ]]; then
+      suite_ok="green"; ok "gate job ${jid}: GREEN (log: $gate_log)"
+      herdr agent prompt looper "LOOP-BOT: filed verdict for #$ticket @ ${sha} from $seat's pane (green)." >/dev/null 2>&1 || true
+      if [[ "$iso" == "true" ]]; then
+        arbiter_enqueue "$ticket" "$seat" "$sha" >/dev/null 2>&1 \
+          || warn "arbiter enqueue failed for #$ticket @ ${sha}"
+      fi
+    else
+      suite_ok="RED"; bad "gate job ${jid}: RED (rc=${rc_val}) — NOT filed; worker must fix (log: $gate_log)"
+      herdr agent prompt "$seat" "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate log: $gate_log)." >/dev/null 2>&1 || true
+    fi
+
+    echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"exit_code\": $rc_val, \"log\": \"$gate_log\"}" >> "$SESSION_LOG"
+    python3 "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" suite.verdict "$seat" "$ticket" \
+      "$(jq -cn --arg s "$suite_ok" --arg sha "$sha" --arg seat "$seat" --arg t "$ticket" \
+        '{suite:$s, sha:$sha, summary:("suite " + $s + " @ " + $sha), details:("seat=" + $seat + " ticket=#" + $t)}')" \
+      --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
+    rm -f "$job" "$jrc"   # conclusive: job done, log kept
+  done
+}
+
+# Crash recovery (ADR 0013 §D): adopt live pids, discard dead pids without rc.
+gate_recover() {
+  local job jrc pid
+  for job in "$STATE_DIR"/gates/*.job; do
+    [[ -e "$job" ]] || continue
+    jrc="${job%.job}.rc"
+    [[ -f "$jrc" ]] && continue
+    pid=$(jq -r '.pid // empty' "$job" 2>/dev/null || true)
+    if [[ -n "$pid" && "$pid" != "null" ]] && ! kill -0 "$pid" 2>/dev/null; then
+      warn "gate job $(basename "$job" .job): pid ${pid} died without rc — DISCARDED (never assumed green); verdict re-harvests next pass"
+      rm -f "$job"
+    fi
+    # alive → adopted as-is; its rc write still lands and the next reap takes it
+  done
+}
+
 harvest_verdicts() {
   local seat out
   for seat in "${EXPECTED_SEATS[@]}"; do
@@ -216,33 +346,44 @@ harvest_verdicts() {
         continue
       fi
       local suite_ok="skipped"
-      if [[ "$(ctl_get suite_gate)" == "true" ]]; then
-        if test_cmd_is_runnable "$TEST_CMD"; then
-          log "verdict for #$ticket @ ${sha} — running suite gate in ${GATE_DIR}: ${TEST_CMD}"
-          local gate_rc=1
-          if (cd "$GATE_DIR" && TMPDIR="${STATE_DIR}/gate-tmp/${seat}" timeout "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD") >"$gate_log" 2>&1; then
-            gate_rc=0
+      if [[ "$(ctl_get suite_gate)" == "true" ]] && test_cmd_is_runnable "$TEST_CMD"; then
+        if (( GATE_CONCURRENCY > 0 )); then
+          # ── async path (ADR 0013): spawn and keep scanning ──
+          if gate_job_running "$ticket" "$sha"; then
+            continue   # already gated; reap will record
           fi
-          # Post-condition drift (TOCTOU): the worker must not have touched
-          # the tree while the suite ran — a moved/dirtied tree invalidates
-          # the run regardless of exit code.
-          if ! gate_tree_matches "$GATE_DIR" "$sha"; then
-            suite_ok="invalidated"; bad "suite run for #$ticket @ ${sha} INVALIDATED — tree changed during the gate"
-            echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
-            herdr agent prompt "$seat" "LOOP-BOT: suite run for #$ticket @ ${sha} was INVALIDATED — the tree changed during the gate. Re-verdict 'ARCH DONE #$ticket <sha>' from a stable tree." >/dev/null 2>&1 || true
-          elif [[ "$gate_rc" -eq 0 ]]; then
-            suite_ok="green"; ok "suite gate GREEN for #$ticket @ ${sha} (log: $gate_log)"
-            echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
-          else
-            suite_ok="RED"; bad "suite gate RED for #$ticket @ ${sha} — NOT filed; arch must fix before done (log: $gate_log)"
-            echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
-            herdr agent prompt "$seat" "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate log: $gate_log)." >/dev/null 2>&1 || true
+          if (( $(gate_running_count) >= GATE_CONCURRENCY )); then
+            note "gate slots full (cap ${GATE_CONCURRENCY}) — verdict for #$ticket @ ${sha} deferred to next pass"
+            continue
           fi
-        else
-          # No runnable suite for this project — never fake-green, record as skipped
-          warn "TEST_CMD not runnable (${TEST_CMD:-<empty>}) — recording verdict for #$ticket without suite gate"
-          echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+          gate_spawn "$seat" "$ticket" "$sha" "$GATE_DIR" "$verdict_line" "$GATE_ISOLATED"
+          continue   # verdict record lands at reap time
         fi
+        # ── legacy inline path (gate_concurrency = 0): unchanged semantics ──
+        log "verdict for #$ticket @ ${sha} — running suite gate in ${GATE_DIR}: ${TEST_CMD}"
+        local gate_rc=1
+        if (cd "$GATE_DIR" && TMPDIR="${STATE_DIR}/gate-tmp/${seat}" timeout "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD") >"$gate_log" 2>&1; then
+          gate_rc=0
+        fi
+        # Post-condition drift (TOCTOU): the worker must not have touched
+        # the tree while the suite ran — a moved/dirtied tree invalidates
+        # the run regardless of exit code.
+        if ! gate_tree_matches "$GATE_DIR" "$sha"; then
+          suite_ok="invalidated"; bad "suite run for #$ticket @ ${sha} INVALIDATED — tree changed during the gate"
+          echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+          herdr agent prompt "$seat" "LOOP-BOT: suite run for #$ticket @ ${sha} was INVALIDATED — the tree changed during the gate. Re-verdict 'ARCH DONE #$ticket <sha>' from a stable tree." >/dev/null 2>&1 || true
+        elif [[ "$gate_rc" -eq 0 ]]; then
+          suite_ok="green"; ok "suite gate GREEN for #$ticket @ ${sha} (log: $gate_log)"
+          echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        else
+          suite_ok="RED"; bad "suite gate RED for #$ticket @ ${sha} — NOT filed; arch must fix before done (log: $gate_log)"
+          echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+          herdr agent prompt "$seat" "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate log: $gate_log)." >/dev/null 2>&1 || true
+        fi
+      elif [[ "$(ctl_get suite_gate)" == "true" ]]; then
+        # No runnable suite for this project — never fake-green, record as skipped
+        warn "TEST_CMD not runnable (${TEST_CMD:-<empty>}) — recording verdict for #$ticket without suite gate"
+        echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
       else
         echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
       fi
@@ -333,8 +474,10 @@ cmd_dispatch() { # dispatch WORKER BRIEF_FILE
 }
 
 cmd_once() {
+  gate_recover
   health_pass
   harvest_verdicts
+  gate_reap
   unpushed_watch
   credits_watch
   frontier_drain

@@ -9,6 +9,11 @@ log_path = "/tmp/herdr-process.log"
 trace_dir = ".herdr-swarm/traces"
 worktree_root = ".herdr-swarm/worktrees"
 
+[fanout]
+# Phase 3 concurrency controls (ADR 0013)
+gate_concurrency = 2      # concurrent suite gates (0 = legacy inline gating)
+max_workers = 2           # back-pressure comparison point
+
 [proxy]
 enabled = true
 endpoint = "http://localhost:4114/v1"
