@@ -228,8 +228,9 @@ fi
 eval "$config_env"
 good "Config bound: ${SWARM_CONFIG_NAME} — seats: ${SEAT_KEYS}"
 
-# Namespaced agent handles for kickoff dispatches
-ARCH_AGENT="${SEAT_NAME_arch:-arch}"
+# Namespaced agent handles for kickoff dispatches (first implementation seat
+# carries the architect role; roster is config-driven, seats may be many)
+ARCH_AGENT="${SEAT_NAME_arch_1:-${SEAT_NAME_arch:-arch}}"
 LOOPER_AGENT="${SEAT_NAME_looper:-looper}"
 
 # Stable telemetry session (shared with loop-bot so the Ops stream sees all)

@@ -31,14 +31,24 @@ brief = "briefs/overseer-pm.md"
 tab = "herd"
 position = "top-left"
 
-[seats.arch]
-name = "arch"
-role = "Lead Architect & Implementation Engine"
+[seats.arch_1]
+name = "arch-1"
+role = "Implementation Engine (GLM-5.3)"
 default_kind = "opencode"
 model = "zai/glm-5.3"
 brief = "briefs/arch.md"
 tab = "herd"
 position = "top-right"
+worktree = true
+
+[seats.arch_2]
+name = "arch-2"
+role = "Implementation Engine (Claude Sonnet)"
+default_kind = "claude"
+model = "claude-sonnet-4-5"
+brief = "briefs/arch.md"
+tab = "herd"
+position = "bottom-right"
 worktree = true
 
 [seats.looper]
