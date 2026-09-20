@@ -2,7 +2,7 @@
 id: P3-3
 title: "Asynchronous Supervisor Harvesting and Durable Gate Jobs"
 type: wayfinder:prototype
-status: backlog
+status: in_progress
 assignee: arch
 prototype_asset: loop-bot-herd.sh,tests/test_async_gate.sh
 owns: loop-bot-herd.sh,tests/test_async_gate.sh

@@ -49,7 +49,11 @@
 - **Multi-Worker Config & Dynamic Roster Expansion (#P3-1):** Resolved in commit `b62faf1`. `arch` implemented dual implementation engines (`arch-1` with GLM-5.3, `arch-2` with Claude) in `swarm.config.toml`, `lib/config.sh`, and `herdr-loop-swarm.sh`.
 - **ADR 0011 Multi-Worker Floor Topologies (#T-DOCS-ADR0011):** Resolved in commit `b62faf1`. `agy-docs` authored `docs/adr/0011-multi-worker-floor-topologies-and-concurrency.md` establishing scaling from 1 to $N$ implementation seats and model tier routing.
 - **Phase 3 Milestone & Issue Sync Mapping (#T-GH-P3SYNC):** Resolved in commit `9050196`. `agy-gh` defined milestone boards, worker issue labels, and drafted tickets P3-2 and P3-3.
-- **P3-2 Task Intake Partition Check Specification (#P3-2-spec):** Resolved in commit `72c2f18`. `pm` authored `docs/audits/2026-09-19-p3-2-task-partition-check-spec.md` specifying `owns:` grammar, casefolding, normalization, and overlap detection.
+- **P3-2 Task Intake Partition Checking (#P3-2):** Resolved in commit `1992e37`. `arch` implemented `lib/partition.sh` (`parse_owns`, `normalize_path`, `overlaps`, `partition_check`, `lease_acquire`, `lease_release`, `suggest`) with 26/26 unit tests in `tests/test_partition.sh` and 0 shellcheck warnings.
+- **ADR 0012 Task Partitioning & Disjoint Dispatches (#T-DOCS-ADR0012):** Resolved in commit `78cb21a`. `agy-docs` authored `docs/adr/0012-task-partitioning-and-disjoint-dispatches.md` capturing single-line frontmatter grammar, casefolded comparison, and arbiter-tied lease lifetimes.
+- **Ticket Frontmatter Annotations (#T-GH-OWNS):** Resolved in commit `cd5c473`. `agy-gh` annotated 29 ticket frontmatters in `maps/tickets/` with single-line `owns:` declarations.
+- **CLAUDE.md Refresh & Alignment:** Resolved in commit `1c8615b`. `pm` refreshed `CLAUDE.md` with verified 3-suite commands, arbiter integration pipeline, and partition/lease rules.
+- **Local Engine Tier Activation (pi + kultivait) (#P3-LOCAL-PI):** Resolved in commit `f6ead53`. Configured local Metal-accelerated Qwen3-14B inference via `kultivait` on port 4114, seated `pi` in pane `wM:pC` (tab `local-pi`), and provisioned isolated worktree `.herdr-swarm/worktrees/pi`.
 
 ---
 
@@ -59,17 +63,20 @@
 - **Phase 2 Parallel Worktree Swarm Fan-Out: 100% COMPLETE & HARDENED (63/63 tests passing).**
 - **Phase 3 Autonomous Multi-Worker Concurrent Fan-Out Progress:**
   - **P3-1 (Multi-Worker Config & Roster Expansion):** Complete (`b62faf1`).
-  - **P3-2 (Task Intake Partition Checking):** Active Frontier. Implementing `lib/partition.sh` (`partition_check`, `lease_acquire`, `lease_release`).
-  - **P3-3 (Asynchronous Supervisor Harvesting):** Queued. Non-blocking polling of concurrent worker panes.
+  - **P3-2 (Task Intake Partition Checking & Lease Protocol):** Complete (`1992e37`, 26/26 tests passing).
+  - **P3-LOCAL (Local Engine Activation - pi + kultivait):** Complete (`f6ead53`).
+  - **P3-3 (Asynchronous Supervisor Harvesting):** Active Frontier (`maps/tickets/async-supervisor-harvesting.md`). Non-blocking polling of concurrent worker panes with background gate jobs in `.herdr-swarm/gates/`.
+- **Total Test Suite Health:** **89 passed, 0 failed** (37 worktree, 26 arbiter, 26 partition); 0 shellcheck warnings.
 
 ---
 
 ## 3. Immediate Next Step
 
-- Dispatch `arch` to implement `lib/partition.sh` and `tests/test_partition.sh` (P3-2).
-- Dispatch `agy-docs` to author ADR 0012 (Task Partitioning & Non-Overlapping Dispatches).
-- Dispatch `pm` to author P3-3 specification (Asynchronous Supervisor Harvesting).
-- Dispatch `agy-gh` to annotate existing ticket frontmatters with `owns:` paths.
+- Dispatch `pm` to author P3-3 specification (`docs/audits/2026-09-19-p3-3-async-supervisor-harvesting-spec.md`) and file concurrent-provision race mitigation ticket.
+- Dispatch `arch` to implement asynchronous background gate execution in `loop-bot-herd.sh` and test suite `tests/test_async_gate.sh`.
+- Dispatch `pi` to execute local verification and documentation integrity scans.
+- Dispatch `agy-docs` to author ADR 0013 (Asynchronous Supervisor Gate Jobs & Concurrency Bounding).
+- Dispatch `agy-gh` to validate GitHub milestone and ticket sync mapping.
 
 
 
