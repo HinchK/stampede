@@ -5,6 +5,7 @@ type: wayfinder:prototype
 status: resolved
 assignee: looper
 prototype_asset: README.md
+owns: README.md
 parent: maps/universal-herdr-swarm.md
 resolution:
   verified_by: looper

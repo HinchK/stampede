@@ -5,6 +5,7 @@ type: wayfinder:prototype
 status: in_progress
 assignee: arch
 prototype_asset: swarm.config.toml,lib/config.sh,herdr-loop-swarm.sh
+owns: swarm.config.toml,lib/config.sh,herdr-loop-swarm.sh
 parent: maps/universal-herdr-swarm.md
 ---
 

@@ -5,6 +5,7 @@ type: wayfinder:prototype
 status: closed
 assignee: looper
 prototype_asset: lib/profile.sh
+owns: lib/profile.sh
 parent: maps/universal-herdr-swarm.md
 ---
 

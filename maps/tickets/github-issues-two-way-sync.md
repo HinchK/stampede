@@ -5,6 +5,7 @@ type: wayfinder:prototype
 status: resolved
 assignee: agy-gh
 prototype_asset: docs/findings/github-issues-sync.md,lib/gh_sync.sh
+owns: docs/findings/github-issues-sync.md,lib/gh_sync.sh
 parent: maps/universal-herdr-swarm.md
 ---
 

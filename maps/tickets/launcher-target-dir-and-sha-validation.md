@@ -5,6 +5,7 @@ type: wayfinder:prototype
 status: in_progress
 assignee: arch
 prototype_asset: herdr-loop-swarm.sh,lib/lifecycle.sh,loop-bot-herd.sh
+owns: herdr-loop-swarm.sh,lib/lifecycle.sh,loop-bot-herd.sh
 parent: maps/universal-herdr-swarm.md
 ---
 

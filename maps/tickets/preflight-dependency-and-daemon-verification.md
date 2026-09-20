@@ -5,6 +5,7 @@ type: wayfinder:prototype
 status: closed
 assignee: arch
 prototype_asset: lib/preflight.sh
+owns: lib/preflight.sh
 parent: maps/universal-herdr-swarm.md
 ---
 

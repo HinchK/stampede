@@ -5,6 +5,7 @@ type: wayfinder:prototype
 status: done
 assignee: arch
 prototype_asset: lib/telemetry.py,herdr-loop-swarm.sh,loop-bot-herd.sh
+owns: lib/telemetry.py,herdr-loop-swarm.sh,loop-bot-herd.sh
 parent: maps/universal-herdr-swarm.md
 ---
 

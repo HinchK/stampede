@@ -6,6 +6,7 @@ status: resolved
 commit: d7c9558
 assignee: arch
 prototype_asset: lib/worktree.sh,lib/lifecycle.sh,tests/test_worktree.sh
+owns: lib/worktree.sh,lib/lifecycle.sh,tests/test_worktree.sh
 parent: maps/universal-herdr-swarm.md
 ---
 

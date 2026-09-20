@@ -5,6 +5,7 @@ type: wayfinder:prototype
 status: in_progress
 assignee: arch
 prototype_asset: lib/partition.sh,tests/test_partition.sh
+owns: lib/partition.sh,tests/test_partition.sh
 parent: maps/universal-herdr-swarm.md
 ---
 

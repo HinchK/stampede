@@ -5,6 +5,7 @@ type: wayfinder:prototype
 status: resolved
 assignee: arch
 prototype_asset: loop-bot-herd.sh,herdr-loop-swarm.sh
+owns: loop-bot-herd.sh,herdr-loop-swarm.sh
 parent: maps/universal-herdr-swarm.md
 ---
 

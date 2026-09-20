@@ -6,6 +6,7 @@ status: resolved
 resolution: "Integrated lib/preflight.sh matrix check fail-closed before workspace/pane mutation and added up, down, status lifecycle subcommands delegating to lib/lifecycle.sh. Commit 5ca2049."
 assignee: arch
 prototype_asset: herdr-loop-swarm.sh
+owns: herdr-loop-swarm.sh
 parent: maps/universal-herdr-swarm.md
 ---
 

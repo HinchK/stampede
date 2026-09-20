@@ -5,6 +5,7 @@ type: wayfinder:prototype
 status: backlog
 assignee: arch
 prototype_asset: loop-bot-herd.sh,tests/test_async_gate.sh
+owns: loop-bot-herd.sh,tests/test_async_gate.sh
 parent: maps/universal-herdr-swarm.md
 ---
 

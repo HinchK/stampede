@@ -5,6 +5,7 @@ type: wayfinder:prototype
 status: resolved
 assignee: agy-docs
 prototype_asset: docs/adr/0006-git-worktree-worker-isolation.md,docs/worktree-swarm.md
+owns: docs/adr/0006-git-worktree-worker-isolation.md,docs/worktree-swarm.md
 parent: maps/universal-herdr-swarm.md
 resolution:
   commit: pending

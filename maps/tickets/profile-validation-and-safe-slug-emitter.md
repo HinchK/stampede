@@ -5,6 +5,7 @@ type: wayfinder:prototype
 status: resolved
 assignee: arch
 prototype_asset: lib/profile.sh
+owns: lib/profile.sh
 parent: maps/universal-herdr-swarm.md
 resolution:
   commit: 44c0d56

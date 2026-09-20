@@ -6,6 +6,7 @@ status: resolved
 commit: 3c4a584
 assignee: arch
 prototype_asset: lib/arbiter.sh,tests/test_arbiter.sh
+owns: lib/arbiter.sh,tests/test_arbiter.sh
 parent: maps/universal-herdr-swarm.md
 ---
 

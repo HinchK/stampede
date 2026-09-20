@@ -5,6 +5,7 @@ type: wayfinder:prototype
 status: resolved
 assignee: arch
 prototype_asset: herdr-loop-swarm.sh
+owns: herdr-loop-swarm.sh
 parent: maps/universal-herdr-swarm.md
 resolution:
   commit: b6237a0

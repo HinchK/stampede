@@ -5,6 +5,7 @@ type: wayfinder:prototype
 status: resolved
 assignee: arch
 prototype_asset: loop-bot-herd.sh
+owns: loop-bot-herd.sh
 parent: maps/universal-herdr-swarm.md
 resolution:
   commit: c308f2b

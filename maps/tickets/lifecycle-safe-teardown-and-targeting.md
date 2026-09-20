@@ -5,6 +5,7 @@ type: wayfinder:prototype
 status: closed
 assignee: arch
 prototype_asset: lib/lifecycle.sh
+owns: lib/lifecycle.sh
 parent: maps/universal-herdr-swarm.md
 ---
 
