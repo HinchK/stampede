@@ -178,6 +178,7 @@ To prevent **kickoff race conditions** (where task prompts arrive while an agent
   - [ADR 0010: Worktree Teardown Lifecycle, Untracked File Salvage, and Stale Branch Re-attachment Gating](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0010-worktree-teardown-lifecycle-and-salvage.md)
   - [ADR 0011: Multi-Worker Floor Topologies, Worktree Namespacing, and Heterogeneous Concurrency](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0011-multi-worker-floor-topologies-and-concurrency.md)
   - [ADR 0012: Task Partitioning, File Disjointness, and Durable Ledger Leases](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0012-task-partitioning-and-disjoint-dispatches.md)
+  - [ADR 0013: Asynchronous Supervisor Suite Gating, Durable Job Records, and Concurrency Bounding](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0013-asynchronous-supervisor-gate-jobs.md)
 - **Swarm Orchestration Retrospective**: See [`docs/findings/swarm-orchestration-retrospective.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/swarm-orchestration-retrospective.md).
 - **Phase 2 Worktree Architecture Blueprint**: See [`docs/worktree-swarm.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/worktree-swarm.md).
 - **Dogfooding Rehearsal Receipt**: See [`docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md).
@@ -216,7 +217,7 @@ loop-bot-herd-agy/
 │   └── tickets/            # Granular milestone prototype tickets
 └── docs/                   # ADRs, findings & audit archives
     ├── worktree-swarm.md   # Phase 2 Worktree Architecture Blueprint
-    ├── adr/                # Architecture Decision Records (0001–0012)
+    ├── adr/                # Architecture Decision Records (0001–0013)
     │   ├── README.md       # ADR catalog & index
     │   ├── 0001-fail-closed-profile-and-test-gating.md
     │   ├── 0002-exact-sha-supervisor-deduplication.md
@@ -229,7 +230,8 @@ loop-bot-herd-agy/
     │   ├── 0009-arbiter-branch-integration-and-cas-merge.md
     │   ├── 0010-worktree-teardown-lifecycle-and-salvage.md
     │   ├── 0011-multi-worker-floor-topologies-and-concurrency.md
-    │   └── 0012-task-partitioning-and-disjoint-dispatches.md
+    │   ├── 0012-task-partitioning-and-disjoint-dispatches.md
+    │   └── 0013-asynchronous-supervisor-gate-jobs.md
     ├── findings/           # Empirical semantics, schemas, and retrospective
     │   └── swarm-orchestration-retrospective.md
     └── audits/             # PM reviews, advisory, & dogfooding receipts
