@@ -134,9 +134,18 @@ fi
 worktree_prune lockblock myproj 1 "$REPO" >/dev/null 2>&1
 
 # ── 5c. dead-pid stale lock is broken with a warning ───────────────────────
+# NOTE (#BASH32-FLOOR): under bash 3.2, `wait` reaping a SIGNAL-KILLED bg
+# job runs the EXIT trap early — this suite's own `cleanup` would rm -rf the
+# scratch tree mid-test (mkdir'd dir vanished before the pid write). The
+# holder must die NATURALLY (as in 5b), never via kill+wait.
 mkdir -p "$REPO/.herdr-swarm/provision.lock"
-sleep 5 & DEAD_PID=$!
-kill "$DEAD_PID" 2>/dev/null || true
+sleep 1 & DEAD_PID=$!
+_waits=0
+while kill -0 "$DEAD_PID" 2>/dev/null; do
+  sleep 0.05
+  _waits=$((_waits + 1))
+  ((_waits > 100)) && break
+ done
 wait "$DEAD_PID" 2>/dev/null || true
 printf '%s\n' "$DEAD_PID" > "$REPO/.herdr-swarm/provision.lock/pid"
 LOCK_OUT=$(worktree_provision lockstale myproj HEAD "$REPO" 2>&1 >/dev/null || true)
