@@ -26,7 +26,12 @@ owns_normalize() { # ENTRY -> prints normalized entry; rc 1 = rejected
   e="${e#"${e%%[![:space:]]*}"}"
   e="${e%"${e##*[![:space:]]}"}"
   e="${e#./}"
-  while [[ "$e" == *//* ]]; do e="${e//\/\//\/}"; done
+  # bash 3.2 treats `\/` in the replacement of ${e//pat/rep} as a literal
+  # backslash (so the naive ${e//\/\/ / /} leaks `lib\/x.sh` and the quoted
+  # ${e//"//"/"/"} never collapses, looping forever). Route the replacement
+  # through a variable so no backslash is parsed on either bash. (#BASH32-FLOOR)
+  local _slash=/
+  while [[ "$e" == *//* ]]; do e="${e//\/\//$_slash}"; done
   e=$(printf '%s' "$e" | tr '[:upper:]' '[:lower:]')
   if [[ -z "$e" ]]; then
     printf 'owns: empty entry rejected\n' >&2
