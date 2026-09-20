@@ -3,7 +3,7 @@ id: PROXY-GATE
 title: "Universal launcher must not hardcode kultivait: proxy start, health URL, serve cmd, and credits probe are config-gated"
 type: wayfinder:defect
 status: resolved
-commit: pending
+commit: 14f8016
 assignee: pi
 owns: herdr-loop-swarm.sh,loop-bot-herd.sh,lib/config.sh,swarm.config.toml
 parent: maps/universal-herdr-swarm.md

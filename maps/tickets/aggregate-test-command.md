@@ -3,7 +3,7 @@ id: TEST-AGG
 title: "Aggregate test command: a Makefile whose `test` target runs every suite and propagates failures"
 type: wayfinder:task
 status: resolved
-commit: pending
+commit: ec6d090
 assignee: pi
 owns: Makefile
 parent: maps/universal-herdr-swarm.md

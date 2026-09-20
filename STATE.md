@@ -1,6 +1,6 @@
 # Swarm State Checkpoint: Universal Herdr Swarm (`herd-swarm`)
 
-**Updated:** 2026-09-19  
+**Updated:** 2026-09-20  
 **Plan of Record:** [maps/universal-herdr-swarm.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/universal-herdr-swarm.md)  
 **Execution Roadmap:** [docs/reordered-plan.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/reordered-plan.md)  
 **Orchestrator:** `looper` (wM:p1, AGY Flash)  
@@ -54,29 +54,40 @@
 - **Ticket Frontmatter Annotations (#T-GH-OWNS):** Resolved in commit `cd5c473`. `agy-gh` annotated 29 ticket frontmatters in `maps/tickets/` with single-line `owns:` declarations.
 - **CLAUDE.md Refresh & Alignment:** Resolved in commit `1c8615b`. `pm` refreshed `CLAUDE.md` with verified 3-suite commands, arbiter integration pipeline, and partition/lease rules.
 - **Local Engine Tier Activation (pi + kultivait) (#P3-LOCAL-PI):** Resolved in commit `f6ead53`. Configured local Metal-accelerated Qwen3-14B inference via `kultivait` on port 4114, seated `pi` in pane `wM:pC` (tab `local-pi`), and provisioned isolated worktree `.herdr-swarm/worktrees/pi`.
+- **P3-3 Asynchronous Supervisor Harvesting & Durable Gate Jobs (#P3-3):** Resolved in commits `eafdc91` (implementation + `tests/test_async_gate.sh`, ADR 0013) and `144efea` (ticket resolved, frontmatter schemas harmonized). Background gate jobs in `.herdr-swarm/gates/` with `(ticket, sha)` dedup, concurrency cap, mid-gate invalidation.
+- **P3-FLAKE-1 Concurrent worktree_provision Race:** Resolved in commit `cf8b546` — serialized provisioning under an advisory `provision.lock` with idempotent retry; later hardened by #BASH32-FLOOR's harness fix.
+- **Bash 3.2 Platform Floor (#BASH32-FLOOR):** Resolved in commits `b9678f3`, `50ad127`. `owns_normalize`'s `//`-collapse leaked backslashes under macOS system bash (test [8d] red); and bash 3.2 fires the EXIT trap early when `wait` reaps a signal-killed bg job, which made the worktree suite's own cleanup delete its scratch tree (xtrace + minimal repro in the ticket). Suites now run under `/bin/bash`.
+- **Aggregate Test Command (#TEST-AGG):** Resolved in commit `ec6d090`. `Makefile` with failure-propagating `test` (all suites), `lint` (0-warning shellcheck bar), `check` — the root fix for "one failure, four symptoms" (no aggregate runner → no CI → red landed on main → ledger certified by its own authors).
+- **Self-Dogfooding Profile (#PROFILE-MAKE):** Resolved in commit `27c8b13`. `detect_ecosystem` resolves `make` (Makefile WITH a `test:` target) and `run_all` (`run_all.sh`) after the ecosystem markers; `profile.env.example` documents the hand-edit path. The swarm now gates its own repo from a clean clone (`TEST_CMD=make test`); the stale hand-typed `REPO="HinchK/prototype"` was corrected to `HinchK/stampede`.
+- **Arbiter String Ticket Ids (#ARB-STR):** Resolved in commits `29667a1`, `906d699`. `--argjson t` silently dropped every non-numeric ticket id (the repo's entire vocabulary); the queue is string-typed end-to-end. The async-gate [8] assertion was updated to match (caught by the arbiter's own integration gate before promote — the pipeline works).
+- **Proxy Config Gating (#PROXY-GATE):** Resolved in commit `14f8016`. `[proxy] enabled` defaults false; launcher preflight/launch and the supervisor's credits probe are config-gated; serve command and health URL are config data (`serve_cmd`, `health_check_url`), not launcher hardcode. Recovery pointer now names this repo's launcher.
+- **PM Branch Reconciliation (#PM-BRANCH-RECON):** Resolved via the first real arbiter run: `P3-4` spec and `PM-PLAN-EVIDENCE` enqueued → gated (`make test`) → integrated (`97d31e2`, `d50c128`) → promoted ff-only to `main` (`d50c128`). Eleven superseded/equivalent pm branches deleted with per-branch evidence (`merge-tree` / `git cherry`); `.claude/worktrees/pm-audit` unlocked and removed; `git branch --no-merged main` is now empty.
 
 ---
 
 ## 2. Active Status & Open Items
 
 - **Milestones M1, M2, M3 Complete & Audited.**
-- **Phase 2 Parallel Worktree Swarm Fan-Out: 100% COMPLETE & HARDENED (63/63 tests passing).**
+- **Phase 2 Parallel Worktree Swarm Fan-Out: 100% COMPLETE & HARDENED.**
 - **Phase 3 Autonomous Multi-Worker Concurrent Fan-Out Progress:**
   - **P3-1 (Multi-Worker Config & Roster Expansion):** Complete (`b62faf1`).
-  - **P3-2 (Task Intake Partition Checking & Lease Protocol):** Complete (`1992e37`, 26/26 tests passing).
-  - **P3-LOCAL (Local Engine Activation - pi + kultivait):** Complete (`f6ead53`).
-  - **P3-3 (Asynchronous Supervisor Harvesting):** Active Frontier (`maps/tickets/async-supervisor-harvesting.md`). Non-blocking polling of concurrent worker panes with background gate jobs in `.herdr-swarm/gates/`.
-- **Total Test Suite Health:** **89 passed, 0 failed** (37 worktree, 26 arbiter, 26 partition); 0 shellcheck warnings.
+  - **P3-2 (Task Intake Partition Checking & Lease Protocol):** Complete (`1992e37`); bash-3.2 normalization defect fixed (`b9678f3`, #BASH32-FLOOR). **Still library-only — nothing in `herdr-loop-swarm.sh` / `loop-bot-herd.sh` calls `partition_check` or `lease_acquire` yet** (next wiring task).
+  - **P3-LOCAL (Local Engine Activation - pi + kultivait):** Complete (`f6ead53`); proxy now config-gated, off by default (#PROXY-GATE).
+  - **P3-3 (Asynchronous Supervisor Harvesting):** Complete (`eafdc91`, resolved `144efea`).
+  - **P3-FLAKE-1 (Concurrent Provision Race):** Complete (`cf8b546`).
+  - **P3-4 (Arbiter Batch Integration & Non-Blocking Drain):** Spec + ticket authored by `pm`, integrated and promoted (`97d31e2`); ticket `arbiter-batch-integration` is **backlog — next implementation target**.
+- **PM branch topology:** reconciled (#PM-BRANCH-RECON) — zero unmerged branches; `main`, `swarm/loop-bot-herd-agy/integration` (arbiter CAS baseline), and the live `pi` seat branch remain.
+- **Total Test Suite Health:** **132 passed, 0 failed** across 5 suites (42 worktree, 30 arbiter, 26 partition, 17 async-gate, 17 profile); `make check` green (lint 0 warnings). Run under `/bin/bash` (3.2 floor).
 
 ---
 
 ## 3. Immediate Next Step
 
-- Dispatch `pm` to author P3-3 specification (`docs/audits/2026-09-19-p3-3-async-supervisor-harvesting-spec.md`) and file concurrent-provision race mitigation ticket.
-- Dispatch `arch` to implement asynchronous background gate execution in `loop-bot-herd.sh` and test suite `tests/test_async_gate.sh`.
-- Dispatch `pi` to execute local verification and documentation integrity scans.
-- Dispatch `agy-docs` to author ADR 0013 (Asynchronous Supervisor Gate Jobs & Concurrency Bounding).
-- Dispatch `agy-gh` to validate GitHub milestone and ticket sync mapping.
+- Dispatch `arch` to implement **P3-4**: batched, non-blocking arbiter drain (spec: `docs/audits/2026-09-19-p3-4-arbiter-batching-spec.md`, ticket `maps/tickets/arbiter-batch-integration.md`).
+- Wire `partition_check` / `lease_acquire` into the launcher's dispatch path (P3-2 is implemented and green but has no callers — grep before assuming a behaviour is live).
+- Push gate: `main` is 37 commits ahead of `origin/main` — human approval required (`git push origin main`).
+- Dispatch `agy-gh` to run `lib/gh_sync.sh --dry-run` and reconcile the new tickets (BASH32-FLOOR, TEST-AGG, PROFILE-MAKE, ARB-STR, PROXY-GATE, PM-BRANCH-RECON, PM-PLAN-EVIDENCE) with GitHub issues.
+- Dispatch `agy-docs` to author ADR 0014 (bash 3.2 platform floor + aggregate gate as the CI contract).
 
 
 

@@ -3,7 +3,7 @@ id: PROFILE-MAKE
 title: "Self-dogfood: detect make / run_all.sh aggregate runners so the swarm can gate its own repo from a clean clone"
 type: wayfinder:task
 status: resolved
-commit: pending
+commit: 27c8b13
 assignee: pi
 owns: lib/profile.sh,tests/test_profile.sh,profile.env.example
 parent: maps/universal-herdr-swarm.md

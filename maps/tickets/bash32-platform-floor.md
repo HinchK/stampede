@@ -3,7 +3,7 @@ id: BASH32-FLOOR
 title: "Platform floor is macOS system bash 3.2: partition // collapse leaks backslashes; test harness fires EXIT trap early on kill+wait"
 type: wayfinder:defect
 status: resolved
-commit: pending
+commit: b9678f3,50ad127
 assignee: pi
 owns: lib/partition.sh,tests/test_partition.sh,tests/test_worktree.sh
 parent: maps/universal-herdr-swarm.md

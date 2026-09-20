@@ -15,11 +15,16 @@ not this one.
 ## Commands
 
 ```bash
-# Test suites (each builds an ephemeral scratch git repo under /tmp and cleans up after itself)
-bash tests/test_worktree.sh              # 37 assertions — provisioning, salvage, teardown
-bash tests/test_arbiter.sh               # 26 — CAS integration, conflict, promote
-bash tests/test_partition.sh             # 26 — owns parsing, overlap, leases
-for t in tests/*.sh; do bash "$t" | tail -1; done   # all three; each exits 0 only when every assertion passes
+# Aggregate entry points (the Suite Gate resolves to `make test` here — #PROFILE-MAKE)
+make check                              # lint + every suite, failure-propagating
+make test                              # all five suites under /bin/bash (bash 3.2 is the platform floor)
+make lint                              # shellcheck 0-warning bar + bash -n + py_compile
+# Suites (each builds an ephemeral scratch git repo under /tmp and cleans up after itself)
+/bin/bash tests/test_worktree.sh        # 42 assertions — provisioning, salvage, teardown
+/bin/bash tests/test_arbiter.sh         # 30 — CAS integration, conflict, promote, string ticket ids
+/bin/bash tests/test_partition.sh       # 26 — owns parsing, overlap, leases
+/bin/bash tests/test_async_gate.sh      # 17 — background gate jobs, reaping, invalidation
+/bin/bash tests/test_profile.sh         # 17 — ecosystem/test-cmd detection incl. make/run_all
 
 # Lint gate — tickets treat 0 warnings as the bar
 shellcheck herdr-loop-swarm.sh loop-bot-herd.sh lib/*.sh

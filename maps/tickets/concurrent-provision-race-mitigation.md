@@ -2,7 +2,8 @@
 id: P3-FLAKE-1
 title: "Concurrent worktree_provision Race: Non-Idempotent Retry Leaves Branch Without Worktree"
 type: wayfinder:defect
-status: backlog
+status: resolved
+commit: cf8b546
 assignee: arch
 owns: lib/worktree.sh,tests/test_worktree.sh
 parent: maps/universal-herdr-swarm.md

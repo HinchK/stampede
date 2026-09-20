@@ -3,7 +3,7 @@ id: ARB-STR
 title: "Arbiter queue must accept string ticket ids (repo vocabulary is P3-4-spec / T-017 style, not numeric)"
 type: wayfinder:defect
 status: resolved
-commit: pending
+commit: 29667a1,906d699
 assignee: pi
 owns: lib/arbiter.sh,tests/test_arbiter.sh
 parent: maps/universal-herdr-swarm.md

@@ -3,7 +3,7 @@ id: PM-BRANCH-RECON
 title: "Reconcile eleven unmerged pm branches: integrate live content through the arbiter, delete the rest with evidence"
 type: wayfinder:task
 status: resolved
-commit: pending
+commit: d50c128
 assignee: pi
 owns: maps/tickets/pm-branch-reconciliation.md
 parent: maps/universal-herdr-swarm.md
