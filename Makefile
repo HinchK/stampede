@@ -1,0 +1,33 @@
+# loop-bot-herd-agy — aggregate entry points
+#
+# The Suite Gate (lib/profile.sh TEST_CMD) resolves to `make test` for this
+# repo (detect_ecosystem "make" branch). One command, all suites, failures
+# propagate. Suites run under /bin/bash — macOS system bash 3.2 is the
+# platform floor (#BASH32-FLOOR), not the dev shell's bash 5.
+
+SHELL   := /bin/bash
+TESTS   := $(sort $(wildcard tests/test_*.sh))
+LINT_SH := herdr-loop-swarm.sh loop-bot-herd.sh $(wildcard lib/*.sh)
+
+.PHONY: test lint check
+
+# Run every suite; any failure fails the target (set -e stops the loop).
+test:
+	@set -e; \
+	for t in $(TESTS); do \
+	  printf '\n==> %s\n' "$$t"; \
+	  $(SHELL) "$$t" || { printf '\n✖ FAILED: %s\n' "$$t" >&2; exit 1; }; \
+	  printf '    OK\n'; \
+	done; \
+	printf '\nAll suites green (%d)\n' "$(words $(TESTS))"
+
+# Lint gate: 0 shellcheck warnings is the bar (SC output goes to stderr).
+lint:
+	@set -e; \
+	shellcheck $(LINT_SH); \
+	for f in $(LINT_SH); do bash -n "$$f"; done; \
+	python3 -m py_compile lib/telemetry.py; \
+	printf 'Lint clean (%d shell files)\n' "$(words $(LINT_SH))"
+
+# Everything CI (or a worker's Suite Gate) should run before a verdict.
+check: lint test
