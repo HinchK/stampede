@@ -17,6 +17,73 @@
 
 set -euo pipefail
 
+# ── advisory provision lock (P3-FLAKE-1) ───────────────────────────────────
+# mkdir-based (atomic create-or-fail, bash 3.2 / macOS safe — same pattern as
+# arbiter_lock). Stamped with the holder's pid: a dead holder means a crashed
+# provision, and the lock is broken deliberately with a warning.
+_wt_lock() { # TARGET_DIR
+  local lk="$1/.herdr-swarm/provision.lock"
+  local tries=0 pid
+  mkdir -p "$1/.herdr-swarm"
+  while ! mkdir "$lk" 2>/dev/null; do
+    pid=""
+    [[ -f "$lk/pid" ]] && pid=$(cat "$lk/pid" 2>/dev/null || true)
+    if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then
+      printf 'worktree: WARNING breaking stale provision lock (holder pid %s is dead)\n' "$pid" >&2
+      rm -rf "$lk"
+      continue
+    fi
+    tries=$((tries + 1))
+    (( tries >= 50 )) && return 1
+    sleep 0.1
+  done
+  printf '%s\n' "$$" > "$lk/pid"
+}
+
+_wt_unlock() { # TARGET_DIR
+  rm -rf "$1/.herdr-swarm/provision.lock" 2>/dev/null || true
+}
+
+# Idempotent add with state re-evaluation (P3-FLAKE-1 §4.2). On failure the
+# retry re-runs the branch-existence check instead of repeating the same `-b`
+# command — a first attempt that created the branch and then failed would
+# otherwise collide with its own branch forever.
+_wt_add_with_retry() { # WT_PATH BRANCH BASE_REF TARGET_DIR
+  local wt_path="$1" branch="$2" base_ref="$3" target_dir="$4"
+  local existed_at_entry=0 attempt err=""
+  git -C "$target_dir" show-ref --verify --quiet "refs/heads/${branch}" 2>/dev/null && existed_at_entry=1
+
+  for attempt in 1 2 3; do
+    if git -C "$target_dir" show-ref --verify --quiet "refs/heads/${branch}" 2>/dev/null; then
+      # branch exists (pre-existing or created by our own failed attempt):
+      # ATTACH — never `-b`, never reset
+      if err=$(git -C "$target_dir" worktree add "$wt_path" "$branch" 2>&1); then
+        return 0
+      fi
+    else
+      if err=$(git -C "$target_dir" worktree add -b "$branch" "$wt_path" "$base_ref" 2>&1); then
+        return 0
+      fi
+    fi
+    (( attempt < 3 )) || break
+    # jittered backoff: uncorrelated retries avoid lockstep re-collision
+    sleep $(( (RANDOM % 3 + 1) / 10 )) 2>/dev/null || sleep 0.1
+  done
+
+  # give-up: surface the real error (never swallow the last one), then clean
+  # up an orphan branch this call created (no worktree, no commits beyond
+  # base) so later runs do not meet a stale branch the P2-H gate would refuse
+  printf 'worktree: provision failed for %s after %d attempts: %s\n' "$branch" "$attempt" "$err" >&2
+  if (( ! existed_at_entry )) \
+     && git -C "$target_dir" show-ref --verify --quiet "refs/heads/${branch}" 2>/dev/null \
+     && ! git -C "$target_dir" worktree list --porcelain 2>/dev/null | grep -q "^worktree ${wt_path}\$" \
+     && [[ "$(git -C "$target_dir" rev-list --count "${base_ref}..${branch}" 2>/dev/null || printf 1)" == 0 ]]; then
+    git -C "$target_dir" branch -D "$branch" >/dev/null 2>&1 || true
+    printf 'worktree: removed orphan branch %s (created by failed provision)\n' "$branch" >&2
+  fi
+  return 1
+}
+
 # worktree_provision SEAT SLUG [BASE_REF] [TARGET_DIR]
 #   Creates + locks the seat's isolated worktree on branch swarm/<slug>/<seat>.
 #   Prints two lines: <worktree_path> <branch>
@@ -27,6 +94,16 @@ worktree_provision() {
   local target_dir="${4:-$PWD}"
   local branch="swarm/${slug}/${seat}"
   local wt_path="${target_dir}/.herdr-swarm/worktrees/${seat}"
+
+  # Serialize the whole compound sequence (show-ref → add → lock): two
+  # interleaved provisions are what produce branch-without-worktree states.
+  # The RETURN trap guarantees release on every path, including errors.
+  _wt_lock "$target_dir" || {
+    printf 'worktree: could not acquire provision lock for %s\n' "$seat" >&2
+    return 1
+  }
+  local _wt_locked_target="$target_dir"
+  trap '_wt_unlock "$_wt_locked_target"' RETURN
 
   mkdir -p "$(dirname "$wt_path")"
 
@@ -67,14 +144,11 @@ worktree_provision() {
         "$branch" "$unmerged" "$base_ref" >&2
       return 1
     fi
-    # one retry: concurrent provisions can transiently collide on git's
-    # worktree/refs locks
-    git -C "$target_dir" worktree add "$wt_path" "$branch" >/dev/null 2>&1 \
-      || { sleep 0.3; git -C "$target_dir" worktree add "$wt_path" "$branch" >/dev/null; }
-  else
-    git -C "$target_dir" worktree add -b "$branch" "$wt_path" "$base_ref" >/dev/null 2>&1 \
-      || { sleep 0.3; git -C "$target_dir" worktree add -b "$branch" "$wt_path" "$base_ref" >/dev/null; }
   fi
+
+  # Idempotent add: re-evaluates branch existence per attempt (see
+  # _wt_add_with_retry) instead of repeating the same -b command.
+  _wt_add_with_retry "$wt_path" "$branch" "$base_ref" "$target_dir"
 
   # Lock = live-seat marker: survives `git worktree prune`, refuses remove.
   git -C "$target_dir" worktree lock --reason "seated: $seat" "$wt_path" >/dev/null

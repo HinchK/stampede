@@ -87,24 +87,140 @@ check "forced dirty prune removes the worktree" '[[ ! -d "$WT3" ]]'
 check "forced prune creates NO checkpoint branch" \
   '! git -C "$REPO" for-each-ref -- "refs/heads/swarm/myproj/forced-probe-checkpoint-*" | grep -q .'
 
-# ── 5. parallel provisioning smoke (advisory P2-1 done-when) ───────────────
+# ── 5. parallel provisioning smoke (P3-FLAKE-1: N=12 under the advisory lock)
 pids=()
-for i in 1 2 3 4 5; do
+for i in $(seq 1 12); do
   worktree_provision "par-$i" myproj HEAD "$REPO" >/dev/null 2>&1 &
   pids+=($!)
 done
 fail=0
 for p in "${pids[@]}"; do wait "$p" || fail=$((fail + 1)); done
-check "5 concurrent provisions all succeed" '(( fail == 0 ))'
-check "5 parallel worktrees + branches all present" '
+check "12 concurrent provisions all succeed" '(( fail == 0 ))'
+check "12 parallel worktrees + branches all present" '
   n_ok=0
-  for i in 1 2 3 4 5; do
+  for i in $(seq 1 12); do
     [[ -d "$REPO/.herdr-swarm/worktrees/par-$i" ]] \
       && git -C "$REPO" rev-parse --verify --quiet "refs/heads/swarm/myproj/par-$i" >/dev/null \
       && n_ok=$((n_ok + 1))
   done
-  (( n_ok == 5 ))'
-for i in 1 2 3 4 5; do worktree_prune "par-$i" myproj 1 "$REPO" >/dev/null 2>&1; done
+  (( n_ok == 12 ))'
+check "no branch-without-worktree orphans after the storm" '
+  n_orphan=0
+  for i in $(seq 1 12); do
+    git -C "$REPO" rev-parse --verify --quiet "refs/heads/swarm/myproj/par-$i" >/dev/null \
+      && [[ ! -d "$REPO/.herdr-swarm/worktrees/par-$i" ]] && n_orphan=$((n_orphan + 1))
+  done
+  (( n_orphan == 0 ))'
+for i in $(seq 1 12); do worktree_prune "par-$i" myproj 1 "$REPO" >/dev/null 2>&1; done
+
+# ── 5b. advisory lock blocks, then is acquired after release ───────────────
+mkdir -p "$REPO/.herdr-swarm/provision.lock"
+sleep 1 & LOCK_HOLDER=$!
+printf '%s\n' "$LOCK_HOLDER" > "$REPO/.herdr-swarm/provision.lock/pid"
+t0=$(date +%s%N 2>/dev/null || date +%s)
+OUT=$(worktree_provision lockblock myproj HEAD "$REPO" 2>/dev/null)
+t1=$(date +%s%N 2>/dev/null || date +%s)
+blocked_ms=$(( (t1 - t0) / 1000000 ))
+wait "$LOCK_HOLDER" 2>/dev/null || true
+if [[ -d "$REPO/.herdr-swarm/worktrees/lockblock" ]]; then
+  if (( blocked_ms >= 400 )); then
+    ok "live-holder lock blocks second provision, then acquires (${blocked_ms}ms wait)"
+  else
+    bad "lock blocking (${blocked_ms}ms — acquired too early?)"
+  fi
+else
+  bad "lock blocking (provision failed)"
+fi
+worktree_prune lockblock myproj 1 "$REPO" >/dev/null 2>&1
+
+# ── 5c. dead-pid stale lock is broken with a warning ───────────────────────
+mkdir -p "$REPO/.herdr-swarm/provision.lock"
+sleep 5 & DEAD_PID=$!
+kill "$DEAD_PID" 2>/dev/null || true
+wait "$DEAD_PID" 2>/dev/null || true
+printf '%s\n' "$DEAD_PID" > "$REPO/.herdr-swarm/provision.lock/pid"
+LOCK_OUT=$(worktree_provision lockstale myproj HEAD "$REPO" 2>&1 >/dev/null || true)
+if [[ -d "$REPO/.herdr-swarm/worktrees/lockstale" ]] \
+   && printf '%s' "$LOCK_OUT" | grep -q "stale provision lock"; then
+  ok "dead-pid lock broken with warning; provision proceeds"
+else
+  bad "stale lock recovery (dir exists: $([[ -d $REPO/.herdr-swarm/worktrees/lockstale ]] && echo yes || echo no))"
+fi
+worktree_prune lockstale myproj 1 "$REPO" >/dev/null 2>&1
+
+# ── 5d. idempotent retry: first `worktree add -b` fails after creating the
+# branch (simulated via a fail-once git stub) — retry re-evaluates, attaches,
+# and the worktree registers on the expected branch ─────────────────────────
+STUB="$TEST_DIR/gitstub"; mkdir -p "$STUB"
+cat > "$STUB/git" <<'STUBEOF'
+#!/bin/sh
+# fail-once / fail-all worktree-add wrapper (P3-FLAKE-1 test double)
+real=/usr/bin/git
+case "$*" in
+  *"worktree add"*)
+    if [ "$GIT_STUB_MODE" = "failall" ]; then
+      case "$*" in *" -b "*) stub_create_branch=1 ;; esac
+    else
+      case "$*" in
+        *" -b "*)
+          [ -f "$STUB_MARKER" ] && exec "$real" "$@"
+          touch "$STUB_MARKER"
+          stub_create_branch=1
+          ;;
+      esac
+    fi
+    if [ -n "$stub_create_branch" ]; then
+      # simulate git's observed failure mode: create the branch, then die
+      set -- "$@"
+      dir=""; br=""; base=""
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          -C) dir=$2; shift 2 ;;
+          -b) br=$2; shift 2 ;;
+          add|worktree) shift ;;
+          *) base=$1; shift ;;
+        esac
+      done
+      [ -n "$br" ] && "$real" -C "$dir" branch "$br" "${base:-HEAD}" >/dev/null 2>&1 || true
+      echo "stub: simulated worktree add failure (branch $br created)" >&2
+      exit 1
+    fi
+    [ "$GIT_STUB_MODE" = "failall" ] && { echo "stub: simulated worktree add failure" >&2; exit 1; }
+    ;;
+esac
+exec "$real" "$@"
+STUBEOF
+chmod +x "$STUB/git"
+rm -f "$TEST_DIR/stub-marker"
+STUB_MARKER="$TEST_DIR/stub-marker" PATH="$STUB:$PATH" \
+  worktree_provision retrycoll myproj HEAD "$REPO" >/dev/null 2>&1
+if [[ -d "$REPO/.herdr-swarm/worktrees/retrycoll" ]] \
+   && [[ "$(git -C "$REPO/.herdr-swarm/worktrees/retrycoll" rev-parse --abbrev-ref HEAD)" == "swarm/myproj/retrycoll" ]]; then
+  ok "fail-once add: retry re-evaluates and attaches (worktree on expected branch)"
+else
+  bad "fail-once retry"
+fi
+worktree_prune retrycoll myproj 1 "$REPO" >/dev/null 2>&1
+
+# ── 5e. all attempts fail → no orphan branch, real error surfaced ─────────
+BEFORE_BRANCHES=$(git -C "$REPO" for-each-ref --format='%(refname:short)' refs/heads/swarm | sort)
+rm -f "$TEST_DIR/stub-marker"
+FAIL_OUT=$(STUB_MARKER="$TEST_DIR/stub-marker" GIT_STUB_MODE=failall PATH="$STUB:$PATH" \
+  worktree_provision allfail myproj HEAD "$REPO" 2>&1 >/dev/null || true)
+AFTER_BRANCHES=$(git -C "$REPO" for-each-ref --format='%(refname:short)' refs/heads/swarm | sort)
+if worktree_provision_ok_probe=$(true); then :; fi
+if [[ "$BEFORE_BRANCHES" == "$AFTER_BRANCHES" ]] \
+   && ! git -C "$REPO" rev-parse --verify --quiet "refs/heads/swarm/myproj/allfail" >/dev/null; then
+  if printf '%s' "$FAIL_OUT" | grep -q "provision failed"; then
+    ok "all-attempts-fail: no orphan branch left, real error surfaced"
+  else
+    bad "all-fail error surfaced (branch cleaned but error swallowed)"
+  fi
+else
+  bad "orphan cleanup (branch list changed or allfail remains)"
+fi
+[[ ! -d "$REPO/.herdr-swarm/worktrees/allfail" ]] && rm -f "$REPO/.herdr-swarm/worktrees/allfail" 2>/dev/null
+rm -f "$STUB/git"
 
 # ── 6. reconcile cleans stale admin entries ────────────────────────────────
 OUT=$(worktree_provision stale-probe myproj HEAD "$REPO" 2>/dev/null)
