@@ -84,6 +84,10 @@ detect_repo() {
 }
 
 # Detect ecosystem and test command
+# Ecosystem order matters: explicit project markers (python/rust/node/go)
+# always win; then repo-level aggregate runners (make / run_all.sh) — the
+# convention this swarm's own targets use — so a repo whose only suite is
+# `make test` is still gate-able. Everything else fails closed as generic.
 detect_ecosystem() {
   local target_dir="${1:-$PWD}"
 
@@ -95,6 +99,12 @@ detect_ecosystem() {
     echo "node"
   elif [[ -f "${target_dir}/go.mod" ]]; then
     echo "go"
+  elif [[ -f "${target_dir}/Makefile" || -f "${target_dir}/makefile" ]] \
+       && grep -qE '^[[:space:]]*test[[:space:]]*:' \
+            "${target_dir}/Makefile" "${target_dir}/makefile" 2>/dev/null; then
+    echo "make"
+  elif [[ -f "${target_dir}/run_all.sh" ]]; then
+    echo "run_all"
   else
     echo "generic"
   fi
@@ -137,6 +147,18 @@ detect_test_cmd() {
       ;;
     go)
       echo "go test ./..."
+      ;;
+    make)
+      # Aggregate-runner repos: the Makefile's test target was verified by
+      # detect_ecosystem (a Makefile without one stays generic/fail-closed).
+      echo "make test"
+      ;;
+    run_all)
+      if [[ -x "${target_dir}/run_all.sh" ]]; then
+        echo "./run_all.sh"
+      else
+        echo "bash run_all.sh"
+      fi
       ;;
     generic)
       # Fail-closed: Never default to "true"!
