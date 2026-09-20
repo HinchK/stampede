@@ -193,7 +193,7 @@ SHA_G=$(git -C "$WTB" rev-parse HEAD)
 VERDICT_B="ARCH DONE #308 $SHA_G"
 harvest_verdicts >/dev/null 2>&1
 sleep 0.6; gate_reap >/dev/null 2>&1
-nq=$(jq -s '[.[] | select(.ticket == 308 and .status == "queued")] | length' "$Q" 2>/dev/null || printf 0)
+nq=$(jq -s '[.[] | select(((.ticket|tostring) == "308") and .status == "queued")] | length' "$Q" 2>/dev/null || printf 0)   # queue stores string ids (#ARB-STR)
 [[ "$nq" == 1 ]] && assert_ok 8 "green isolated verdict enqueued to arbiter exactly once" || assert_bad 8 "arbiter enqueue (n=$nq)"
 
 # ── 3: gate_concurrency=0 = legacy inline ─────────────────────────────────
