@@ -129,6 +129,8 @@ emit('FANOUT_GATE_CONCURRENCY', fanout.get('gate_concurrency', 2))
 emit('FANOUT_MAX_WORKERS', fanout.get('max_workers', 2))
 emit('PROXY_ENABLED', str(proxy.get('enabled', False)).lower())
 emit('PROXY_ENDPOINT', proxy.get('endpoint', 'http://localhost:4114/v1'))
+emit('PROXY_HEALTH_URL', proxy.get('health_check_url', 'http://localhost:4114/openapi.json'))
+emit('PROXY_SERVE_CMD', proxy.get('serve_cmd', ''))
 emit('GEOM_MIN_COLS', geom.get('min_cols', 80))
 emit('GEOM_MIN_ROWS', geom.get('min_rows', 20))
 
@@ -196,7 +198,7 @@ config_plan_preview() {
   printf '\n**Ops Services:**\n'
   local proxy_on
   proxy_on=$(config_get "proxy.enabled" "false" "$toml_path")
-  printf -- '- Kultivait Proxy: %s\n' "$proxy_on"
+  printf -- '- Routing proxy ([proxy] enabled): %s\n' "$proxy_on"
   # shellcheck disable=SC2016  # %s is a printf conversion, not a variable
   printf -- '- Telemetry Traces: `%s`\n' "$(config_get "swarm.trace_dir" ".herdr-swarm/traces" "$toml_path")"
 }

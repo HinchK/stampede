@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# loop-bot-herd — the kultivait herd's supervisor loop.
+# loop-bot-herd — the swarm's supervisor loop.
 #
-# Not another kickoff wizard (herdr-kultivait-session.sh owns seating);
-# this is the long-r  unning watcher that makes the swarm self-tending:
+# Not another kickoff wizard (herdr-loop-swarm.sh owns seating);
+# this is the long-running watcher that makes the swarm self-tending:
 #
 #   watch      poll loop: herd health, verdict harvest, suite gate,
 #              credit/quota probes, unpushed watchdog, optional frontier drain
@@ -114,7 +114,7 @@ health_pass() {
     if grep -q "\"$seat\"" <<<"$listing"; then
       alive=$((alive + 1))
     else
-      warn "seat absent: $seat (seat it: ../kultivait-internals/herdr-briefs/ has its brief; herdr-kultivait-session.sh recovers)"
+      warn "seat absent: $seat (briefs/ has its brief; ./herdr-loop-swarm.sh up <target-dir> re-seats it)"
     fi
   done
   if (( alive == ${#EXPECTED_SEATS[@]} )); then
@@ -421,12 +421,15 @@ unpushed_watch() {
 }
 
 # ---- 4. credit / quota probes ---------------------------------------------
+# Only meaningful when the optional routing proxy is enabled in
+# swarm.config.toml — a universal target repo has no kultivait credentials.
 credits_watch() {
   local key out
-  key=$(python3 - << 'EOF' 2>/dev/null || true
+  [[ "$(config_get "proxy.enabled" "false" "${SWARM_CONFIG:-$SCRIPT_DIR/swarm.config.toml}")" == "true" ]] || return 0
+  key=$(python3 - "${KULTIVAIT_CREDENTIALS:-$HOME/.kultivait/credentials.toml}" << 'EOF' 2>/dev/null || true
+import sys, tomllib
 from pathlib import Path
-import tomllib
-p = Path.home() / ".kultivait" / "credentials.toml"
+p = Path(sys.argv[1])
 if p.is_file():
     d = tomllib.loads(p.read_text())
     print(d.get("openrouter", {}).get("api_key", ""))

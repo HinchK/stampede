@@ -281,11 +281,14 @@ else
   fi
 fi
 
-# Check Kultivait Routing Proxy
-if curl -sf --max-time 2 http://localhost:4114/openapi.json >/dev/null 2>&1; then
-  good "Kultivait intelligent routing proxy: active (:4114)"
-else
-  note "Kultivait proxy is not running on :4114 (will launch in Ops tab)"
+# Optional routing proxy ([proxy] in swarm.config.toml) — off by default so a
+# universal target repo never inherits this machine's local LLM setup.
+if [[ "${PROXY_ENABLED:-false}" == "true" ]]; then
+  if curl -sf --max-time 2 "${PROXY_HEALTH_URL:-http://localhost:4114/openapi.json}" >/dev/null 2>&1; then
+    good "Routing proxy: active (${PROXY_ENDPOINT:-http://localhost:4114/v1})"
+  else
+    note "Routing proxy not healthy (will try to launch in Ops tab)"
+  fi
 fi
 
 # Canonical GitHub repository comes from the project profile (lib/profile.sh,
@@ -560,10 +563,18 @@ python3 "$LIB_DIR/telemetry.py" log "$SESSION_ID" swarm.lifecycle "$LOOPER_AGENT
   --trace-dir "$TRACE_DIR_PATH" >/dev/null 2>&1 || true
 good "Telemetry session: ${SESSION_ID} → ${TRACE_DIR_PATH}"
 
-# Start Kultivait Proxy in Ops pane if not already active
-if ! curl -sf --max-time 2 http://localhost:4114/openapi.json >/dev/null 2>&1; then
-  step "Starting Kultivait routing proxy on :4114..."
-  herdr pane run "$SRV_PANE" "uv run kultivait serve" >/dev/null 2>&1 || true
+# Optional routing proxy in the Ops pane — ONLY when [proxy] enabled = true in
+# swarm.config.toml. Health URL and serve command come from the config; a
+# universal target repo never gets a kultivait serve by default.
+if [[ "${PROXY_ENABLED:-false}" == "true" ]]; then
+  if ! curl -sf --max-time 2 "${PROXY_HEALTH_URL:-http://localhost:4114/openapi.json}" >/dev/null 2>&1; then
+    if [[ -n "${PROXY_SERVE_CMD:-}" ]]; then
+      step "Starting routing proxy (${PROXY_ENDPOINT:-http://localhost:4114/v1})..."
+      herdr pane run "$SRV_PANE" "$PROXY_SERVE_CMD" >/dev/null 2>&1 || true
+    else
+      warn "[proxy] enabled but no serve_cmd configured — skipping proxy launch"
+    fi
+  fi
 fi
 
 # ──────────────────────────────────────────────────────────────────────────

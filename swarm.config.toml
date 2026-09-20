@@ -15,10 +15,14 @@ gate_concurrency = 2      # concurrent suite gates (0 = legacy inline gating)
 max_workers = 2           # back-pressure comparison point
 
 [proxy]
-enabled = true
+# Off by default: a universal target repo must not inherit this machine's
+# kultivait setup. Flip to true (and set serve_cmd) to route seats through
+# the local proxy.
+enabled = false
 endpoint = "http://localhost:4114/v1"
 model_override = "auto"
 health_check_url = "http://localhost:4114/openapi.json"
+serve_cmd = "uv run kultivait serve"
 
 [geometry]
 min_cols = 80
