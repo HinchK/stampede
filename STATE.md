@@ -42,28 +42,35 @@
 - **ADR 0009 Arbiter Branch Integration & CAS Merge (#T-DOCS-ADR0009):** Resolved in commit `9d5eaea`. `agy-docs` authored `docs/adr/0009-arbiter-branch-integration-and-cas-merge.md` capturing the off-branch integration architecture, CAS atomic updates, and human-promoted base merges.
 - **Arbiter Branch Merge and Integration PR Engine (#P2-4):** Resolved in commit `3c4a584`. `arch` implemented `lib/arbiter.sh` (`arbiter_enqueue`, `arbiter_drain`, `arbiter_promote`) with 26/26 unit tests passing in `tests/test_arbiter.sh` and 0 shellcheck warnings.
 - **Phase 2 Worktree Swarm Milestone Audit (#P2-AUDIT):** Resolved in commit `af18758`. `pm` conducted comprehensive empirical audit validating P2-1 through P2-4, confirming structural false green elimination and data loss closure, while identifying hardening items (H1-H5).
+- **ADR 0010 Worktree Teardown Lifecycle and Salvage (#T-DOCS-ADR0010):** Resolved in commit `cd6979b`. `agy-docs` authored `docs/adr/0010-worktree-teardown-lifecycle-and-salvage.md` capturing non-destructive teardown, untracked salvage directory, and stale branch gate.
+- **GitHub Sync Closeout (#T-GH-CLOSEOUT):** Resolved in commit `6732646`. `agy-gh` validated full 31-ticket inventory against `lib/gh_sync.sh` with zero unconfirmed writes.
+- **Worktree Lifecycle Teardown, Untracked Salvage & Stale Branch Gate (#P2-H):** Resolved in commit `d7c9558`. `arch` implemented stale branch gating in `lib/worktree.sh`, untracked file salvage preservation, and teardown worktree unlocking/pruning in `lib/lifecycle.sh` (37/37 worktree tests passing).
+- **Phase 3 Concurrent Fan-Out Roadmap (#P3-ROADMAP):** Resolved in commit `416b569`. `pm` authored `docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md` defining multi-worker seating, partition checking, and async harvesting.
 
 ---
 
 ## 2. Active Status & Open Items
 
 - **Milestones M1, M2, M3 Complete & Audited.**
-- **Phase 2 Parallel Worktree Swarm Fan-Out: COMPLETE!**
+- **Phase 2 Parallel Worktree Swarm Fan-Out: 100% COMPLETE & HARDENED!**
   - **P2-1 (Worktree Lifecycle Library `lib/worktree.sh`):** Complete (`99867cf`, 21/21 tests pass).
   - **P2-2 (Config, Ledger & Launcher Worktree Integration):** Complete (`5200df5`).
   - **P2-3 (Supervisor Worktree Suite Gating):** Complete (`420d5e6`).
   - **P2-4 (Arbiter Branch Merge and PR Reconciliation):** Complete (`3c4a584`, 26/26 tests pass).
-- **Active Frontier: Phase 2 Hardening & Live Dogfooding:**
-  - **H1 (Stale Branch Gate):** Enforce ADR 0007 §C in `lib/worktree.sh` to refuse attaching to stale branches with unmerged commits unless `--adopt-branches`.
-  - **H2 (Untracked File Salvage):** Preserve untracked worker files to `.herdr-swarm/salvage/` during worktree prune rather than running destructive `git worktree remove --force`.
-  - **H3 (Lifecycle Teardown Prune):** Wire worktree unlocking and safe pruning into `lib/lifecycle.sh` (`swarm_down`) so teardown leaves zero dangling worktrees.
+  - **P2-H (Lifecycle Teardown, Salvage & Stale Gate):** Complete (`d7c9558`, 37/37 tests pass).
+- **Active Frontier: Phase 3 Autonomous Multi-Worker Concurrent Fan-Out:**
+  - **P3-1 (Multi-Worker Config & Roster Expansion):** Supporting multiple simultaneous coding seats (`arch-1`, `arch-2`) in `swarm.config.toml` and launcher layout.
+  - **P3-2 (Task Intake Partition Checking):** Enforcing disjoint file path ownership (`owns`) at ticket dispatch time to prevent merge conflicts.
+  - **P3-3 (Asynchronous Supervisor Harvesting):** Non-blocking polling of concurrent worker panes with per-worker suite execution.
 
 ---
 
 ## 3. Immediate Next Step
 
-- Initialize hardening ticket `maps/tickets/worktree-lifecycle-teardown-and-salvage.md` (P2-H).
-- Dispatch `arch` to implement teardown pruning in `lib/lifecycle.sh` and untracked salvage in `lib/worktree.sh`.
-- Dispatch `agy-docs` to document Phase 2 operational runbook and lifecycle cleanup.
+- Draft ticket `maps/tickets/multi-worker-config-and-roster-expansion.md` (P3-1).
+- Dispatch `arch` to implement multi-worker seat arrays in `swarm.config.toml` and `lib/config.sh`.
+- Dispatch `agy-docs` to author ADR 0011 (Multi-Worker Floor Topologies and Concurrency Invariants).
+- Dispatch `pm` to author P3-1 specification.
+
 
 

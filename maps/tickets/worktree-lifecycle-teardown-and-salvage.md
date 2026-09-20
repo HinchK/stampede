@@ -2,7 +2,8 @@
 id: P2-H
 title: "Worktree Lifecycle Teardown, Untracked Salvage, and Stale Branch Gate"
 type: wayfinder:prototype
-status: in_progress
+status: resolved
+commit: d7c9558
 assignee: arch
 prototype_asset: lib/worktree.sh,lib/lifecycle.sh,tests/test_worktree.sh
 parent: maps/universal-herdr-swarm.md

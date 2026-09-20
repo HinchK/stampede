@@ -52,14 +52,18 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - [Phase 2 Arbiter and Branch Reconciliation](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/arbiter-and-branch-reconciliation.md): Implemented lib/arbiter.sh providing partition checking, atomic CAS fast-forward merges into swarm/<slug>/integration, and human-promoted PRs (P2-4).
 - [ADR 0009: Arbiter Branch Integration and CAS Merge](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0009-arbiter-branch-integration-and-cas-merge.md): Authored ADR 0009 documenting off-branch integration, detached worktree candidate pre-gating, and CAS atomic ref updates (#T-DOCS-ADR0009).
 - [Phase 2 Worktree Swarm Milestone Audit](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-milestone-audit.md): Comprehensive empirical audit validating P2-1 through P2-4, proving false-green elimination and zero data loss, while defining hardening items H1-H5 (#P2-AUDIT).
+- [Phase 2 Worktree Teardown and Untracked Salvage](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/worktree-lifecycle-teardown-and-salvage.md): Implemented worktree unlocking and safe pruning in lib/lifecycle.sh, untracked salvage preservation, and stale-branch gating in lib/worktree.sh (P2-H).
+- [ADR 0010: Worktree Teardown Lifecycle and Salvage](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0010-worktree-teardown-lifecycle-and-salvage.md): Authored ADR 0010 documenting untracked file salvage, non-destructive teardown, and stale branch gate (#T-DOCS-ADR0010).
+- [Phase 3 Concurrent Fan-Out Roadmap](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md): Defined multi-worker seat rosters, task intake partition checks, and asynchronous supervisor polling (#P3-ROADMAP).
 
 ## Active Frontier
 
-- [Phase 2 Worktree Teardown and Untracked Salvage](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/worktree-lifecycle-teardown-and-salvage.md): Wiring worktree unlocking and safe pruning into lib/lifecycle.sh (swarm_down), adding untracked file salvage, and enforcing stale-branch gates in lib/worktree.sh (P2-H).
+- [Phase 3: Multi-Worker Config & Roster Expansion](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/multi-worker-config-and-roster-expansion.md): Expanding swarm.config.toml and lib/config.sh to provision multiple parallel implementation workers (arch-1, arch-2) with isolated worktrees (P3-1).
 
 ## Not yet specified
 
 - **Cross-LLM Quota and Credit Probing:** Live API credit/rate-limit detection across Anthropic, Google Gemini, and Z.AI backends to gracefully pause or reroute workers before rate limits fail tasks.
+
 
 
 
