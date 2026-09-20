@@ -4,6 +4,7 @@ title: "Cross-LLM Quota and Credit Probing"
 type: wayfinder:prototype
 status: backlog
 assignee: arch
+owns: lib/quota.sh
 parent: maps/universal-herdr-swarm.md
 ---
 

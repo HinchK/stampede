@@ -6,6 +6,7 @@ status: closed
 assignee: arch
 resolution_commits: [97b67d0, 6ad4afe]
 findings_doc: docs/findings/herdr-semantics.md
+owns: docs/findings/herdr-semantics.md
 parent: maps/universal-herdr-swarm.md
 ---
 

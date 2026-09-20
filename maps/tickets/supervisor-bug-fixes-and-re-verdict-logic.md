@@ -5,6 +5,7 @@ type: wayfinder:grilling
 status: closed
 assignee: looper
 resolution_file: loop-bot-herd.sh
+owns: loop-bot-herd.sh
 parent: maps/universal-herdr-swarm.md
 ---
 

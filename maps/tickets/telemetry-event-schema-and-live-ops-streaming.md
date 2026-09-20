@@ -5,6 +5,7 @@ type: wayfinder:research
 status: closed
 assignee: research
 resolution_doc: docs/findings/telemetry-schema.md
+owns: docs/findings/telemetry-schema.md
 parent: maps/universal-herdr-swarm.md
 ---
 

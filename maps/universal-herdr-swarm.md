@@ -59,10 +59,11 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - [Phase 3: Multi-Worker Config & Roster Expansion](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/multi-worker-config-and-roster-expansion.md): Expanded swarm.config.toml and lib/config.sh to provision multiple parallel implementation workers (arch-1, arch-2) with isolated worktrees (P3-1, b62faf1).
 
 - [Phase 3: Task Intake Partition Checking and Ledger Lease Protocol](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/task-intake-partition-checking.md): Enforcing disjoint file path ownership (`owns`) at ticket intake and managing durable path leases in .herdr-swarm/leases.json (P3-2, 1992e37).
+- [Phase 3: Asynchronous Supervisor Harvesting and Durable Gate Jobs](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/async-supervisor-harvesting.md): Decoupled suite gate execution into non-blocking background jobs with durable tracking in .herdr-swarm/gates/, concurrency capping, and arbiter enqueueing (P3-3, eafdc91).
 
 ## Active Frontier
 
-- [Phase 3: Asynchronous Supervisor Harvesting and Durable Gate Jobs](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/async-supervisor-harvesting.md): Decoupling suite gate execution into non-blocking background jobs with durable tracking in .herdr-swarm/gates/ and concurrency capping (P3-3).
+- [Phase 3 Defect: Concurrent worktree_provision Race Mitigation](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/concurrent-provision-race-mitigation.md): Hardening worktree provisioning against concurrent race conditions with advisory directory locks and idempotent retry logic (P3-FLAKE-1).
 
 ## Not yet specified
 

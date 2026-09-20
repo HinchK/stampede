@@ -2,7 +2,8 @@
 id: P3-3
 title: "Asynchronous Supervisor Harvesting and Durable Gate Jobs"
 type: wayfinder:prototype
-status: in_progress
+status: resolved
+commit: eafdc91
 assignee: arch
 prototype_asset: loop-bot-herd.sh,tests/test_async_gate.sh
 owns: loop-bot-herd.sh,tests/test_async_gate.sh
@@ -34,3 +35,20 @@ Per [Phase 3 Roadmap](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/202
      - `shellcheck loop-bot-herd.sh` passes cleanly with 0 warnings.
 3. **Verification Step**:
    - Simulate concurrent long-running suite gates and verify non-blocking supervisor polling.
+
+## Resolution
+
+- **Commit**: `eafdc91` (`feat: implement asynchronous supervisor harvesting and durable gate jobs (#P3-3)`)
+- **ADR**: [ADR 0013: Asynchronous Supervisor Gate Jobs](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0013-asynchronous-supervisor-gate-jobs.md) (`9c3ec4f`)
+- **Specification**: [P3-3 Specification](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p3-3-async-supervisor-harvesting-spec.md) (`cb3dad7`)
+- **Key Implementation Details**:
+  - Non-blocking harvest loop via `gate_spawn`, `gate_reap`, `gate_recover`, `gate_running_count`, and `gate_job_running`.
+  - Concurrency bounded by `FANOUT_GATE_CONCURRENCY` (default 2 in `swarm.config.toml`).
+  - Atomic `.rc` exit code writing using `.rc.tmp` and `mv` with explicit `set +e` inside subshell execution.
+  - Post-gate tree drift validation against TOCTOU race conditions.
+  - Automatic `arbiter_enqueue` upon successful green gate runs.
+  - Backward compatible inline fallback when `GATE_CONCURRENCY=0`.
+- **Verification**:
+  - `tests/test_async_gate.sh`: 17/17 assertions passing across all 12 PM specification requirements.
+  - `shellcheck loop-bot-herd.sh lib/config.sh tests/test_async_gate.sh`: 0 warnings.
+  - Full test suite: 106/106 green assertions.

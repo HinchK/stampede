@@ -5,6 +5,7 @@ type: wayfinder:task
 status: closed
 assignee: arch
 resolution_commit: 95044cc
+owns: .gitignore,README.md
 parent: maps/universal-herdr-swarm.md
 ---
 
