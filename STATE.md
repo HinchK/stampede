@@ -46,31 +46,31 @@
 - **GitHub Sync Closeout (#T-GH-CLOSEOUT):** Resolved in commit `6732646`. `agy-gh` validated full 31-ticket inventory against `lib/gh_sync.sh` with zero unconfirmed writes.
 - **Worktree Lifecycle Teardown, Untracked Salvage & Stale Branch Gate (#P2-H):** Resolved in commit `d7c9558`. `arch` implemented stale branch gating in `lib/worktree.sh`, untracked file salvage preservation, and teardown worktree unlocking/pruning in `lib/lifecycle.sh` (37/37 worktree tests passing).
 - **Phase 3 Concurrent Fan-Out Roadmap (#P3-ROADMAP):** Resolved in commit `416b569`. `pm` authored `docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md` defining multi-worker seating, partition checking, and async harvesting.
+- **Multi-Worker Config & Dynamic Roster Expansion (#P3-1):** Resolved in commit `b62faf1`. `arch` implemented dual implementation engines (`arch-1` with GLM-5.3, `arch-2` with Claude) in `swarm.config.toml`, `lib/config.sh`, and `herdr-loop-swarm.sh`.
+- **ADR 0011 Multi-Worker Floor Topologies (#T-DOCS-ADR0011):** Resolved in commit `b62faf1`. `agy-docs` authored `docs/adr/0011-multi-worker-floor-topologies-and-concurrency.md` establishing scaling from 1 to $N$ implementation seats and model tier routing.
+- **Phase 3 Milestone & Issue Sync Mapping (#T-GH-P3SYNC):** Resolved in commit `9050196`. `agy-gh` defined milestone boards, worker issue labels, and drafted tickets P3-2 and P3-3.
+- **P3-2 Task Intake Partition Check Specification (#P3-2-spec):** Resolved in commit `72c2f18`. `pm` authored `docs/audits/2026-09-19-p3-2-task-partition-check-spec.md` specifying `owns:` grammar, casefolding, normalization, and overlap detection.
 
 ---
 
 ## 2. Active Status & Open Items
 
 - **Milestones M1, M2, M3 Complete & Audited.**
-- **Phase 2 Parallel Worktree Swarm Fan-Out: 100% COMPLETE & HARDENED!**
-  - **P2-1 (Worktree Lifecycle Library `lib/worktree.sh`):** Complete (`99867cf`, 21/21 tests pass).
-  - **P2-2 (Config, Ledger & Launcher Worktree Integration):** Complete (`5200df5`).
-  - **P2-3 (Supervisor Worktree Suite Gating):** Complete (`420d5e6`).
-  - **P2-4 (Arbiter Branch Merge and PR Reconciliation):** Complete (`3c4a584`, 26/26 tests pass).
-  - **P2-H (Lifecycle Teardown, Salvage & Stale Gate):** Complete (`d7c9558`, 37/37 tests pass).
-- **Active Frontier: Phase 3 Autonomous Multi-Worker Concurrent Fan-Out:**
-  - **P3-1 (Multi-Worker Config & Roster Expansion):** Supporting multiple simultaneous coding seats (`arch-1`, `arch-2`) in `swarm.config.toml` and launcher layout.
-  - **P3-2 (Task Intake Partition Checking):** Enforcing disjoint file path ownership (`owns`) at ticket dispatch time to prevent merge conflicts.
-  - **P3-3 (Asynchronous Supervisor Harvesting):** Non-blocking polling of concurrent worker panes with per-worker suite execution.
+- **Phase 2 Parallel Worktree Swarm Fan-Out: 100% COMPLETE & HARDENED (63/63 tests passing).**
+- **Phase 3 Autonomous Multi-Worker Concurrent Fan-Out Progress:**
+  - **P3-1 (Multi-Worker Config & Roster Expansion):** Complete (`b62faf1`).
+  - **P3-2 (Task Intake Partition Checking):** Active Frontier. Implementing `lib/partition.sh` (`partition_check`, `lease_acquire`, `lease_release`).
+  - **P3-3 (Asynchronous Supervisor Harvesting):** Queued. Non-blocking polling of concurrent worker panes.
 
 ---
 
 ## 3. Immediate Next Step
 
-- Draft ticket `maps/tickets/multi-worker-config-and-roster-expansion.md` (P3-1).
-- Dispatch `arch` to implement multi-worker seat arrays in `swarm.config.toml` and `lib/config.sh`.
-- Dispatch `agy-docs` to author ADR 0011 (Multi-Worker Floor Topologies and Concurrency Invariants).
-- Dispatch `pm` to author P3-1 specification.
+- Dispatch `arch` to implement `lib/partition.sh` and `tests/test_partition.sh` (P3-2).
+- Dispatch `agy-docs` to author ADR 0012 (Task Partitioning & Non-Overlapping Dispatches).
+- Dispatch `pm` to author P3-3 specification (Asynchronous Supervisor Harvesting).
+- Dispatch `agy-gh` to annotate existing ticket frontmatters with `owns:` paths.
+
 
 
 

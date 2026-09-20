@@ -2,7 +2,7 @@
 id: P3-2
 title: "Task Intake Partition Checking and Ledger Lease Protocol"
 type: wayfinder:prototype
-status: backlog
+status: in_progress
 assignee: arch
 prototype_asset: lib/partition.sh,tests/test_partition.sh
 parent: maps/universal-herdr-swarm.md

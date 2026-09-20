@@ -2,7 +2,8 @@
 id: P3-1
 title: "Multi-Worker Config & Dynamic Roster Expansion"
 type: wayfinder:prototype
-status: in_progress
+status: resolved
+commit: b62faf1
 assignee: arch
 prototype_asset: swarm.config.toml,lib/config.sh,herdr-loop-swarm.sh
 parent: maps/universal-herdr-swarm.md

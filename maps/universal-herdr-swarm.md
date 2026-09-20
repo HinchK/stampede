@@ -56,9 +56,11 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - [ADR 0010: Worktree Teardown Lifecycle and Salvage](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0010-worktree-teardown-lifecycle-and-salvage.md): Authored ADR 0010 documenting untracked file salvage, non-destructive teardown, and stale branch gate (#T-DOCS-ADR0010).
 - [Phase 3 Concurrent Fan-Out Roadmap](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md): Defined multi-worker seat rosters, task intake partition checks, and asynchronous supervisor polling (#P3-ROADMAP).
 
+- [Phase 3: Multi-Worker Config & Roster Expansion](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/multi-worker-config-and-roster-expansion.md): Expanded swarm.config.toml and lib/config.sh to provision multiple parallel implementation workers (arch-1, arch-2) with isolated worktrees (P3-1, b62faf1).
+
 ## Active Frontier
 
-- [Phase 3: Multi-Worker Config & Roster Expansion](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/multi-worker-config-and-roster-expansion.md): Expanding swarm.config.toml and lib/config.sh to provision multiple parallel implementation workers (arch-1, arch-2) with isolated worktrees (P3-1).
+- [Phase 3: Task Intake Partition Checking and Ledger Lease Protocol](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/task-intake-partition-checking.md): Enforcing disjoint file path ownership (`owns`) at ticket intake and managing durable path leases in .herdr-swarm/leases.json (P3-2).
 
 ## Not yet specified
 
