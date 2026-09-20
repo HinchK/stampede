@@ -59,10 +59,12 @@ _arb_record() { # JSON (single line) — append to queue
 # (ticket, sha). Atomic via tmp+mv; output stays JSONL (one record per line).
 _arb_set_status() { # TICKET SHA STATUS [EXTRA_JQ]
   local t="$1" s="$2" st="$3" extra="${4:-}"
+  # Ticket ids are STRINGS (repo vocabulary: frontmatter id like "P3-4-spec");
+  # numeric ids still work — they just round-trip as strings now.
   local filter="if (.ticket == \$t and .sha == \$s and .status == \"queued\") then . + {status: \$st}"
   [[ -n "$extra" ]] && filter+=" + ($extra)"
   filter+=" else . end"
-  jq -s --argjson t "$t" --arg s "$s" --arg st "$st" "map($filter) | .[]" "$ARB_QUEUE" \
+  jq -s --arg t "$t" --arg s "$s" --arg st "$st" "map($filter) | .[]" "$ARB_QUEUE" \
     > "${ARB_QUEUE}.tmp" && mv "${ARB_QUEUE}.tmp" "$ARB_QUEUE"
 }
 
@@ -104,7 +106,7 @@ arbiter_enqueue() {
   # Idempotent enqueue: an identical queued (ticket, sha) is a no-op
   if [[ -f "$ARB_QUEUE" ]]; then
     local dup
-    dup=$(jq -r -c -s --argjson t "$ticket" --arg s "$sha" \
+    dup=$(jq -r -c -s --arg t "$ticket" --arg s "$sha" \
       'any(.[]; .ticket == $t and .sha == $s and .status == "queued")' "$ARB_QUEUE" 2>/dev/null || true)
     [[ "$dup" == "true" ]] && return 0
   fi
@@ -113,7 +115,7 @@ arbiter_enqueue() {
   # still-queued older sha for it.
   if [[ -f "$ARB_QUEUE" ]]; then
     local older
-    older=$(jq -r -c -s --argjson t "$ticket" \
+    older=$(jq -r -c -s --arg t "$ticket" \
       'map(select(.ticket == $t and .status == "queued")) | .[0].sha // empty' "$ARB_QUEUE" 2>/dev/null || true)
     if [[ -n "$older" && "$older" != "$sha" ]]; then
       _arb_set_status "$ticket" "$older" "superseded" "{superseded_by: \"${sha}\"}"
@@ -122,7 +124,7 @@ arbiter_enqueue() {
     fi
   fi
 
-  _arb_record "$(jq -cn --argjson ts "$now" --argjson t "$ticket" \
+  _arb_record "$(jq -cn --argjson ts "$now" --arg t "$ticket" \
     --arg seat "$seat" --arg sha "$sha" \
     '{ts: $ts, ticket: $t, seat: $seat, sha: $sha, status: "queued"}')"
   _arb_telemetry arbiter.queued "$ticket" "$seat" "$sha" \
@@ -283,7 +285,7 @@ arbiter_promote() {
       --title "herd: integrate ${ARB_SLUG}" --body-file "$body"
     local pr_url
     pr_url=$(gh pr view --json url -q .url 2>/dev/null || printf 'unknown')
-    _arb_record "$(jq -cn --argjson ts "$(date +%s)" --argjson t 0 \
+    _arb_record "$(jq -cn --argjson ts "$(date +%s)" --arg t 0 \
       --arg st promoted --arg u "$pr_url" \
       '{ts: $ts, ticket: $t, status: $st, promoted_to: "pr", pr_url: $u}')"
     return 0

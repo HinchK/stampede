@@ -21,7 +21,11 @@ ok()   { printf '  ✓ %s\n' "$1"; PASS=$((PASS + 1)); }
 bad()  { printf '  ✗ %s\n' "$1"; FAIL=$((FAIL + 1)); }
 check(){ if eval "$2"; then ok "$1"; else bad "$1"; fi; }
 ck()   { # TICKET WANT_STATUS LABEL
-  got=$(jq -r -s --argjson t "$1" '[.[] | select(.ticket == $t)] | .[-1].status // "none"' "$Q" 2>/dev/null || printf 'err')
+  got=$(jq -r -s --arg t "$1" '[.[] | select((.ticket|tostring) == $t)] | .[-1].status // "none"' "$Q" 2>/dev/null || printf 'err')
+  if [[ "$got" == "$2" ]]; then ok "$3"; else bad "$3 (wanted $2, got $got)"; fi
+}
+cks()  { # STRING-TICKET WANT_STATUS LABEL — repo ticket ids are strings (P3-4-spec)
+  got=$(jq -r -s --arg t "$1" '[.[] | select((.ticket|tostring) == $t)] | .[-1].status // "none"' "$Q" 2>/dev/null || printf 'err')
   if [[ "$got" == "$2" ]]; then ok "$3"; else bad "$3 (wanted $2, got $got)"; fi
 }
 
@@ -89,7 +93,7 @@ check "#201 gated sha is reachable from integration ref" \
 check "#202 gated sha is reachable from integration ref" \
   'git -C "$REPO" merge-base --is-ancestor "$SHA_B" '"$IREF"''
 check "records log full-sha CAS integration_before" \
-  '[[ $(jq -r -s --argjson t3 201 "[.[] | select(.ticket == \$t3 and .status == \"integrated\")] | .[0].integration_before | length" "$Q") == 40 ]]'
+  '[[ $(jq -r -s --arg t3 201 "[.[] | select((.ticket|tostring) == \$t3 and .status == \"integrated\")] | .[0].integration_before | length" "$Q") == 40 ]]'
 check "integration tree contains both seats' files (merge or ff chain)" '
   integ=$(git -C "$REPO" rev-parse '"$IREF"')
   git -C "$REPO" cat-file -p "${integ}:alpha.txt" | grep -q alpha \
@@ -104,7 +108,7 @@ arbiter_enqueue 203 seat-c "$SHA_C"
 arbiter_drain 2>/dev/null
 ck 203 conflict "conflicting branch recorded as conflict"
 check "conflict record lists the file" \
-  '[[ $(jq -r -s --argjson t2 203 "[.[] | select(.ticket == \$t2)] | .[-1].files[0]" "$Q") == "alpha.txt" ]]'
+  '[[ $(jq -r -s --arg t2 203 "[.[] | select((.ticket|tostring) == \$t2)] | .[-1].files[0]" "$Q") == "alpha.txt" ]]'
 check "integration ref unmoved after conflict" \
   '[[ $(git -C "$REPO" rev-parse '"$IREF"') != "$SHA_C" ]]'
 check "arbiter worktree clean after merge --abort" \
@@ -170,6 +174,20 @@ check "integrated records marked promoted" \
 arbiter_pr_body "$REPO/.herdr-swarm/pr-body.md"
 check "PR body lists integrated tickets with Closes lines" \
   'grep -q "Closes #206" "$REPO/.herdr-swarm/pr-body.md"'
+
+# ── 9. string ticket ids (repo vocabulary: frontmatter id like P3-4-spec) ──
+# The queue must accept the ids maps/tickets actually uses — the pm branch
+# reconciliation enqueues them verbatim.
+git -C "$REPO" branch "swarm/ptest/seat-s" "$sha_base"
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/ws" "swarm/ptest/seat-s"
+printf 'sigma\n' > "$TEST_DIR/ws/sigma.txt"
+SHA_S=$(commit_at "$TEST_DIR/ws" "seat-s work")
+if arbiter_enqueue "P3-4-spec" seat-s "$SHA_S" 2>/dev/null; then ok "string ticket enqueues"; else bad "string ticket enqueues"; fi
+arbiter_drain >/dev/null 2>&1
+cks "P3-4-spec" integrated "string ticket drains to integrated"
+check "string ticket merge commit references the string id" \
+  'git -C "$REPO" log --format=%s -1 "$(git -C "$REPO" rev-parse '"$IREF"')" | grep -q "integrate #P3-4-spec"'
+if arbiter_enqueue "P3-4-spec" seat-s "$SHA_S" 2>/dev/null; then ok "string re-enqueue tolerated"; else bad "string re-enqueue tolerated"; fi
 
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
