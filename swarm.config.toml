@@ -10,7 +10,7 @@ trace_dir = ".herdr-swarm/traces"
 worktree_root = ".herdr-swarm/worktrees"
 
 [proxy]
-enabled = false
+enabled = true
 endpoint = "http://localhost:4114/v1"
 model_override = "auto"
 health_check_url = "http://localhost:4114/openapi.json"
@@ -49,6 +49,16 @@ model = "claude-sonnet-4-5"
 brief = "briefs/arch.md"
 tab = "herd"
 position = "bottom-right"
+worktree = true
+
+[seats.pi]
+name = "pi"
+role = "Local Fast Implementation Engine (pi / kultivait)"
+default_kind = "pi"
+model = "kultivait/auto"
+brief = "briefs/pi.md"
+tab = "herd"
+position = "bottom-left"
 worktree = true
 
 [seats.looper]
