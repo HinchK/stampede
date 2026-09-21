@@ -6,6 +6,9 @@ status: backlog
 assignee: arch
 owns: briefs/looper.in.md,lib/arbiter.sh,tests/test_arbiter.sh
 parent: maps/public-readiness.md
+github_issue: 2
+github_url: "https://github.com/HinchK/stampede/issues/2"
+synced_at: "2026-09-21T21:03:40Z"
 ---
 
 # DOG-12 — Promote guardrail (WAVE 1.5, RUNS ALONE)
