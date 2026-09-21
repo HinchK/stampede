@@ -2,7 +2,8 @@
 id: DOG-5
 title: "Above-the-fold: lead with the Zero Trust thesis; drop the Autonomous claim"
 type: wayfinder:doc
-status: backlog
+status: resolved
+commit: 113a42f
 assignee: agy-docs
 owns: README.md
 parent: maps/public-readiness.md

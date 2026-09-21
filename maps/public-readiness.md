@@ -77,8 +77,9 @@ that is the gate. Do not use `status:` for this (see hazard 3).
 - [x] **Wave 1.5 — runs alone.** DOG-12 looper promote guardrail. Brief rule and
       `--confirm` gate in `lib/arbiter.sh` ensure human-only base merges.
 - [x] **Wave 1.6 — runs alone.** DOG-13 arbiter orchestrator resolution. Anchors governing arbiter to orchestrator root (`$SCRIPT_DIR`), preventing unmerged/decoy target-local arbiters from bypassing promote guardrails.
-- [ ] **Wave 2 — parallel, file-disjoint.** [x] DOG-2 LICENSE · DOG-3 CI ·
-      [x] DOG-4 token-claim relabel · DOG-5 README lede · DOG-6 CONTRIBUTING+SECURITY.
+- [ ] **Wave 2 — parallel, file-disjoint.** [x] DOG-2 LICENSE · DOG-3 CI (PR #9, awaiting promote) ·
+      [x] DOG-4 token-claim relabel · [x] DOG-5 README lede · DOG-6 CONTRIBUTING+SECURITY ·
+      🔴 DOG-14 lint-toolchain pinning (CI-blocker, arch-1) · 🔴 DOG-15 arbiter suite CI failure (CI-blocker, arch-2).
       Verified disjoint by inspection of their `owns:` lines.
 - [ ] **Wave 3 — runs alone.** DOG-7 kultivait optional (shares
       `loop-bot-herd.sh` and `lib/config.sh` with DOG-1).
