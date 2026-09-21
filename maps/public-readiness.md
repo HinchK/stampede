@@ -59,6 +59,9 @@ every claim in the docs backed by something the repo can show.
   `lib/pyenv.sh` (`resolve_python()`), replacing bare `python3` invocations across
   `Makefile`, supervisor, library scripts, and test suites with a probe for
   `tomllib` and actionable remediation advice.
+- **DOG-12 resolved (`a7be67a`):** Enforced human-only promote invariant across
+  `briefs/looper.in.md` and added `lib/arbiter.sh` promote guardrail (requiring `--force`),
+  backed by 4 new assertions in `tests/test_arbiter.sh` (152 tests green).
 
 ## Active Frontier
 
@@ -68,6 +71,8 @@ that is the gate. Do not use `status:` for this (see hazard 3).
 
 - [x] **Wave 1 — runs alone.** DOG-1 interpreter resolver. Unblocks everything;
       the swarm cannot reliably run until it lands.
+- [x] **Wave 1.5 — runs alone.** DOG-12 looper promote guardrail. Brief rule and
+      `--force` gate in `lib/arbiter.sh` ensure human-only base merges.
 - [ ] **Wave 2 — parallel, file-disjoint.** DOG-2 LICENSE · DOG-3 CI ·
       DOG-4 token-claim relabel · DOG-5 README lede · DOG-6 CONTRIBUTING+SECURITY.
       Verified disjoint by inspection of their `owns:` lines.
