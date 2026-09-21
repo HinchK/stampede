@@ -6,6 +6,9 @@ status: backlog
 assignee: arch
 owns: .github/
 parent: maps/public-readiness.md
+github_issue: 5
+github_url: "https://github.com/HinchK/stampede/issues/5"
+synced_at: "2026-09-21T21:52:15Z"
 ---
 
 # DOG-3 — CI workflow (WAVE 2)
