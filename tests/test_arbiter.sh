@@ -158,12 +158,30 @@ ck 206 integrated "gated sha integrated despite newer branch tip"
 check "integration contains GATED content, not tip" \
   'git -C "$REPO" cat-file -p "${SHA_D1}:feature.txt" | grep -q "v1"'
 
-# ── 7. promotion (local mode) ──────────────────────────────────────────────
+# ── 7. promotion (local mode) — human-gated (DOG-12) ───────────────────────
+# 7a. unconfirmed promote refuses with the human-action message and moves nothing
+MAIN_BEFORE=$(git -C "$REPO" rev-parse main)
+if arbiter_promote >/dev/null 2>"$TEST_DIR/promote-refusal.txt"; then bad "unconfirmed promote refused"; else ok "unconfirmed promote refused"; fi
+if grep -qi "human" "$TEST_DIR/promote-refusal.txt" \
+   && grep -q -- "--confirm" "$TEST_DIR/promote-refusal.txt" \
+   && grep -q "PROMOTE_CONFIRM=1" "$TEST_DIR/promote-refusal.txt"; then
+  ok "refusal names the required human action"
+else
+  bad "refusal names the required human action"
+fi
+check "main unmoved after unconfirmed promote" \
+  '[[ $(git -C "$REPO" rev-parse main) == "$MAIN_BEFORE" ]]'
+check "refusal flips no records to promoted" \
+  '[[ $(jq -s "[.[] | select(.status == \"promoted\")] | length" "$Q") == 0 ]]'
+
+# 7b. dirty-root guard still applies WITH explicit confirmation
 printf 'dirty\n' > "$REPO/stray.txt"
-if arbiter_promote >/dev/null 2>&1; then bad "dirty root promote refused"; else ok "dirty root promote refused"; fi
+if arbiter_promote --confirm >/dev/null 2>&1; then bad "dirty root promote refused"; else ok "dirty root promote refused"; fi
 rm "$REPO/stray.txt"
-arbiter_promote >/dev/null 2>&1
-check "promote ff-advances main to integration" \
+
+# 7c. confirmed promote (env form) behaves exactly as the pre-guardrail promote
+( export PROMOTE_CONFIRM=1; arbiter_promote >/dev/null 2>&1 )
+check "confirmed promote ff-advances main to integration" \
   '[[ $(git -C "$REPO" rev-parse main) == $(git -C "$REPO" rev-parse '"$IREF"') ]]'
 check "root tree clean after promote" \
   '[[ -z "$(git -C "$REPO" status --porcelain)" ]]'

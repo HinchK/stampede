@@ -267,11 +267,29 @@ arbiter_pr_body() { # OUT_FILE
   } > "$1"
 }
 
-# arbiter_promote [--pr]
+# arbiter_promote [--pr] [--confirm]  (or env PROMOTE_CONFIRM=1)
 arbiter_promote() {
   _arb_cfg
-  local mode="local"
-  [[ "${1:-}" == "--pr" ]] && mode="pr"
+  local mode="local" confirmed=0 arg
+  for arg in "$@"; do
+    case "$arg" in
+      --pr)      mode="pr" ;;
+      --confirm) confirmed=1 ;;
+    esac
+  done
+
+  # Human gate (DOG-12): moving a base branch is a human-only act. A brief is
+  # a request, not enforcement — this refusal is the enforcement. It fires
+  # before every other check so the human-action message is always the one
+  # printed.
+  if [[ "$confirmed" -ne 1 && "${PROMOTE_CONFIRM:-0}" != "1" ]]; then
+    printf 'arbiter: promote REFUSED — promoting advances the base branch and is reserved for the human driver\n' >&2
+    printf 'arbiter: required human action: run it yourself, exactly one of:\n' >&2
+    printf 'arbiter:   bash lib/arbiter.sh promote --confirm\n' >&2
+    printf 'arbiter:   PROMOTE_CONFIRM=1 bash lib/arbiter.sh promote\n' >&2
+    printf 'arbiter: agents must never pass --confirm or set PROMOTE_CONFIRM — main moves only by human promote\n' >&2
+    return 1
+  fi
 
   git -C "$ARB_REPO" show-ref --verify --quiet "$ARB_REF" || {
     printf 'arbiter: no integration branch %s\n' "$ARB_REF" >&2
@@ -329,10 +347,10 @@ if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
   case "$cmd" in
     enqueue) arbiter_enqueue "$@" ;;
     drain)   arbiter_drain ;;
-    promote) arbiter_promote "${1:-}" ;;
+    promote) arbiter_promote "$@" ;;
     pr-body) arbiter_pr_body "${1:?out-file}" ;;
     *)
-      printf 'Usage: %s enqueue <ticket> <seat> <sha> | drain | promote [--pr] | pr-body <file>\n' "$0" >&2
+      printf 'Usage: %s enqueue <ticket> <seat> <sha> | drain | promote [--pr] [--confirm] | pr-body <file>\n' "$0" >&2
       exit 1 ;;
   esac
 fi
