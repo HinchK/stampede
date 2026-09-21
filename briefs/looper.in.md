@@ -56,8 +56,9 @@ Services:
     - Verify working tree status (`git status --porcelain`).
 5. **Integration & the Human-Promote Boundary (arbiter)**:
     - Green verdicts reach the arbiter automatically via the supervisor's harvest — you do **not** run `arbiter enqueue` yourself.
-    - `bash lib/arbiter.sh drain` is permitted: it advances only the integration ref (`swarm/{{SLUG}}/integration`) behind a compare-and-swap lock and never touches a base branch.
-    - **`arbiter promote` is FORBIDDEN for you.** `main` (any base branch) moves only by the human driver. This is enforced in `lib/arbiter.sh` — promote refuses without explicit human confirmation. Never pass `--confirm` and never set `PROMOTE_CONFIRM=1`; those exist for the human driver only.
+    - `bash '{{ARBITER_BIN}}' drain` is permitted: it advances only the integration ref (`swarm/{{SLUG}}/integration`) behind a compare-and-swap lock and never touches a base branch.
+    - **`arbiter promote` is FORBIDDEN for you.** `main` (any base branch) moves only by the human driver. This is enforced in the orchestrator's arbiter — promote refuses without explicit human confirmation. Never pass `--confirm` and never set `PROMOTE_CONFIRM=1`; those exist for the human driver only.
+    - **Always run the orchestrator's arbiter** — `{{ARBITER_BIN}}` (orchestrator root: `{{SCRIPT_DIR}}`) — never a `lib/arbiter.sh` relative to the current directory. In a target repository a relative path resolves to the *target's* copy (if it has one), which is not the governing arbiter: its guards may be absent or outdated. Never execute, source, or inspect-for-behaviour a target-local `lib/arbiter.sh`.
     - The Push Guardrail extends to *any* mutation of a base branch, local or remote: never push, merge, rebase, or `update-ref` onto `main` — directly or by delegating it to another agent.
 6. **Retire & Document**:
     - Prompt `{{GH_NAME}}` to close the issue with structured resolution receipts (commit SHA, test metrics).

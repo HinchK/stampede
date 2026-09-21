@@ -10,6 +10,16 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 LIB_DIR="$SCRIPT_DIR/lib"
 CONFIG_FILE="$SCRIPT_DIR/swarm.config.toml"
 
+# Governance dependency (DOG-13): the supervisor this launcher seats loads
+# the arbiter from the orchestrator, never from the target tree. A launcher
+# install without its arbiter is broken — fail loudly before any workspace
+# mutation, with no cwd-relative fallback.
+if [[ ! -f "$LIB_DIR/arbiter.sh" ]]; then
+  printf 'herdr-loop-swarm: FATAL — arbiter missing from orchestrator: %s\n' "$LIB_DIR/arbiter.sh" >&2
+  printf 'herdr-loop-swarm: refusing to run; the target tree is never a fallback arbiter source\n' >&2
+  exit 1
+fi
+
 # ──────────────────────────────────────────────────────────────────────────
 # Shared swarm libraries (loaded before dispatch so subcommands inherit them)
 # ──────────────────────────────────────────────────────────────────────────

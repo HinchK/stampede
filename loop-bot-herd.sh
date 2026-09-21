@@ -46,6 +46,15 @@ resolve_python
 source "$SCRIPT_DIR/lib/profile.sh"
 # shellcheck disable=SC1091  # dynamically resolved sibling libs
 source "$SCRIPT_DIR/lib/config.sh"
+# The arbiter is governance: it loads from the orchestrator (SCRIPT_DIR),
+# never from the target tree under REPO_DIR. A supervisor install without
+# its arbiter is broken — fail loudly before anything runs, and never fall
+# back to a target-local copy (DOG-13).
+if [[ ! -f "$SCRIPT_DIR/lib/arbiter.sh" ]]; then
+  printf 'loop-bot-herd: FATAL — arbiter missing from orchestrator: %s/lib/arbiter.sh\n' "$SCRIPT_DIR" >&2
+  printf 'loop-bot-herd: refusing to run; the target tree is never a fallback arbiter source\n' >&2
+  exit 1
+fi
 # shellcheck disable=SC1091  # dynamically resolved sibling lib (arbiter enqueue at reap)
 source "$SCRIPT_DIR/lib/arbiter.sh"
 

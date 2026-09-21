@@ -57,7 +57,13 @@ render_all_briefs() {
   source "${SCRIPT_DIR}/lib/config.sh"
   eval "$(config_dump_env "$slug")"
 
-  # Build replacement JSON dictionary
+  # Build replacement JSON dictionary.
+  # SCRIPT_DIR / ARBITER_BIN: the absolute orchestrator paths, so brief
+  # templates can point agents at the governing arbiter instead of a
+  # cwd-relative `lib/arbiter.sh` that resolves inside the target (DOG-13).
+  # Travel via the environment — never interpolated into the Python source.
+  export SCRIPT_DIR
+  export ARBITER_BIN="${SCRIPT_DIR}/lib/arbiter.sh"
   local vars_json
   vars_json=$("$PYTHON_BIN" -c "
 import json, os
@@ -68,6 +74,8 @@ vars_map = {
     'ECOSYSTEM': os.environ.get('ECOSYSTEM', 'generic'),
     'DOCS_DIR': os.environ.get('DOCS_DIR', 'docs'),
     'SLUG': '$slug',
+    'SCRIPT_DIR': os.environ.get('SCRIPT_DIR', ''),
+    'ARBITER_BIN': os.environ.get('ARBITER_BIN', ''),
     'ARCH_NAME': os.environ.get('SEAT_NAME_arch', 'arch-$slug'),
     'LOOPER_NAME': os.environ.get('SEAT_NAME_looper', 'looper-$slug'),
     'PM_NAME': os.environ.get('SEAT_NAME_pm', 'pm-$slug'),
