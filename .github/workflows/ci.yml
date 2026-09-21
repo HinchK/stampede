@@ -1,0 +1,80 @@
+# CI — the mechanical external check (DOG-3).
+#
+# Runs the repo's own aggregate gate, `make check` (lint + all six suites), on
+# both platforms it claims to support, so the repo can never again be green on
+# one machine and broken on another. The suites are hermetic: they build
+# ephemeral scratch repos under /tmp and stub herdr/agy/opencode, so nothing
+# here needs a secret and no agent CLI is installed.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: make check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Never cancel the sibling leg: a cross-platform divergence is the exact
+      # finding this job exists to surface, so both legs must always report.
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # NOTE: no step here pins a Python version, deliberately, and none
+      # should be added. The runner's stock interpreter resolution is the
+      # configuration DOG-1 exists to survive (macOS ships /usr/bin/python3 =
+      # 3.9, and tomllib is 3.11+), so lib/pyenv.sh must be exercised against
+      # the unpinned image. Pinning would hide the regression this job catches.
+
+      - name: Install shellcheck and jq (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck jq
+
+      - name: Install shellcheck and jq (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          # Both are preinstalled on the hosted image; only install what is
+          # genuinely absent so an unnecessary upgrade cannot fail the job.
+          brew list shellcheck >/dev/null 2>&1 || brew install shellcheck
+          brew list jq >/dev/null 2>&1 || brew install jq
+
+      - name: Configure git identity
+        run: |
+          # A hosted runner has no git identity and its hostname is not
+          # fully qualified, so git's auto-detection is refused rather than
+          # guessed. The suites set identity per commit, but the teardown
+          # checkpoint in lib/worktree.sh commits with the ambient identity —
+          # without this, test_worktree.sh fails for an environment reason.
+          git config --global user.name "stampede-ci"
+          git config --global user.email "ci@stampede.invalid"
+
+      - name: Record toolchain
+        run: |
+          bash --version | head -1
+          git --version
+          make --version | head -1
+          shellcheck --version | sed -n '2p'
+          jq --version
+          # Informational only — `make check` is the authoritative gate.
+          bash lib/pyenv.sh \
+            || echo "pyenv.sh: no tomllib-capable interpreter on PATH (lint will report it)"
+
+      - name: make check
+        run: make check
