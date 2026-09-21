@@ -6,6 +6,9 @@ status: backlog
 assignee: agy-docs
 owns: LICENSE
 parent: maps/public-readiness.md
+github_issue: 4
+github_url: "https://github.com/HinchK/stampede/issues/4"
+synced_at: "2026-09-21T21:51:18Z"
 ---
 
 # DOG-2 — LICENSE (WAVE 2)
