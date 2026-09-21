@@ -55,6 +55,10 @@ every claim in the docs backed by something the repo can show.
 - **First dogfood finding, before the loop ran:** `partition_check` deadlocks in
   any fresh clone because its integration evidence is gitignored. Filed as
   DOG-11. The exercise paid for itself during bootstrap.
+- **DOG-1 resolved (`3a9a70d`):** Centralized Python interpreter resolution in
+  `lib/pyenv.sh` (`resolve_python()`), replacing bare `python3` invocations across
+  `Makefile`, supervisor, library scripts, and test suites with a probe for
+  `tomllib` and actionable remediation advice.
 
 ## Active Frontier
 
@@ -62,7 +66,7 @@ Release **one wave at a time** by moving files from `maps/tickets-staged/` into
 `maps/tickets/`. A ticket the looper cannot see is a ticket it cannot pull —
 that is the gate. Do not use `status:` for this (see hazard 3).
 
-- [ ] **Wave 1 — runs alone.** DOG-1 interpreter resolver. Unblocks everything;
+- [x] **Wave 1 — runs alone.** DOG-1 interpreter resolver. Unblocks everything;
       the swarm cannot reliably run until it lands.
 - [ ] **Wave 2 — parallel, file-disjoint.** DOG-2 LICENSE · DOG-3 CI ·
       DOG-4 token-claim relabel · DOG-5 README lede · DOG-6 CONTRIBUTING+SECURITY.
