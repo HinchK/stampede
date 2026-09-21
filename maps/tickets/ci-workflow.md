@@ -2,7 +2,7 @@
 id: DOG-3
 title: "CI: run make check on macos-latest and ubuntu-latest"
 type: wayfinder:task
-status: backlog
+status: in_progress
 assignee: arch
 owns: .github/
 parent: maps/public-readiness.md
