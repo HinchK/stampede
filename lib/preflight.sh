@@ -231,12 +231,15 @@ if [[ "${BASH_SOURCE[0]:-}" == "$0" ]]; then
 
   preflight_run
 
+  # "$@" is empty here (flags were shifted off) but is forwarded anyway: the
+  # FD is genuinely optional, and an explicit pass-through keeps SC2119/SC2120
+  # quiet under shellcheck < 0.11.0, where a bare call is read as a bug.
   if [[ "$PF_JSON" -eq 1 ]]; then
-    if ! preflight_report_json; then
-      preflight_report_text
+    if ! preflight_report_json "$@"; then
+      preflight_report_text "$@"
     fi
   elif [[ "$PF_QUIET" -eq 0 ]]; then
-    preflight_report_text
+    preflight_report_text "$@"
   fi
 
   preflight_exit_code || {

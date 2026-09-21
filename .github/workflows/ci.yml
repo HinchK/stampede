@@ -41,19 +41,42 @@ jobs:
       # 3.9, and tomllib is 3.11+), so lib/pyenv.sh must be exercised against
       # the unpinned image. Pinning would hide the regression this job catches.
 
-      - name: Install shellcheck and jq (Ubuntu)
-        if: runner.os == 'Linux'
+      # DOG-14: pin shellcheck on BOTH legs. `make lint`'s verdict must not
+      # depend on whatever the platform package manager ships — apt's build is
+      # older than 0.11.0 and disagrees with it about SC2119/SC2120, which is
+      # exactly how this job went red while local runs were green. Both legs
+      # install the SAME upstream release into a GITHUB_PATH-prepended
+      # directory, so it also shadows any preinstalled Homebrew build. jq's
+      # version does not affect any verdict, so it stays on the package
+      # manager.
+      - name: Install pinned shellcheck + jq
+        env:
+          SHELLCHECK_VERSION: v0.10.0
         run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck jq
-
-      - name: Install shellcheck and jq (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          # Both are preinstalled on the hosted image; only install what is
-          # genuinely absent so an unnecessary upgrade cannot fail the job.
-          brew list shellcheck >/dev/null 2>&1 || brew install shellcheck
-          brew list jq >/dev/null 2>&1 || brew install jq
+          set -euo pipefail
+          case "${{ runner.os }}" in
+            Linux)
+              asset="shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+              sudo apt-get update
+              sudo apt-get install -y jq xz-utils
+              ;;
+            macOS)
+              # Upstream ships only darwin.x86_64; the arm64 runner images
+              # have Rosetta 2 and run it fine.
+              asset="shellcheck-${SHELLCHECK_VERSION}.darwin.x86_64.tar.xz"
+              brew list jq >/dev/null 2>&1 || brew install jq
+              ;;
+            *)
+              printf 'unsupported runner.os: %s\n' "${{ runner.os }}" >&2
+              exit 1
+              ;;
+          esac
+          bindir="${RUNNER_TEMP}/shellcheck-bin"
+          mkdir -p "$bindir"
+          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/${asset}" \
+            | tar -xJ -C "$bindir" --strip-components=1
+          printf '%s\n' "$bindir" >> "$GITHUB_PATH"
+          "${bindir}/shellcheck" --version | sed -n '2p'
 
       - name: Configure git identity
         run: |
