@@ -4,7 +4,8 @@
 #
 # Validates, before any workspace initialization or seating:
 #   - Herdr daemon responsiveness (herdr workspace list, with retry)
-#   - Core binaries: jq, git, tomllib-capable interpreter (lib/pyenv.sh)
+#   - Core binaries: jq, git, timeout(1) (lib/common.sh), tomllib-capable
+#     interpreter (lib/pyenv.sh)
 #   - GitHub CLI presence and authentication (fail-closed)
 #   - Agent CLIs: agy, claude, opencode (advisory report)
 #   - Git work-tree state (advisory)
@@ -29,6 +30,8 @@ set -euo pipefail
 # shellcheck disable=SC1091  # shared interpreter resolver (DOG-1); sourced
 # for the probe only — a missing interpreter is recorded, never fatal here.
 source "$(dirname "${BASH_SOURCE[0]}")/pyenv.sh"
+# shellcheck disable=SC1091  # shared timeout(1) resolver (DOG-15); sourced
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 # Terminal colors
 if [[ -t 1 ]] && command -v tput >/dev/null 2>&1 && [[ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]]; then
@@ -106,6 +109,24 @@ pf_check_python() {
   rm -f "$errfile"
 }
 
+# timeout(1) via the shared resolver (lib/common.sh). Declared because every
+# suite gate bounds its run with it, and macOS ships none: an undeclared
+# dependency is exactly how DOG-15 reached CI, where a missing binary made the
+# gate exit 127 and be recorded as a RED verdict it had never measured.
+# NOTE: resolve_timeout runs in THIS shell so its TIMEOUT_BIN export survives.
+pf_check_timeout() {
+  local errfile msg
+  errfile=$(mktemp)
+  if resolve_timeout 2>"$errfile"; then
+    pf_record "timeout" "ok" "found: ${TIMEOUT_BIN}"
+  else
+    msg=$(tr '\n' ' ' < "$errfile")
+    pf_record "timeout" "error" "no runnable timeout(1): ${msg}" \
+      "install: brew install coreutils, or export TIMEOUT_BIN=/path/to/timeout"
+  fi
+  rm -f "$errfile"
+}
+
 # GitHub CLI + auth — fail-closed: agy-gh seat and repo targeting depend on it.
 pf_check_gh() {
   if ! command -v gh >/dev/null 2>&1; then
@@ -159,6 +180,7 @@ preflight_run() {
   pf_check_bin "jq" jq "install: brew install jq"
   pf_check_bin "git" git "install: xcode-select --install"
   pf_check_python
+  pf_check_timeout
   pf_check_gh
   pf_check_agents
   pf_check_git_repo

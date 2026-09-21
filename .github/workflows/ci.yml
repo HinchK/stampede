@@ -54,6 +54,12 @@ jobs:
           # genuinely absent so an unnecessary upgrade cannot fail the job.
           brew list shellcheck >/dev/null 2>&1 || brew install shellcheck
           brew list jq >/dev/null 2>&1 || brew install jq
+          # coreutils supplies timeout(1), which every suite gate uses to bound
+          # its run. macOS ships none and the runner image does not install it,
+          # so without this the gate exits 127 (DOG-15). The code now declares
+          # this dependency in lib/preflight.sh and fails loudly without it;
+          # CI's job is to provide it, not to let it be inferred.
+          brew list coreutils >/dev/null 2>&1 || brew install coreutils
 
       - name: Configure git identity
         run: |
