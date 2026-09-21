@@ -59,9 +59,9 @@ every claim in the docs backed by something the repo can show.
   `lib/pyenv.sh` (`resolve_python()`), replacing bare `python3` invocations across
   `Makefile`, supervisor, library scripts, and test suites with a probe for
   `tomllib` and actionable remediation advice.
-- **DOG-12 increment 1 (`a7be67a`), increment 2 outstanding:** Enforced human-only promote invariant across
-  `briefs/looper.in.md` and added `lib/arbiter.sh` promote guardrail (requiring `--confirm` or `PROMOTE_CONFIRM=1`),
-  backed by 4 new assertions in `tests/test_arbiter.sh` (152 tests green).
+- **DOG-12 resolved (`3d679ef`):** Both increments landed (6 suites green):
+  - Increment 1 (`a7be67a`): Enforced human-promote invariant in `briefs/looper.in.md` and added `lib/arbiter.sh` promote guardrail requiring `--confirm` or `PROMOTE_CONFIRM=1` (4 new assertions in `tests/test_arbiter.sh`).
+  - Increment 2: Established direct-to-base write boundaries and ungated blast radius warnings in `briefs/worker-docs.in.md`, `briefs/worker-gh.in.md`, and `briefs/overseer-pm.in.md`.
 
 ## Active Frontier
 
