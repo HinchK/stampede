@@ -4,7 +4,7 @@ title: "A guard that ships inside the artifact it guards is unarmed until that a
 type: wayfinder:defect
 status: in_progress
 assignee: arch
-owns: herdr-loop-swarm.sh,loop-bot-herd.sh,briefs/looper.in.md
+owns: herdr-loop-swarm.sh,loop-bot-herd.sh,lib/briefs.sh,briefs/looper.in.md
 parent: maps/public-readiness.md
 github_issue: 3
 github_url: "https://github.com/HinchK/stampede/issues/3"
