@@ -2,10 +2,13 @@
 id: DOG-15
 title: "tests/test_arbiter.sh fails on macos-latest in CI but passes everywhere locally"
 type: wayfinder:defect
-status: backlog
-assignee: arch
+status: in_progress
+assignee: arch-2
 owns: tests/test_arbiter.sh,lib/arbiter.sh
 parent: maps/public-readiness.md
+github_issue: 11
+github_url: "https://github.com/HinchK/stampede/issues/11"
+synced_at: "2026-09-21T22:28:00Z"
 ---
 
 # DOG-15 — Arbiter suite fails in CI only

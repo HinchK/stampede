@@ -2,10 +2,13 @@
 id: DOG-14
 title: "The 0-warning lint bar is version-dependent: CI's shellcheck fails what the dev shell passes"
 type: wayfinder:defect
-status: backlog
-assignee: arch
+status: in_progress
+assignee: arch-1
 owns: .github/workflows/ci.yml,lib/preflight.sh
 parent: maps/public-readiness.md
+github_issue: 10
+github_url: "https://github.com/HinchK/stampede/issues/10"
+synced_at: "2026-09-21T22:28:00Z"
 ---
 
 # DOG-14 — Pin the lint toolchain
