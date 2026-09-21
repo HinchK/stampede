@@ -2,7 +2,8 @@
 id: DOG-13
 title: "A guard that ships inside the artifact it guards is unarmed until that artifact lands"
 type: wayfinder:defect
-status: in_progress
+status: resolved
+commit: 81958f1
 assignee: arch
 owns: herdr-loop-swarm.sh,loop-bot-herd.sh,lib/briefs.sh,briefs/looper.in.md
 parent: maps/public-readiness.md
