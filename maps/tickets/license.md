@@ -2,7 +2,8 @@
 id: DOG-2
 title: "Add an OSI license — the repo is currently legally unusable"
 type: wayfinder:task
-status: in_progress
+status: resolved
+commit: f1c12d9
 assignee: agy-docs
 owns: LICENSE
 parent: maps/public-readiness.md
