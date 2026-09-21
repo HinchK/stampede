@@ -6,6 +6,9 @@ status: backlog
 assignee: arch
 owns: herdr-loop-swarm.sh,loop-bot-herd.sh,briefs/looper.in.md
 parent: maps/public-readiness.md
+github_issue: 3
+github_url: "https://github.com/HinchK/stampede/issues/3"
+synced_at: "2026-09-21T21:33:19Z"
 ---
 
 # DOG-13 — Invoke the arbiter from the orchestrator, not the target
