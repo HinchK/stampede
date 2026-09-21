@@ -6,6 +6,9 @@ status: backlog
 assignee: arch
 owns: Makefile,lib/pyenv.sh,lib/config.sh,lib/briefs.sh,loop-bot-herd.sh,lib/preflight.sh,tests/test_profile.sh
 parent: maps/public-readiness.md
+github_issue: 1
+github_url: "https://github.com/HinchK/stampede/issues/1"
+synced_at: "2026-09-21T20:44:03Z"
 ---
 
 # DOG-1 — Interpreter resolver (WAVE 1, RUNS ALONE)
