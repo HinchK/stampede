@@ -4,7 +4,7 @@ title: "The human-promote invariant is absent from the brief the looper actually
 type: wayfinder:defect
 status: backlog
 assignee: arch
-owns: briefs/looper.in.md,lib/arbiter.sh,tests/test_arbiter.sh
+owns: briefs/looper.in.md,briefs/worker-docs.in.md,briefs/worker-gh.in.md,briefs/overseer-pm.in.md,lib/arbiter.sh,tests/test_arbiter.sh
 parent: maps/public-readiness.md
 github_issue: 2
 github_url: "https://github.com/HinchK/stampede/issues/2"
@@ -97,7 +97,79 @@ make check
 
 Receipt must show `main` unmoved after the unconfirmed promote attempt.
 
-## 6. Notes
+## 6. Second finding — the same root cause, one layer down
+
+Folded in after increment 1. While watching for an unauthorised promote, two
+commits landed on `main` that were **not** promotes:
+
+```
+87431c3  agy-docs  docs: update STATE.md for DOG-1 completion
+254ccee  agy-gh    chore(tickets): link DOG-12 to GitHub issue #2
+```
+
+Both single-parent, neither reachable from the integration ref. They are root
+anchors committing straight to the base branch. From `.herdr-swarm/seats.json`:
+
+| seat | isolated | branch |
+|---|---|---|
+| `pm` | 0 | `main` |
+| `looper` | 0 | `main` |
+| `agy-docs` | 0 | `main` |
+| `agy-gh` | 0 | `main` |
+| `arch-1` / `arch-2` / `pi` | 1 | `swarm/<slug>/<seat>` |
+
+**Four of seven seats write directly to `main`** — no worktree, no suite gate,
+no arbiter, no human. There is exactly one gate log on disk
+(`arch-1-…-3a9a70d.log`); neither commit above was verified by anything.
+
+This is the same root cause as §2 at a different layer: the architecture's
+guarantees apply to the seats it isolates, and every other seat is governed only
+by the prose in its brief. Three consequences:
+
+1. `STATE.md` — the continuity ledger a cold seat reads as truth, and the file
+   the 2026-09-19 review flagged for drift — is now written by an agent with no
+   verification of any kind.
+2. Nothing confines a docs seat to docs. `agy-docs` is scoped by its brief, not
+   by a path check — and §2 established that the brief is the only thing these
+   agents actually obey.
+3. The claim "nothing lands unverified" is true of `arch` seats and false of the
+   other four.
+
+### Added scope
+
+4. **`briefs/worker-docs.in.md`, `briefs/worker-gh.in.md`,
+   `briefs/overseer-pm.in.md`** — state the write boundary in each, since the
+   brief is the enforcement surface that works:
+   - these seats commit to the base branch directly and are therefore **never**
+     suite-gated; say so plainly, so the agent knows its own blast radius
+   - permitted paths: `docs/`, `maps/`, `STATE.md`, `CONTEXT.md`, `README.md`
+   - forbidden without going through an `arch` seat: `lib/`, `tests/`,
+     `briefs/`, `*.sh`, `Makefile`, `swarm.config.toml`
+   - a docs seat that believes it needs a forbidden path must stop and report
+
+**Out of scope here, deliberately.** The README's accuracy is DOG-5's
+(`owns: README.md`) and the ADR is DOG-9's (`owns: docs/`). Do not edit either
+from this ticket. Record in the receipt that **DOG-5's lede needs a scope
+clause** — "Workers never merge" is true only of isolated seats, and shipping it
+unqualified would be the same class of overclaim this backlog exists to remove.
+
+### Added done-criteria
+
+6. Each of the three briefs names its permitted and forbidden paths and states
+   that the seat is not suite-gated.
+7. `grep -c 'not suite-gated\|never suite-gated' briefs/worker-docs.in.md` ≥ 1.
+8. The receipt carries the DOG-5 cross-reference from the paragraph above.
+
+## 7. Notes
 
 Runs alone and **before wave 2**. Wave 2 releases five tickets at once; without
 this, each green verdict is a candidate for another unsupervised promotion.
+
+Increment 1 (`a7be67a`) shipped §3 items 1–3. This fold-in adds item 4; land it
+on the same branch and re-emit `ARCH DONE #2 <new-sha>`. The supervisor dedupes
+on `(ticket, sha)`, so a new sha on the same ticket is re-gated by design.
+
+Minor, worth fixing while in here: increment 1 set `status: in-progress` in the
+frontmatter, but `lib/partition.sh:188` recognises `in_progress` with an
+underscore. The hyphenated form is an *unknown* status and lands in the `*`
+fail-closed branch — treated as active for the wrong reason. Use `in_progress`.
