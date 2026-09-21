@@ -2,7 +2,7 @@
 id: DOG-1
 title: "Resolve a tomllib-capable interpreter instead of bare python3"
 type: wayfinder:defect
-status: backlog
+status: in-progress
 assignee: arch
 owns: Makefile,lib/pyenv.sh,lib/config.sh,lib/briefs.sh,loop-bot-herd.sh,lib/preflight.sh,tests/test_profile.sh
 parent: maps/public-readiness.md

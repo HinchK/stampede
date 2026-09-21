@@ -25,6 +25,9 @@ check() {
 
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/profile.sh"
+# shellcheck disable=SC1091  # resolver: python entry points fail with the
+# remedy, never a traceback (DOG-1)
+source "$SCRIPT_DIR/lib/pyenv.sh"
 
 echo "── profile detection suite (scratch: $TEST_DIR)"
 

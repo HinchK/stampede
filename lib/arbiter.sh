@@ -32,6 +32,9 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck disable=SC1091  # dynamically resolved sibling lib
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+# shellcheck disable=SC1091  # tomllib-capable interpreter (DOG-1)
+source "$(dirname "${BASH_SOURCE[0]}")/pyenv.sh"
+resolve_python
 
 ARBITER_TMP_SLEEP=0.2
 
@@ -69,7 +72,7 @@ _arb_set_status() { # TICKET SHA STATUS [EXTRA_JQ]
 }
 
 _arb_telemetry() { # EVENT_TYPE TICKET SEAT SHA PAYLOAD_JSON
-  python3 "$SCRIPT_DIR/lib/telemetry.py" log \
+  "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log \
     "$(telemetry_session_id "$ARB_STATE")" "$1" "$2" - "$3" "$4" \
     --trace-dir "${ARB_STATE}/traces" >/dev/null 2>&1 || true
 }

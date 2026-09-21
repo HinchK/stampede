@@ -39,6 +39,9 @@ SUITE_TIMEOUT_S="${SUITE_TIMEOUT_S:-300}"
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck disable=SC1091  # dynamically resolved sibling libs
 source "$SCRIPT_DIR/lib/common.sh"
+# shellcheck disable=SC1091  # tomllib-capable interpreter (DOG-1)
+source "$SCRIPT_DIR/lib/pyenv.sh"
+resolve_python
 # shellcheck disable=SC1091  # dynamically resolved sibling libs
 source "$SCRIPT_DIR/lib/profile.sh"
 # shellcheck disable=SC1091  # dynamically resolved sibling libs
@@ -267,7 +270,7 @@ gate_reap() {
     fi
 
     echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"exit_code\": $rc_val, \"log\": \"$gate_log\"}" >> "$SESSION_LOG"
-    python3 "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" suite.verdict "$seat" "$ticket" \
+    "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" suite.verdict "$seat" "$ticket" \
       "$(jq -cn --arg s "$suite_ok" --arg sha "$sha" --arg seat "$seat" --arg t "$ticket" \
         '{suite:$s, sha:$sha, summary:("suite " + $s + " @ " + $sha), details:("seat=" + $seat + " ticket=#" + $t)}')" \
       --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
@@ -389,7 +392,7 @@ harvest_verdicts() {
       fi
 
       # Telemetry: suite verdict event (streams live into the Ops pane)
-      python3 "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" suite.verdict "$seat" "$ticket" \
+      "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" suite.verdict "$seat" "$ticket" \
         "$(jq -cn --arg s "$suite_ok" --arg sha "$sha" --arg seat "$seat" --arg t "$ticket" \
           '{suite:$s, sha:$sha, summary:("suite " + $s + " @ " + $sha), details:("seat=" + $seat + " ticket=#" + $t)}')" \
         --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
@@ -426,7 +429,7 @@ unpushed_watch() {
 credits_watch() {
   local key out
   [[ "$(config_get "proxy.enabled" "false" "${SWARM_CONFIG:-$SCRIPT_DIR/swarm.config.toml}")" == "true" ]] || return 0
-  key=$(python3 - "${KULTIVAIT_CREDENTIALS:-$HOME/.kultivait/credentials.toml}" << 'EOF' 2>/dev/null || true
+  key=$("$PYTHON_BIN" - "${KULTIVAIT_CREDENTIALS:-$HOME/.kultivait/credentials.toml}" << 'EOF' 2>/dev/null || true
 import sys, tomllib
 from pathlib import Path
 p = Path(sys.argv[1])
@@ -438,7 +441,7 @@ EOF
   [[ -n "$key" ]] || return 0
   out=$(curl -sf --max-time 5 -H "Authorization: Bearer $key" https://openrouter.ai/api/v1/credits 2>/dev/null || true)
   [[ -n "$out" ]] || { warn "OpenRouter /credits unreachable"; return 0; }
-  python3 - "$out" "$CREDIT_WARN_USD" << 'EOF'
+  "$PYTHON_BIN" - "$out" "$CREDIT_WARN_USD" << 'EOF'
 import json, sys
 d = json.loads(sys.argv[1])
 left = float(d["data"]["total_credits"]) - float(d["data"]["total_usage"])

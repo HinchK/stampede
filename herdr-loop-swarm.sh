@@ -501,7 +501,7 @@ SRV_PANE=$(split_pane "$OpsAnchor" down 0.5 "$PWD") || true
 
 # Live telemetry stream occupies the Ops anchor pane (replaces raw log tail)
 herdr pane rename "$OpsAnchor" "telemetry-stream" >/dev/null 2>&1 || true
-herdr pane run "$OpsAnchor" "python3 -u '$LIB_DIR/telemetry.py' stream '$SESSION_ID' '${PWD}/.herdr-swarm/traces'" >/dev/null 2>&1 || true
+herdr pane run "$OpsAnchor" "${PYTHON_BIN} -u '$LIB_DIR/telemetry.py' stream '$SESSION_ID' '${PWD}/.herdr-swarm/traces'" >/dev/null 2>&1 || true
 
 # Geometry Guard Floor
 # shellcheck disable=SC2086  # intentional word splitting over collected pane ids
@@ -559,7 +559,7 @@ _ready_payload=$(jq -cn \
   --argjson seats "$(jq '.seats | length' "${PWD}/.herdr-swarm/seats.json" 2>/dev/null || echo 0)" \
   '{action:"swarm_ready", mode:$mode, slug:$slug, repo:$repo, seats:$seats,
     summary:("swarm seated+verified (mode=" + $mode + ", seats=" + ($seats|tostring) + ")")}')
-python3 "$LIB_DIR/telemetry.py" log "$SESSION_ID" swarm.lifecycle "$LOOPER_AGENT" - "$_ready_payload" \
+"$PYTHON_BIN" "$LIB_DIR/telemetry.py" log "$SESSION_ID" swarm.lifecycle "$LOOPER_AGENT" - "$_ready_payload" \
   --trace-dir "$TRACE_DIR_PATH" >/dev/null 2>&1 || true
 good "Telemetry session: ${SESSION_ID} → ${TRACE_DIR_PATH}"
 

@@ -17,7 +17,7 @@ not this one.
 ```bash
 # Aggregate entry points (the Suite Gate resolves to `make test` here — #PROFILE-MAKE)
 make check                              # lint + every suite, failure-propagating
-make test                              # all five suites under /bin/bash (bash 3.2 is the platform floor)
+make test                              # all six suites under /bin/bash (bash 3.2 is the platform floor)
 make lint                              # shellcheck 0-warning bar + bash -n + py_compile
 # Suites (each builds an ephemeral scratch git repo under /tmp and cleans up after itself)
 /bin/bash tests/test_worktree.sh        # 42 assertions — provisioning, salvage, teardown
@@ -25,11 +25,12 @@ make lint                              # shellcheck 0-warning bar + bash -n + py
 /bin/bash tests/test_partition.sh       # 26 — owns parsing, overlap, leases
 /bin/bash tests/test_async_gate.sh      # 17 — background gate jobs, reaping, invalidation
 /bin/bash tests/test_profile.sh         # 17 — ecosystem/test-cmd detection incl. make/run_all
+/bin/bash tests/test_pyenv.sh           # 16 — tomllib interpreter resolver, PYTHON_BIN honouring
 
 # Lint gate — tickets treat 0 warnings as the bar
 shellcheck herdr-loop-swarm.sh loop-bot-herd.sh lib/*.sh
 bash -n herdr-loop-swarm.sh              # syntax-only check
-python3 -m py_compile lib/telemetry.py
+"$(bash lib/pyenv.sh)" -m py_compile lib/telemetry.py   # tomllib-capable interpreter (DOG-1)
 
 # Launcher (safe, read-only subcommands first)
 ./herdr-loop-swarm.sh status [dir]                 # workspace, seats, profile, recent traces

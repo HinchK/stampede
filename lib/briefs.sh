@@ -9,6 +9,9 @@ set -euo pipefail
 
 # shellcheck disable=SC1091  # dynamically resolved sibling lib
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+# shellcheck disable=SC1091  # tomllib-capable interpreter (DOG-1)
+source "$(dirname "${BASH_SOURCE[0]}")/pyenv.sh"
+resolve_python
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 BRIEFS_SRC_DIR="${SCRIPT_DIR}/briefs"
@@ -21,7 +24,7 @@ substitute_template() {
 
   mkdir -p "$(dirname "$output_out")"
 
-  python3 -c "
+  "$PYTHON_BIN" -c "
 import json, sys
 
 with open('$template_in', 'r', encoding='utf-8') as f:
@@ -56,7 +59,7 @@ render_all_briefs() {
 
   # Build replacement JSON dictionary
   local vars_json
-  vars_json=$(python3 -c "
+  vars_json=$("$PYTHON_BIN" -c "
 import json, os
 
 vars_map = {
