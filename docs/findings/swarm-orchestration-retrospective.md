@@ -59,14 +59,14 @@ Spatial segregation into **Tab 1 (Herd)** and **Tab 2 (Ops)** ensures that heavy
 
 ## 3. Token Economics & Context Budget Management
 
-### 3.1 The 80%+ Token Reduction
+### 3.1 Context Compaction: Why Per-Turn Context Shrinks
 In a long-running monolithic agent session, every new turn re-processes the entire accumulated conversation history:
 
 $$\text{Cost per turn} \propto \sum_{i=1}^{N} \text{Tokens}_i$$
 
 After 20 turns, a monolithic agent session easily consumes 100k+ input tokens on every subsequent prompt, driving API costs to prohibitive levels while slowing response times to 30–60 seconds per turn.
 
-The Universal Swarm achieves an **80–90% reduction in total token consumption** through three architectural mechanisms:
+The Universal Swarm yields a modelled/estimated **80–90% reduction in per-turn input context** through three architectural mechanisms:
 
 ```
 Monolithic Single-Agent Context (Bloated, 100k–200k tokens per turn)
@@ -89,6 +89,11 @@ Universal Swarm Stateless Workers (Lean, 3k–8k tokens per turn)
    - Complex reasoning, architecture, and invariant audits $\to$ Frontier models (Claude 3.7 Sonnet / Opus).
    - High-throughput code implementation $\to$ Cost-effective coding models (GLM-5.3 / OpenCode).
    - Structured metadata, documentation, and GitHub operations $\to$ Ultra-fast, low-cost models (Gemini Flash).
+
+### 3.2 The Trust Tax
+While per-turn context size shrinks dramatically, total token spend across the entire herd actually goes **up**, not down. This is the deliberate trade of the architecture: correctness bought with compute. Running independent workers, an asynchronous supervisor re-running test suites on every harvested commit, re-verdict cycles on red verdicts, arbiter integration testing, and specialized audit roles (`pm`, `docs`, `gh`) multiplies total token volume to ensure that no unverified or unreviewed change lands on `main`.
+
+Note that exact per-seat token accounting is not obtainable today because Herdr drives vendor CLIs over a PTY that reports no usage data.
 
 ---
 
@@ -182,7 +187,7 @@ The swarm can branch, commit, run test suites, author ADRs, and prepare Pull Req
 
 | Metric / Dimension | Monolithic Single-Agent | Sequential Herdr Swarm (M1) | Parallel Worktree Swarm (Phase 2) |
 |---|---|---|---|
-| **Token Efficiency** | Poor (100k–200k tokens/turn) | **High (80%+ savings)** | **Exceptional (isolated task contexts)** |
+| **Token Efficiency** | Poor (100k–200k tokens/turn) | Modelled: high (per-turn context) | **Exceptional (isolated task contexts)** |
 | **Concurrency Resilience** | None (sequential only) | Poor (4/6 fail on concurrent `add`) | **Zero failures (0/240 clean fsck)** |
 | **Test Verification** | Agent self-report (false-green risk) | Independent Suite Gate (`loop-bot`) | Independent Per-Worktree Suite Gate |
 | **Workspace Safety** | Host terminal pollution | Safe CWD matching & seat ledger | Safe CWD matching + worktree pruning |
