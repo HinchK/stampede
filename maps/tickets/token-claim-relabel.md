@@ -2,7 +2,8 @@
 id: DOG-4
 title: "Relabel the 80% token-reduction claim as design rationale, not measurement"
 type: wayfinder:doc
-status: in_progress
+status: resolved
+commit: 4cb5f28
 assignee: agy-docs
 owns: docs/findings/swarm-orchestration-retrospective.md
 parent: maps/public-readiness.md
