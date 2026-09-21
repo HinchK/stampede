@@ -2,8 +2,7 @@
 id: DOG-12
 title: "The human-promote invariant is absent from the brief the looper actually reads"
 type: wayfinder:defect
-status: resolved
-commit: a7be67a
+status: in_progress
 assignee: arch
 owns: briefs/looper.in.md,briefs/worker-docs.in.md,briefs/worker-gh.in.md,briefs/overseer-pm.in.md,lib/arbiter.sh,tests/test_arbiter.sh
 parent: maps/public-readiness.md
