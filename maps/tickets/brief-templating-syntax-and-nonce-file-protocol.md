@@ -21,7 +21,7 @@ What placeholder syntax (`{{REPO}}`, `{{TEST_CMD}}`, `{{DOCS_DIR}}`, `{{ARCH_NAM
 
 ## Resolution
 
-Implemented in [`lib/briefs.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/briefs.sh) and converted briefs into template definitions in `briefs/*.in.md`:
+Implemented in [`lib/briefs.sh`](../../lib/briefs.sh) and converted briefs into template definitions in `briefs/*.in.md`:
 1. **Dynamic Placeholder Architecture:**
    - Placeholders (`{{REPO}}`, `{{TEST_CMD}}`, `{{ECOSYSTEM}}`, `{{DOCS_DIR}}`, `{{SLUG}}`, and namespaced agent names `{{ARCH_NAME}}`, `{{LOOPER_NAME}}`, etc.) are resolved from `lib/profile.sh` and `lib/config.sh`.
    - Rendered briefs are generated on the fly into `${TARGET_DIR}/.herdr-swarm/briefs/*.md`.

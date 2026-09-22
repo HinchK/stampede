@@ -1,13 +1,13 @@
 # Phase 2 Worktree Swarm: Release & Synchronization Verification Checklist
 
 **Date:** 2026-09-19 · **Status:** Active Release Gate · **Agent:** `agy-gh`  
-**Parent Map:** [`maps/universal-herdr-swarm.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/universal-herdr-swarm.md)  
+**Parent Map:** [`maps/universal-herdr-swarm.md`](../../maps/universal-herdr-swarm.md)  
 **Associated Architecture:**  
-- [ADR 0006: Git Worktree Worker Isolation](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md)  
-- [Phase 2 Architecture Specification (`docs/worktree-swarm.md`)](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/worktree-swarm.md)  
-- [GitHub Issues Two-Way Synchronization Protocol (`docs/findings/github-issues-sync.md`)](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/github-issues-sync.md)  
-- [GitHub Issues Sync Tooling (`lib/gh_sync.sh`)](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/gh_sync.sh)  
-- [Worktree Lifecycle Library (`lib/worktree.sh`)](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/worktree.sh)
+- [ADR 0006: Git Worktree Worker Isolation](../adr/0006-git-worktree-worker-isolation.md)  
+- [Phase 2 Architecture Specification (`docs/worktree-swarm.md`)](../worktree-swarm.md)  
+- [GitHub Issues Two-Way Synchronization Protocol (`docs/findings/github-issues-sync.md`)](github-issues-sync.md)  
+- [GitHub Issues Sync Tooling (`lib/gh_sync.sh`)](../../lib/gh_sync.sh)  
+- [Worktree Lifecycle Library (`lib/worktree.sh`)](../../lib/worktree.sh)
 
 ---
 
@@ -15,7 +15,7 @@
 
 Milestone 1 established a project-agnostic, sequential multi-agent swarm orchestrator (`up · watch · down · status · verify`) operating inside a dedicated Herdr workspace.
 
-**Phase 2** expands the system into a **concurrent parallel worktree swarm**. Workers operate inside isolated Git worktrees (`.herdr-swarm/worktrees/<seat>`) with dedicated branches (`swarm/<slug>/<seat>`), preventing workspace pollution, index lock contention, and dirty working tree collisions. Concurrently, local architectural decision tickets (`maps/tickets/*.md`) are synchronized bi-directionally with upstream GitHub Issues via [`lib/gh_sync.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/gh_sync.sh).
+**Phase 2** expands the system into a **concurrent parallel worktree swarm**. Workers operate inside isolated Git worktrees (`.herdr-swarm/worktrees/<seat>`) with dedicated branches (`swarm/<slug>/<seat>`), preventing workspace pollution, index lock contention, and dirty working tree collisions. Concurrently, local architectural decision tickets (`maps/tickets/*.md`) are synchronized bi-directionally with upstream GitHub Issues via [`lib/gh_sync.sh`](../../lib/gh_sync.sh).
 
 This document specifies the **Mandatory Release Verification Checklist** that must be executed and signed off prior to tagging and promoting Phase 2 to production environments.
 
@@ -40,7 +40,7 @@ flowchart TD
 
 ### Gate 1: Preflight 9-Point Matrix Validation
 
-Prior to any workspace creation, pane splitting, or worktree provisioning, the launcher executes the preflight matrix defined in [`lib/preflight.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/preflight.sh).
+Prior to any workspace creation, pane splitting, or worktree provisioning, the launcher executes the preflight matrix defined in [`lib/preflight.sh`](../../lib/preflight.sh).
 
 * **Command:** `./lib/preflight.sh --json` or `./herdr-loop-swarm.sh preflight`
 * **Success Criteria:**
@@ -59,7 +59,7 @@ Prior to any workspace creation, pane splitting, or worktree provisioning, the l
 
 ### Gate 2: Worktree Isolation & Topology
 
-Validates that worker seats execute in isolated Git worktrees rather than the root project repository, per [ADR 0006](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md).
+Validates that worker seats execute in isolated Git worktrees rather than the root project repository, per [ADR 0006](../adr/0006-git-worktree-worker-isolation.md).
 
 * **Topology Verification:**
   - **Root Workspace (`$TARGET_DIR`):** Hosts orchestrator (`looper`), strategic overseer (`pm`), and telemetry streaming pane (`lib/telemetry.py`). Checked out on the base branch (`main`).
@@ -78,7 +78,7 @@ Validates that worker seats execute in isolated Git worktrees rather than the ro
            "name": "arch-loop-bot",
            "kind": "opencode",
            "pane": "wM:p3",
-           "worktree_dir": "/Users/hinchk/Fun/loop-bot-herd-agy/.herdr-swarm/worktrees/arch",
+           "worktree_dir": "/path/to/loop-bot-herd-agy/.herdr-swarm/worktrees/arch",
            "branch": "swarm/loop-bot/arch"
          }
        ]
@@ -104,7 +104,7 @@ Validates that all configured agents initialize cleanly, reach `idle` status, an
 
 ### Gate 4: Worktree-Scoped Suite Gating
 
-Validates that the supervisor evaluates code quality and test passes exclusively within the worker's isolated worktree, per [`docs/worktree-swarm.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/worktree-swarm.md).
+Validates that the supervisor evaluates code quality and test passes exclusively within the worker's isolated worktree, per [`docs/worktree-swarm.md`](../worktree-swarm.md).
 
 * **Command:** `./loop-bot-herd.sh check-suite`
 * **Verification Checks:**
@@ -148,7 +148,7 @@ Validates that shutting down the swarm cleanly retires panes, checkpoints dirty 
 
 ## 3. GitHub Issues Two-Way Synchronization Validation
 
-Validates integration between local decision tickets in `maps/tickets/*.md` and upstream GitHub Issues via [`lib/gh_sync.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/gh_sync.sh).
+Validates integration between local decision tickets in `maps/tickets/*.md` and upstream GitHub Issues via [`lib/gh_sync.sh`](../../lib/gh_sync.sh).
 
 ### A. Preflight & Fail-Closed Validation
 

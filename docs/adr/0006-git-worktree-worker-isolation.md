@@ -3,7 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-09-19
 - **Deciders**: `arch`, `pm`, `looper`, `agy-docs`
-- **Consulted**: [T-016-docs](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/worktree-isolation-architecture.md), [Universal Swarm Plan](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/universal-herdr-swarm.md), [ADR 0004](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md), [Claude-PM Prototype](file:///Users/hinchk/Fun/loop-bot-herd-agy/loop-bot-herd-claude/README.md)
+- **Consulted**: [T-016-docs](../../maps/tickets/worktree-isolation-architecture.md), [Universal Swarm Plan](../../maps/universal-herdr-swarm.md), [ADR 0004](0004-safe-workspace-lifecycle-and-seat-ledger.md), Claude-PM Prototype (`loop-bot-herd-claude/`, external lineage — not part of this repo)
 
 ---
 
@@ -55,7 +55,7 @@ The swarm topology divides agents into **Root Anchor Seats** and **Isolated Work
      ```
      ${TARGET_DIR}/.herdr-swarm/worktrees/<seat>
      ```
-     (Example: `/Users/hinchk/Fun/loop-bot-herd-agy/.herdr-swarm/worktrees/arch-kultivait`)
+     (Example: `.herdr-swarm/worktrees/arch-kultivait`)
    - Each worker operates on an isolated local branch:
      ```
      swarm/<slug>/<seat>
@@ -63,7 +63,7 @@ The swarm topology divides agents into **Root Anchor Seats** and **Isolated Work
      (Example: `swarm/kultivait/arch`) branched from the baseline branch.
 
 ### B. Durable Seat Ledger Schema (`.herdr-swarm/seats.json`)
-Per [ADR 0004](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md), `.herdr-swarm/seats.json` tracks active seats. For worktree-isolated seats, the schema is extended to record `"worktree_dir"` and `"branch"`:
+Per [ADR 0004](0004-safe-workspace-lifecycle-and-seat-ledger.md), `.herdr-swarm/seats.json` tracks active seats. For worktree-isolated seats, the schema is extended to record `"worktree_dir"` and `"branch"`:
 
 ```json
 {
@@ -74,7 +74,7 @@ Per [ADR 0004](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-wor
       "name": "looper-kultivait",
       "kind": "agy",
       "pane": "wM:p1",
-      "worktree_dir": "/Users/hinchk/Fun/kultivait",
+      "worktree_dir": "/path/to/target-repo",
       "branch": "main",
       "isolated": false
     },
@@ -82,7 +82,7 @@ Per [ADR 0004](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-wor
       "name": "arch-kultivait",
       "kind": "opencode",
       "pane": "wM:p2",
-      "worktree_dir": "/Users/hinchk/Fun/kultivait/.herdr-swarm/worktrees/arch-kultivait",
+      "worktree_dir": "/path/to/target-repo/.herdr-swarm/worktrees/arch-kultivait",
       "branch": "swarm/kultivait/arch",
       "isolated": true
     }
@@ -144,7 +144,7 @@ Before any worker's commits are integrated into the baseline branch:
 
 | Edge Case | Failure Risk | Mitigation |
 |---|---|---|
-| **Stale Worktree Lock** | Previous crash leaves `.git/worktrees/<seat>/locked` | Run `git worktree prune` during preflight matrix ([ADR 0005](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0005-preflight-matrix-and-seat-verification.md)); remove stale lock files if agent is gone. |
+| **Stale Worktree Lock** | Previous crash leaves `.git/worktrees/<seat>/locked` | Run `git worktree prune` during preflight matrix ([ADR 0005](0005-preflight-matrix-and-seat-verification.md)); remove stale lock files if agent is gone. |
 | **Branch Divergence** | Baseline branch moves forward while worker is coding | Worker worktree pulls or rebases against `BASE_BRANCH` before final suite gating and PR submission. |
 | **Dirty Worktree on Teardown** | Worker left uncommitted files in worktree | `git worktree remove --force` discards disposable working files; uncommitted state was not validated. Committed changes remain safe on the branch ref. |
 | **Dependency Cache Duplication** | Sub-worktrees lack `node_modules` or `.venv` | Symlink shared cache directories from root or rely on global virtual environments/package caches (e.g. `uv`, `pnpm` store, `cargo` cache). |
@@ -168,8 +168,8 @@ Before any worker's commits are integrated into the baseline branch:
 
 ## 8. References
 
-- [Ticket T-016-docs: Worktree Isolation Architecture](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/worktree-isolation-architecture.md)
-- [ADR 0004: Safe Workspace Lifecycle and Seat Ledger](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md)
-- [ADR 0005: Preflight Matrix and Seat Verification](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0005-preflight-matrix-and-seat-verification.md)
-- [Phase 2 Specification: docs/worktree-swarm.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/worktree-swarm.md)
-- [Prototype Reference: loop-bot-herd-claude/herdr-loop-claude-pm.sh](file:///Users/hinchk/Fun/loop-bot-herd-agy/loop-bot-herd-claude/herdr-loop-claude-pm.sh)
+- [Ticket T-016-docs: Worktree Isolation Architecture](../../maps/tickets/worktree-isolation-architecture.md)
+- [ADR 0004: Safe Workspace Lifecycle and Seat Ledger](0004-safe-workspace-lifecycle-and-seat-ledger.md)
+- [ADR 0005: Preflight Matrix and Seat Verification](0005-preflight-matrix-and-seat-verification.md)
+- [Phase 2 Specification: docs/worktree-swarm.md](../worktree-swarm.md)
+- Prototype Reference: `loop-bot-herd-claude/herdr-loop-claude-pm.sh` (external lineage — not part of this repo)

@@ -3,7 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-09-19
 - **Deciders**: `arch`, `pm`, `looper`
-- **Consulted**: [T-008](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/preflight-dependency-and-daemon-verification.md), [T-010](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/seat-verification-protocol.md), [T-INT-4](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/launcher-preflight-and-subcommands.md)
+- **Consulted**: [T-008](../../maps/tickets/preflight-dependency-and-daemon-verification.md), [T-010](../../maps/tickets/seat-verification-protocol.md), [T-INT-4](../../maps/tickets/launcher-preflight-and-subcommands.md)
 
 ---
 
@@ -68,7 +68,7 @@ Before any workspace creation or pane mutation occurs, `preflight_run` executes 
 If any mandatory check fails, the preflight engine formats human-actionable remediation hints (e.g. `brew install jq`, `gh auth login`, `pyenv install 3.11`) and halts with exit code 1.
 
 ### B. Stage 2: Post-Seating Readiness Verification Gate (`swarm_verify_seats`)
-Immediately after panes are allocated, agents started, briefs delivered via nonces, and `.herdr-swarm/seats.json` written, [`lib/lifecycle.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/lifecycle.sh) executes `swarm_verify_seats`:
+Immediately after panes are allocated, agents started, briefs delivered via nonces, and `.herdr-swarm/seats.json` written, [`lib/lifecycle.sh`](../../lib/lifecycle.sh) executes `swarm_verify_seats`:
 
 1. **Ledger Resolution**: Reads the seated agents roster from `.herdr-swarm/seats.json` (falling back to the live workspace registry if necessary).
 2. **Agent Liveness Probe**: Confirms the agent exists in Herdr (`herdr agent get "$name"`).

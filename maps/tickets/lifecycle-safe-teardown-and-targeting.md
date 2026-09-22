@@ -31,7 +31,7 @@ How must `find_workspace_by_cwd` and `swarm_down` in `lib/lifecycle.sh` be harde
 
 ## Resolution
 
-Hardened and validated in [`lib/lifecycle.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/lifecycle.sh):
+Hardened and validated in [`lib/lifecycle.sh`](../../lib/lifecycle.sh):
 1. **Strict CWD Target Matching (`find_workspace_by_cwd`):** Checks physical pane CWDs across workspaces rather than fragile labels. If `$HERDR_WORKSPACE_ID` is set, verifies that its panes actually match the target directory before returning; returns empty string and exit 0 for unrelated paths (e.g. `/tmp` never matches the caller's workspace).
 2. **Recorded Seats Ledger (`seats.json`):** `swarm_down` inspects `.herdr-swarm/seats.json` (validating workspace ID match) to selectively close only recorded swarm panes, preserving operator anchor panes when `--keep-workspace` is specified. Falls back to live workspace agents if the ledger is absent or stale.
 3. **Interactive Confirmation Gate (`lifecycle_confirm`):** Prompts the operator before any destructive pane or workspace disposal. Refuses execution (exit 1) in non-interactive environments unless `--yes` / `-y` is explicitly supplied.

@@ -19,7 +19,7 @@ synced_at: "2026-09-22T03:50:13Z"
 
 In Phase 3 multi-worker concurrent execution, multiple workers (`arch-1`, `arch-2`) run in parallel. To prevent merge conflicts before workers are dispatched, the swarm must verify file path disjointness (`owns`) between concurrently running tasks.
 
-Per [Phase 3 Roadmap](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md) §1.2:
+Per [Phase 3 Roadmap](../../docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md) §1.2:
 - Each ticket specifies an `owns:` list in YAML frontmatter representing repo-relative paths or directory prefixes.
 - Invariant: For any two concurrently dispatched tickets $T_i, T_j$, $\text{owns}(T_i) \cap \text{owns}(T_j) = \emptyset$.
 - Leases are recorded in `.herdr-swarm/seats.json` or `.herdr-swarm/leases.json` and released upon arbiter merge or seat teardown.

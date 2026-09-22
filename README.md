@@ -53,31 +53,31 @@ flowchart TD
 
 The swarm operates in a dedicated, multi-tab Herdr workspace:
 - **Tab 1 (`Herd`)**: Hosts the primary execution trio — `pm` (strategic overseer), `arch` (lead implementation engine), and `looper` (master coordinator and test verifier).
-- **Tab 2 (`Ops`)**: Hosts operational support agents (`agy-docs` for documentation and ADRs, `agy-gh` for GitHub issue management) and the **Ops Anchor Pane**, which runs [`lib/telemetry.py`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/telemetry.py) streaming real-time, terminal-width clamped ANSI badges (`DISPATCH`, `VERDICT:✓/✗`, `BREAKER:⚠`, `LIFECYCLE`, `VERIFY:✓/✗`) directly from `.herdr-swarm/traces/`.
+- **Tab 2 (`Ops`)**: Hosts operational support agents (`agy-docs` for documentation and ADRs, `agy-gh` for GitHub issue management) and the **Ops Anchor Pane**, which runs [`lib/telemetry.py`](lib/telemetry.py) streaming real-time, terminal-width clamped ANSI badges (`DISPATCH`, `VERDICT:✓/✗`, `BREAKER:⚠`, `LIFECYCLE`, `VERIFY:✓/✗`) directly from `.herdr-swarm/traces/`.
 
 ---
 
 ## Shipped Core Capabilities
 
-1. **Fail-Closed Project Profiling & Test Gate ([`lib/profile.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/profile.sh), [ADR 0001](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0001-fail-closed-profile-and-test-gating.md))**:
+1. **Fail-Closed Project Profiling & Test Gate ([`lib/profile.sh`](lib/profile.sh), [ADR 0001](docs/adr/0001-fail-closed-profile-and-test-gating.md))**:
    - Inspects target repository manifests to auto-detect toolchains (Python/uv/pytest, Rust/cargo, Node/pnpm/npm, Go) and GitHub remotes without hardcoded defaults.
    - **Fail-Closed Invariant**: Rejects synthetic test bypasses (`TEST_CMD="true"`). Auto-queue mode aborts immediately if no runnable test runner is configured.
-2. **Supervisor Re-Verdict Deduplication Protocol ([`loop-bot-herd.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/loop-bot-herd.sh), [ADR 0002](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0002-exact-sha-supervisor-deduplication.md))**:
+2. **Supervisor Re-Verdict Deduplication Protocol ([`loop-bot-herd.sh`](loop-bot-herd.sh), [ADR 0002](docs/adr/0002-exact-sha-supervisor-deduplication.md))**:
    - Completion signals adhere to the `ARCH DONE #<ticket> <commit-sha>` protocol.
    - Supervisor uses `jq` to deduplicate on exact `(ticket, sha)` tuples, eliminating `#23` vs `#230` substring collisions and enabling self-healing fix-and-reverdict loops on new commits after `RED` test failures.
-3. **Dynamic TOML Seating & Slug Namespacing ([`swarm.config.toml`](file:///Users/hinchk/Fun/loop-bot-herd-agy/swarm.config.toml), [`lib/config.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/config.sh), [ADR 0003](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0003-dynamic-seating-and-nonce-brief-delivery.md))**:
+3. **Dynamic TOML Seating & Slug Namespacing ([`swarm.config.toml`](swarm.config.toml), [`lib/config.sh`](lib/config.sh), [ADR 0003](docs/adr/0003-dynamic-seating-and-nonce-brief-delivery.md))**:
    - Declarative seat registry in `swarm.config.toml` dynamically parsed via Python `tomllib`.
    - `slugify()` normalizes project directories into Herdr-compliant agent identifiers (`seat-<slug>` matching `^[a-z][a-z0-9_-]*$`), enabling multiple swarms to run concurrently without agent name collisions.
-4. **Nonce Brief Delivery Protocol ([`lib/briefs.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/briefs.sh), [ADR 0003](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0003-dynamic-seating-and-nonce-brief-delivery.md))**:
+4. **Nonce Brief Delivery Protocol ([`lib/briefs.sh`](lib/briefs.sh), [ADR 0003](docs/adr/0003-dynamic-seating-and-nonce-brief-delivery.md))**:
    - Renders brief templates (`briefs/*.in.md`) to disk with project variables, delivering instructions via ultra-compact (<200 bytes) file pointers. Eliminates PTY buffer overflow and corrupted prompt injections.
-5. **Deterministic Workspace Lifecycle & Durable Seat Ledger ([`lib/lifecycle.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/lifecycle.sh), [ADR 0004](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md))**:
+5. **Deterministic Workspace Lifecycle & Durable Seat Ledger ([`lib/lifecycle.sh`](lib/lifecycle.sh), [ADR 0004](docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md))**:
    - `find_workspace_by_cwd` resolves workspaces strictly by matching physical pane working directories.
    - Durably tracks seated agents in `.herdr-swarm/seats.json`, retiring only swarm-managed panes while preserving human operator shells and dev servers.
-6. **9-Point Preflight Dependency Matrix ([`lib/preflight.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/preflight.sh), [ADR 0005](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0005-preflight-matrix-and-seat-verification.md))**:
+6. **9-Point Preflight Dependency Matrix ([`lib/preflight.sh`](lib/preflight.sh), [ADR 0005](docs/adr/0005-preflight-matrix-and-seat-verification.md))**:
    - Validates daemon liveness, core utilities (`jq`, `git`, `python3`+`tomllib`, `gh`), GitHub authentication, and agent runtimes before any workspace mutation begins.
-7. **Post-Seating Readiness Verification Gate ([`lib/lifecycle.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/lifecycle.sh), [ADR 0005](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0005-preflight-matrix-and-seat-verification.md))**:
+7. **Post-Seating Readiness Verification Gate ([`lib/lifecycle.sh`](lib/lifecycle.sh), [ADR 0005](docs/adr/0005-preflight-matrix-and-seat-verification.md))**:
    - `swarm_verify_seats` actively polls all seated agents until they settle into `idle` or `done` states after ingesting their briefs, preventing race conditions before kickoff task prompts dispatch.
-8. **Real-Time ANSI Telemetry Engine ([`lib/telemetry.py`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/telemetry.py))**:
+8. **Real-Time ANSI Telemetry Engine ([`lib/telemetry.py`](lib/telemetry.py))**:
    - Structured JSONL event logging and live stream renderer displaying color-coded status badges clamped to terminal width in the Ops pane.
 
 ---
@@ -87,7 +87,7 @@ The swarm operates in a dedicated, multi-tab Herdr workspace:
 Milestone 1 shipped a hardened, fail-closed sequential swarm where all agents operate in the root repository checkout (`$PWD`). **Phase 2** expands this foundation into a **concurrent, parallel worker swarm** powered by Git worktrees.
 
 ### 1. Concurrency Resilience (0/240 Empirical Benchmark)
-In sequential herds where multiple agents share a single working checkout, concurrent `git add` and `git commit` operations frequently collide: empirical probes in the [Phase 2 PM Worktree Advisory](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-advisory.md) measured a **4/6 failure rate (`index.lock: File exists`)** under shared-checkout conditions.
+In sequential herds where multiple agents share a single working checkout, concurrent `git add` and `git commit` operations frequently collide: empirical probes in the [Phase 2 PM Worktree Advisory](docs/audits/2026-09-19-phase2-worktree-advisory.md) measured a **4/6 failure rate (`index.lock: File exists`)** under shared-checkout conditions.
 
 By provisioning isolated Git worktrees (`git worktree add`) for each autonomous coding agent:
 - **0/240 failures** across 20 rounds of parallel commits by 12 concurrent workers.
@@ -99,19 +99,19 @@ By provisioning isolated Git worktrees (`git worktree add`) for each autonomous 
 - **Isolated Worker Worktrees**: Dedicated worker directories (`.herdr-swarm/worktrees/<seat>`) checkout private task branches (`swarm/<slug>/<seat>`), sharing the underlying `.git` object database.
 - **Durable State Accounting**: `.herdr-swarm/seats.json` tracks `"worktree_dir"` and `"branch"` per seat.
 - **Safe Lifecycle Teardown**: `swarm_down` prunes exclusively registered disposable worktrees (`git worktree remove --force`), preserving the root tree and leaving worker branch commits intact in Git history.
-- **Lifecycle Dogfooding Receipt**: Validated in the [Dogfooding Rehearsal Receipt](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md), verifying multi-workspace isolation (`status` → `up` → `verify` → `down`) without host workspace hijacking.
+- **Lifecycle Dogfooding Receipt**: Validated in the [Dogfooding Rehearsal Receipt](docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md), verifying multi-workspace isolation (`status` → `up` → `verify` → `down`) without host workspace hijacking.
 
 For comprehensive architectural design and technical specifications, see:
-- [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md)
-- [Phase 2 Specification: docs/worktree-swarm.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/worktree-swarm.md)
-- [Phase 2 Advisory: Concurrency Hazards & Ledger v2](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-advisory.md)
-- [Dogfooding Rehearsal Receipt: End-to-End Swarm Lifecycle](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md)
+- [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](docs/adr/0006-git-worktree-worker-isolation.md)
+- [Phase 2 Specification: docs/worktree-swarm.md](docs/worktree-swarm.md)
+- [Phase 2 Advisory: Concurrency Hazards & Ledger v2](docs/audits/2026-09-19-phase2-worktree-advisory.md)
+- [Dogfooding Rehearsal Receipt: End-to-End Swarm Lifecycle](docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md)
 
 ---
 
 ## CLI Usage and Subcommands
 
-The universal launcher binary [`herdr-loop-swarm.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/herdr-loop-swarm.sh) provides a unified CLI interface for managing swarm lifecycles across any repository:
+The universal launcher binary [`herdr-loop-swarm.sh`](herdr-loop-swarm.sh) provides a unified CLI interface for managing swarm lifecycles across any repository:
 
 ```bash
 ./herdr-loop-swarm.sh [up] [OPTIONS] | status [dir] | down [dir] [FLAGS] | verify [dir] [timeout_ms]
@@ -184,25 +184,25 @@ To prevent **kickoff race conditions** (where task prompts arrive while an agent
 
 ## System Vocabulary and Architecture Decisions
 
-- **System Vocabulary & Invariants**: See [`CONTEXT.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/CONTEXT.md) for definitions of foundational concepts (**Fail-Closed**, **Nonce Delivery**, **Seat Ledger**, **Slug Namespacing**, **Suite Gate**, **Wayfinder Map**, **Supervisor Gate**) and explicit `_Avoid_` warnings.
-- **Architecture Decision Records (ADRs)**: See [`docs/adr/`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/README.md) for full decision histories:
-  - [ADR 0001: Fail-Closed Profile Detection and Test Gating Policy](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0001-fail-closed-profile-and-test-gating.md)
-  - [ADR 0002: Exact-SHA Supervisor Protocol and Re-Verdict Deduplication](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0002-exact-sha-supervisor-deduplication.md)
-  - [ADR 0003: Dynamic Seating from TOML Registry and Nonce Brief Delivery Protocol](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0003-dynamic-seating-and-nonce-brief-delivery.md)
-  - [ADR 0004: Safe Workspace Lifecycle, Physical CWD Resolution, and Seat Ledger](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md)
-  - [ADR 0005: Preflight Dependency Matrix and Post-Seating Readiness Verification Gate](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0005-preflight-matrix-and-seat-verification.md)
-  - [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md)
-  - [ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)
-  - [ADR 0008: Supervisor Worktree Suite Gating, Provenance, and Drift Detection](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md)
-  - [ADR 0009: Arbiter Branch Integration, Compare-and-Swap Ref Updates, and Human Promotion Gates](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0009-arbiter-branch-integration-and-cas-merge.md)
-  - [ADR 0010: Worktree Teardown Lifecycle, Untracked File Salvage, and Stale Branch Re-attachment Gating](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0010-worktree-teardown-lifecycle-and-salvage.md)
-  - [ADR 0011: Multi-Worker Floor Topologies, Worktree Namespacing, and Heterogeneous Concurrency](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0011-multi-worker-floor-topologies-and-concurrency.md)
-  - [ADR 0012: Task Partitioning, File Disjointness, and Durable Ledger Leases](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0012-task-partitioning-and-disjoint-dispatches.md)
-  - [ADR 0013: Asynchronous Supervisor Suite Gating, Durable Job Records, and Concurrency Bounding](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0013-asynchronous-supervisor-gate-jobs.md)
-- **Swarm Orchestration Retrospective**: See [`docs/findings/swarm-orchestration-retrospective.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/swarm-orchestration-retrospective.md).
-- **Phase 2 Worktree Architecture Blueprint**: See [`docs/worktree-swarm.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/worktree-swarm.md).
-- **Dogfooding Rehearsal Receipt**: See [`docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md).
-- **Wayfinder Architecture Plan**: See [`maps/universal-herdr-swarm.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/universal-herdr-swarm.md) and [`maps/tickets/`](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/).
+- **System Vocabulary & Invariants**: See [`CONTEXT.md`](CONTEXT.md) for definitions of foundational concepts (**Fail-Closed**, **Nonce Delivery**, **Seat Ledger**, **Slug Namespacing**, **Suite Gate**, **Wayfinder Map**, **Supervisor Gate**) and explicit `_Avoid_` warnings.
+- **Architecture Decision Records (ADRs)**: See [`docs/adr/`](docs/adr/README.md) for full decision histories:
+  - [ADR 0001: Fail-Closed Profile Detection and Test Gating Policy](docs/adr/0001-fail-closed-profile-and-test-gating.md)
+  - [ADR 0002: Exact-SHA Supervisor Protocol and Re-Verdict Deduplication](docs/adr/0002-exact-sha-supervisor-deduplication.md)
+  - [ADR 0003: Dynamic Seating from TOML Registry and Nonce Brief Delivery Protocol](docs/adr/0003-dynamic-seating-and-nonce-brief-delivery.md)
+  - [ADR 0004: Safe Workspace Lifecycle, Physical CWD Resolution, and Seat Ledger](docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md)
+  - [ADR 0005: Preflight Dependency Matrix and Post-Seating Readiness Verification Gate](docs/adr/0005-preflight-matrix-and-seat-verification.md)
+  - [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](docs/adr/0006-git-worktree-worker-isolation.md)
+  - [ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)
+  - [ADR 0008: Supervisor Worktree Suite Gating, Provenance, and Drift Detection](docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md)
+  - [ADR 0009: Arbiter Branch Integration, Compare-and-Swap Ref Updates, and Human Promotion Gates](docs/adr/0009-arbiter-branch-integration-and-cas-merge.md)
+  - [ADR 0010: Worktree Teardown Lifecycle, Untracked File Salvage, and Stale Branch Re-attachment Gating](docs/adr/0010-worktree-teardown-lifecycle-and-salvage.md)
+  - [ADR 0011: Multi-Worker Floor Topologies, Worktree Namespacing, and Heterogeneous Concurrency](docs/adr/0011-multi-worker-floor-topologies-and-concurrency.md)
+  - [ADR 0012: Task Partitioning, File Disjointness, and Durable Ledger Leases](docs/adr/0012-task-partitioning-and-disjoint-dispatches.md)
+  - [ADR 0013: Asynchronous Supervisor Suite Gating, Durable Job Records, and Concurrency Bounding](docs/adr/0013-asynchronous-supervisor-gate-jobs.md)
+- **Swarm Orchestration Retrospective**: See [`docs/findings/swarm-orchestration-retrospective.md`](docs/findings/swarm-orchestration-retrospective.md).
+- **Phase 2 Worktree Architecture Blueprint**: See [`docs/worktree-swarm.md`](docs/worktree-swarm.md).
+- **Dogfooding Rehearsal Receipt**: See [`docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md`](docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md).
+- **Wayfinder Architecture Plan**: See [`maps/universal-herdr-swarm.md`](maps/universal-herdr-swarm.md) and [`maps/tickets/`](maps/tickets).
 
 ---
 

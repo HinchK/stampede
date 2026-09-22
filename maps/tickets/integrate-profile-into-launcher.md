@@ -35,7 +35,7 @@ How should `herdr-loop-swarm.sh` be integrated with `lib/profile.sh` and `lib/li
 3. **Verification Step**: Run:
    `grep -n 'Standard-Pentest\|TEST_CMD="true"' herdr-loop-swarm.sh && exit 1 || true`
    and
-   `mkdir -p /tmp/test-empty-repo && (cd /tmp/test-empty-repo && /Users/hinchk/Fun/loop-bot-herd-agy/herdr-loop-swarm.sh --mode a < /dev/null 2>&1 | grep -q "FATAL") && rm -rf /tmp/test-empty-repo && echo "PASS: fail-closed profile integration"`
+   `mkdir -p /tmp/test-empty-repo && (cd /tmp/test-empty-repo && herdr-loop-swarm.sh --mode a < /dev/null 2>&1 | grep -q "FATAL") && rm -rf /tmp/test-empty-repo && echo "PASS: fail-closed profile integration"`
 
 ## Verification Log
 

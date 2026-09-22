@@ -3,18 +3,18 @@
 - **Status**: Accepted
 - **Date**: 2026-09-19
 - **Deciders**: `arch`, `pm`, `looper`, `agy-docs`
-- **Consulted**: [P3-2 Spec (Task Intake File Partition Checking)](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p3-2-task-partition-check-spec.md), [Ticket P3-2](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/task-intake-partition-checking.md), [Phase 3 Fan-Out Roadmap](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md), [ADR 0006](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md), [ADR 0009](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0009-arbiter-branch-integration-and-cas-merge.md), [ADR 0011](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0011-multi-worker-floor-topologies-and-concurrency.md)
+- **Consulted**: [P3-2 Spec (Task Intake File Partition Checking)](../audits/2026-09-19-p3-2-task-partition-check-spec.md), [Ticket P3-2](../../maps/tickets/task-intake-partition-checking.md), [Phase 3 Fan-Out Roadmap](../audits/2026-09-19-phase3-concurrent-fanout-roadmap.md), [ADR 0006](0006-git-worktree-worker-isolation.md), [ADR 0009](0009-arbiter-branch-integration-and-cas-merge.md), [ADR 0011](0011-multi-worker-floor-topologies-and-concurrency.md)
 
 ---
 
 ## 1. Context and Problem Statement
 
-Phase 3 introduces concurrent multi-worker execution ([ADR 0011](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0011-multi-worker-floor-topologies-and-concurrency.md)), enabling multiple implementation seats (`arch-1`, `arch-2`) to implement tickets in parallel in isolated Git worktrees. In Phase 2, the Arbiter engine ([ADR 0009](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0009-arbiter-branch-integration-and-cas-merge.md)) established atomic Compare-and-Swap (CAS) ref updates and conflict rejection.
+Phase 3 introduces concurrent multi-worker execution ([ADR 0011](0011-multi-worker-floor-topologies-and-concurrency.md)), enabling multiple implementation seats (`arch-1`, `arch-2`) to implement tickets in parallel in isolated Git worktrees. In Phase 2, the Arbiter engine ([ADR 0009](0009-arbiter-branch-integration-and-cas-merge.md)) established atomic Compare-and-Swap (CAS) ref updates and conflict rejection.
 
 However, relying solely on merge-time conflict detection at the Arbiter stage introduces severe inefficiencies in a concurrent swarm:
 1. **Wasted Agent Cycles & Token Burn**: If two workers concurrently spend 10–15 minutes modifying overlapping files, one worker's merge will succeed while the other will be rejected as a merge conflict. The rejected worker must rebase, reconcile conflicts, and re-run its test suites, wasting API tokens and execution time.
 2. **Integration Queue Stalls**: Concurrent updates on overlapping files invalidate candidate merges, forcing the Arbiter queue to serialize, bisect, or stall.
-3. **YAML Frontmatter Parser Vulnerability**: Existing lightweight tooling (such as [`lib/gh_sync.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/gh_sync.sh)) parses ticket frontmatter line-by-line via simple string splitting (`line.split(":", 1)`). If multi-line YAML block sequences (`owns:\n  - file1\n  - file2`) were introduced, the parser would record `owns` as an empty string and drop all subsequent path lines, leading to silent partitioning failure.
+3. **YAML Frontmatter Parser Vulnerability**: Existing lightweight tooling (such as [`lib/gh_sync.sh`](../../lib/gh_sync.sh)) parses ticket frontmatter line-by-line via simple string splitting (`line.split(":", 1)`). If multi-line YAML block sequences (`owns:\n  - file1\n  - file2`) were introduced, the parser would record `owns` as an empty string and drop all subsequent path lines, leading to silent partitioning failure.
 4. **Host Filesystem Case Sensitivity Mismatches**: On macOS systems (APFS / HFS+), filesystems are case-insensitive by default. Naive case-sensitive string equality checks (e.g. `lib/Common.sh` vs `lib/common.sh`) would conclude paths are disjoint, resulting in silent filesystem collisions.
 5. **Premature Lease Release on Verdict**: Releasing file locks when a worker emits a green verdict rather than when the Arbiter successfully merges the branch creates a critical race condition: a second worker could dispatch against a base commit that does not yet contain the first worker's changes, manufacturing base drift conflicts.
 
@@ -179,11 +179,11 @@ To ensure agent declarations remain honest without introducing fragile pre-merge
 
 ## 7. References
 
-- [P3-2 Spec: Task Intake File Partition Checking](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p3-2-task-partition-check-spec.md)
-- [Ticket P3-2: Task Intake Partition Checking and Ledger Lease Protocol](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/task-intake-partition-checking.md)
-- [Phase 3 Fan-Out Roadmap](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md)
-- [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md)
-- [ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)
-- [ADR 0008: Supervisor Worktree Suite Gating, Provenance, and Drift Detection](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md)
-- [ADR 0009: Arbiter Branch Integration, Compare-and-Swap Ref Updates, and Human Promotion Gates](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0009-arbiter-branch-integration-and-cas-merge.md)
-- [ADR 0011: Multi-Worker Floor Topologies, Worktree Namespacing, and Heterogeneous Concurrency](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0011-multi-worker-floor-topologies-and-concurrency.md)
+- [P3-2 Spec: Task Intake File Partition Checking](../audits/2026-09-19-p3-2-task-partition-check-spec.md)
+- [Ticket P3-2: Task Intake Partition Checking and Ledger Lease Protocol](../../maps/tickets/task-intake-partition-checking.md)
+- [Phase 3 Fan-Out Roadmap](../audits/2026-09-19-phase3-concurrent-fanout-roadmap.md)
+- [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](0006-git-worktree-worker-isolation.md)
+- [ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](0007-split-pane-cwd-order-and-ledger-v2.md)
+- [ADR 0008: Supervisor Worktree Suite Gating, Provenance, and Drift Detection](0008-supervisor-worktree-suite-gating-and-drift.md)
+- [ADR 0009: Arbiter Branch Integration, Compare-and-Swap Ref Updates, and Human Promotion Gates](0009-arbiter-branch-integration-and-cas-merge.md)
+- [ADR 0011: Multi-Worker Floor Topologies, Worktree Namespacing, and Heterogeneous Concurrency](0011-multi-worker-floor-topologies-and-concurrency.md)

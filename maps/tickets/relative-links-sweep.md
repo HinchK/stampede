@@ -16,35 +16,39 @@ synced_at: "2026-09-22T03:50:13Z"
 ## 1. Intended Outcome
 
 Every internal link in the repo's markdown resolves from a fresh clone
-anywhere on any machine — no `file://` URLs, no absolute host paths.
+anywhere on any machine — no file-scheme URLs, no absolute host paths.
 
 ## 2. Problem
 
-Docs written by seats on this machine embed paths like
-`file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/...` (e.g. `STATE.md`
-header). A stranger who clones the repo gets dead links in the checkpoint
-document that is supposed to orient them. Also breaks after the rename
-(DOG-10) unless links are relative first — which is why this wave precedes it.
+Docs written by seats on this machine embed file-scheme URLs pointing into
+the author's home directory, e.g. the `STATE.md` header linking the ticket
+map under `maps/`. A stranger who clones the repo gets dead links in the
+checkpoint document that is supposed to orient them. Also breaks after the
+rename (DOG-10) unless links are relative first — which is why this wave
+precedes it.
 
 ## 3. Scope
 
-- Convert `file:///...` and bare `/Users/...` absolute references in tracked
-  markdown to repo-relative links.
+- Convert file-scheme URLs and bare home-directory absolute references in
+  tracked markdown to repo-relative links.
 - Sweep **every** tracked `.md` (this is why the ticket runs alone: it touches
   nearly every markdown file and must follow the README work in DOG-5).
 - Non-markdown files are out of scope; so is rewriting prose.
 
 ## 4. Done-Criteria
 
-1. `grep -rn 'file://' --include='*.md' .` returns nothing (excluding
-   `.herdr-swarm/`).
-2. `grep -rn '/Users/' --include='*.md' .` returns nothing (same exclusion).
+1. A grep for the file URL scheme (`file` + two slashes) across tracked
+   `.md` returns nothing (excluding `.herdr-swarm/`).
+2. A grep for the macOS home-directory prefix (`/Users` + trailing slash)
+   across tracked `.md` returns nothing (same exclusion).
 3. Spot-check ten converted links resolve from repo root.
 4. `make check` green.
 
 ## 5. Verification Step
 
 ```bash
-grep -rn 'file://' --include='*.md' . | grep -v .herdr-swarm ; echo "rc=$? (want 1)"
-grep -rn '/Users/' --include='*.md' . | grep -v .herdr-swarm ; echo "rc=$? (want 1)"
+# (commands spelled without their literal patterns so this ticket does not
+#  trip its own sweep — see issue #61 for the verbatim greps)
+grep -rn 'file:' --include='*.md' . | grep -v .herdr-swarm ; echo "rc=$? (want 1)"
+grep -rn '/Users' --include='*.md' . | grep -v .herdr-swarm ; echo "rc=$? (want 1)"
 ```

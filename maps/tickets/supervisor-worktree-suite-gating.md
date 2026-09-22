@@ -19,7 +19,7 @@ synced_at: "2026-09-22T03:50:13Z"
 
 In Phase 2, workers operate in isolated Git worktrees (`.herdr-swarm/worktrees/<seat>`). However, the supervisor daemon (`loop-bot-herd.sh`) historically executed tests inside the root checkout (`$REPO_DIR`), creating a structural false green: changes made in a worker's worktree were not tested, and verdicts simply gated `main`'s code.
 
-PM's comprehensive specification in [docs/audits/2026-09-19-p2-3-supervisor-gating-spec.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-3-supervisor-gating-spec.md) defines the exact requirements for ledger-first seat directory resolution, commit provenance checks, pre- and post-run drift validation, and branch preservation.
+PM's comprehensive specification in [docs/audits/2026-09-19-p2-3-supervisor-gating-spec.md](../../docs/audits/2026-09-19-p2-3-supervisor-gating-spec.md) defines the exact requirements for ledger-first seat directory resolution, commit provenance checks, pre- and post-run drift validation, and branch preservation.
 
 ## Preamble
 

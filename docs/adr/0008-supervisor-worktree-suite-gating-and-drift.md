@@ -3,15 +3,15 @@
 - **Status**: Accepted
 - **Date**: 2026-09-19
 - **Deciders**: `arch`, `pm`, `looper`, `agy-docs`
-- **Consulted**: [P2-3 Specification](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-3-supervisor-gating-spec.md), [Ticket P2-3](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/supervisor-worktree-suite-gating.md), [ADR 0002](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0002-exact-sha-supervisor-deduplication.md), [ADR 0006](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md), [ADR 0007](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)
+- **Consulted**: [P2-3 Specification](../audits/2026-09-19-p2-3-supervisor-gating-spec.md), [Ticket P2-3](../../maps/tickets/supervisor-worktree-suite-gating.md), [ADR 0002](0002-exact-sha-supervisor-deduplication.md), [ADR 0006](0006-git-worktree-worker-isolation.md), [ADR 0007](0007-split-pane-cwd-order-and-ledger-v2.md)
 
 ---
 
 ## 1. Context and Problem Statement
 
-In Phase 2, the swarm architecture introduced isolated Git worktrees ([ADR 0006](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md), [ADR 0007](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)), seating coding agents (`arch`, parallel workers) inside dedicated directories (`.herdr-swarm/worktrees/<seat>`) on isolated branches (`swarm/<slug>/<seat>`).
+In Phase 2, the swarm architecture introduced isolated Git worktrees ([ADR 0006](0006-git-worktree-worker-isolation.md), [ADR 0007](0007-split-pane-cwd-order-and-ledger-v2.md)), seating coding agents (`arch`, parallel workers) inside dedicated directories (`.herdr-swarm/worktrees/<seat>`) on isolated branches (`swarm/<slug>/<seat>`).
 
-However, empirical auditing ([P2-3 Spec](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-3-supervisor-gating-spec.md)) uncovered a critical structural vulnerability in the supervisor daemon (`loop-bot-herd.sh`):
+However, empirical auditing ([P2-3 Spec](../audits/2026-09-19-p2-3-supervisor-gating-spec.md)) uncovered a critical structural vulnerability in the supervisor daemon (`loop-bot-herd.sh`):
 
 1. **Structural False-Green Gate**: The supervisor historically executed test suites exclusively in the root repository checkout (`cd "$REPO_DIR" && $TEST_CMD`). When an isolated worker emitted a completion verdict (`ARCH DONE #<ticket> <sha>`), the supervisor ran tests against the base branch (`main`) in `$REPO_DIR`, where the worker's changes did not exist. The test suite gated clean `main` code, reported `green`, and retired the ticket without testing a single line of the worker's implementation.
 2. **Worktree Fallback Hazard**: If an isolated seat's worktree was removed or broken, a naive fallback to `$REPO_DIR` silently recreated the structural false green.
@@ -43,7 +43,7 @@ However, empirical auditing ([P2-3 Spec](file:///Users/hinchk/Fun/loop-bot-herd-
 
 ## 4. Decision
 
-We adopted **Option C**. We established the **Worktree Suite Gating and Drift Validation Engine** in [`loop-bot-herd.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/loop-bot-herd.sh) and [`lib/worktree.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/worktree.sh):
+We adopted **Option C**. We established the **Worktree Suite Gating and Drift Validation Engine** in [`loop-bot-herd.sh`](../../loop-bot-herd.sh) and [`lib/worktree.sh`](../../lib/worktree.sh):
 
 ### A. Ledger-First Directory Resolution (`resolve_seat_gate`)
 The supervisor resolves the gate directory strictly from `.herdr-swarm/seats.json` v2 by matching the exact namespaced seat identifier (`arch-<slug>`):
@@ -117,7 +117,7 @@ To ensure the test suite gates the exact immutable commit state:
    - If the worker modified the tree during execution, the verdict is recorded as `suite: "invalidated"` regardless of exit code. **A moving target is never granted green.**
 
 ### D. Branch Preservation Invariant (Eliminating `-B`)
-In [`lib/worktree.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/worktree.sh), `worktree_provision` is prohibited from using `git worktree add -B`.
+In [`lib/worktree.sh`](../../lib/worktree.sh), `worktree_provision` is prohibited from using `git worktree add -B`.
 - New branches are created with `-b`:
   ```bash
   git -C "$target_dir" worktree add -q -b "$branch" "$wt_dir" "$base_branch"
@@ -126,14 +126,14 @@ In [`lib/worktree.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/worktree.s
   ```bash
   git -C "$target_dir" worktree add -q "$wt_dir" "$branch"
   ```
-  *(Validated against stale commit checks per [ADR 0007](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)).*
+  *(Validated against stale commit checks per [ADR 0007](0007-split-pane-cwd-order-and-ledger-v2.md)).*
 
 Unmerged worker commits are permanently preserved in Git history and cannot be silently overwritten during re-seating.
 
 ### E. Ticket Retirement Semantics
 The deduplication and retirement filter in `loop-bot-herd.sh` is strictly restricted:
 - **Only `suite == "green"` permanently retires a ticket**.
-- `suite == "RED"`: Triggers a fix-and-reverdict cycle; a subsequent verdict with a *new commit SHA* is admitted through the gate ([ADR 0002](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0002-exact-sha-supervisor-deduplication.md)).
+- `suite == "RED"`: Triggers a fix-and-reverdict cycle; a subsequent verdict with a *new commit SHA* is admitted through the gate ([ADR 0002](0002-exact-sha-supervisor-deduplication.md)).
 - `suite == "stale"` or `"invalidated"`: Excluded from SHA deduplication; once the worker cleans its tree or re-commits, the verdict can be re-evaluated.
 - `suite == "rejected"`, `"unresolvable"`, or `"skipped"`: Escalates to human operator and orchestrator; never retired automatically.
 
@@ -166,8 +166,8 @@ The deduplication and retirement filter in `loop-bot-herd.sh` is strictly restri
 
 ## 7. References
 
-- [P2-3 Specification: Supervisor Worktree Suite Gating](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-3-supervisor-gating-spec.md)
-- [Ticket P2-3: Supervisor Worktree Suite Gating and Drift Validation](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/supervisor-worktree-suite-gating.md)
-- [ADR 0002: Exact-SHA Supervisor Protocol and Re-Verdict Deduplication](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0002-exact-sha-supervisor-deduplication.md)
-- [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md)
-- [ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)
+- [P2-3 Specification: Supervisor Worktree Suite Gating](../audits/2026-09-19-p2-3-supervisor-gating-spec.md)
+- [Ticket P2-3: Supervisor Worktree Suite Gating and Drift Validation](../../maps/tickets/supervisor-worktree-suite-gating.md)
+- [ADR 0002: Exact-SHA Supervisor Protocol and Re-Verdict Deduplication](0002-exact-sha-supervisor-deduplication.md)
+- [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](0006-git-worktree-worker-isolation.md)
+- [ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](0007-split-pane-cwd-order-and-ledger-v2.md)

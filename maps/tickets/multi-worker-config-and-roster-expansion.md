@@ -21,7 +21,7 @@ With Phase 2's worktree lifecycle, suite gating, and arbiter engine verified (63
 
 ## Preamble
 
-1. **Intended Outcome**: `arch` implements multi-worker seating in `swarm.config.toml`, `lib/config.sh`, and `herdr-loop-swarm.sh` per [docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md).
+1. **Intended Outcome**: `arch` implements multi-worker seating in `swarm.config.toml`, `lib/config.sh`, and `herdr-loop-swarm.sh` per [docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md](../../docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md).
 2. **Explicit Done-Criteria**:
    - `swarm.config.toml`:
      - Configure multiple implementation seats (`arch_1` with GLM-5.3, `arch_2` with Sonnet or alternative), each with `worktree = true`.

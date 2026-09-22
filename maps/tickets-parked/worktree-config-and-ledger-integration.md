@@ -17,7 +17,7 @@ How should `swarm.config.toml`, `lib/config.sh`, and `herdr-loop-swarm.sh` integ
 
 ## Preamble
 
-1. **Intended Outcome**: `arch` implements P2-2 following PM's specification in [docs/audits/2026-09-19-p2-2-config-integration-spec.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-2-config-integration-spec.md).
+1. **Intended Outcome**: `arch` implements P2-2 following PM's specification in [docs/audits/2026-09-19-p2-2-config-integration-spec.md](../../docs/audits/2026-09-19-p2-2-config-integration-spec.md).
 2. **Explicit Done-Criteria**:
    - `swarm.config.toml`:
      - Add `worktree = true` for `[seats.arch]`. `pm`, `looper`, `docs`, `gh` omit or set `worktree = false`.

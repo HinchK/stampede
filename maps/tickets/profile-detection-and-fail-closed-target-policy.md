@@ -20,7 +20,7 @@ What exact fallback and caching strategy should `lib/profile.sh` follow when det
 
 ## Resolution
 
-Built and validated prototype in [`lib/profile.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/profile.sh):
+Built and validated prototype in [`lib/profile.sh`](../../lib/profile.sh):
 1. **Fallback & Caching Hierarchy:**
    - Evaluates `${TARGET_DIR}/.herdr-swarm/profile.env` first for cached/explicit user overrides (`REPO`, `TEST_CMD`, `ECOSYSTEM`, `DOCS_DIR`).
    - For `REPO`: Inspects `remote.upstream.url` first, then `remote.origin.url`, normalizing GitHub URLs into `owner/repo`.

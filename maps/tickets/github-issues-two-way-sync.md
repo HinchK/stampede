@@ -20,7 +20,7 @@ How should the Universal Herdr Swarm synchronize local markdown tickets in `maps
 
 ## Resolution
 
-Built and validated prototype in [`docs/findings/github-issues-sync.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/github-issues-sync.md) and [`lib/gh_sync.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/gh_sync.sh):
+Built and validated prototype in [`docs/findings/github-issues-sync.md`](../../docs/findings/github-issues-sync.md) and [`lib/gh_sync.sh`](../../lib/gh_sync.sh):
 1. **Bi-Directional Schema Mapping:**
    - Documented frontmatter schema mapping (`id`, `title`, `status`, `type`, `assignee`, `github_issue`, `github_url`, `synced_at`, `synced_sha`).
    - Mapped local status lifecycle (`backlog`, `in_progress`, `resolved`, `closed`, `blocked`) to GitHub state, stateReason, and `status:*` labels.

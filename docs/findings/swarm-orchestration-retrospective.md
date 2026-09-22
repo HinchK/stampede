@@ -4,7 +4,7 @@
 - **Author**: `agy-docs` (in collaboration with `looper`, `pm`, and `arch`)
 - **Scope**: Milestones 1–3 Foundations, Phase 2 Worktree Architecture, and Production Dogfooding Rehearsals
 - **Target System**: Universal Herdr Swarm (`herd-swarm` / `loop-bot-herd-agy`)
-- **Associated ADRs**: [ADR 0001](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0001-fail-closed-profile-and-test-gating.md)–[ADR 0007](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)
+- **Associated ADRs**: [ADR 0001](../adr/0001-fail-closed-profile-and-test-gating.md)–[ADR 0007](../adr/0007-split-pane-cwd-order-and-ledger-v2.md)
 
 ---
 
@@ -112,7 +112,7 @@ In POSIX pseudo-terminals (PTYs), the input buffer has finite capacity (often 10
 - **Unsubmitted Prompts**: Characters sat in the input line without an enter keystroke, stranding agents indefinitely.
 
 ### 4.2 The Nonce Brief Delivery Protocol
-[ADR 0003](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0003-dynamic-seating-and-nonce-brief-delivery.md) established the **Nonce Brief Delivery Protocol** in [`lib/briefs.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/briefs.sh):
+[ADR 0003](../adr/0003-dynamic-seating-and-nonce-brief-delivery.md) established the **Nonce Brief Delivery Protocol** in [`lib/briefs.sh`](../../lib/briefs.sh):
 1. The launcher compiles templates (`briefs/*.in.md`) into `.herdr-swarm/briefs/<seat>.md` on disk, injecting project facts (`{{REPO}}`, `{{TEST_CMD}}`, `{{WORKTREE_DIR}}`).
 2. The launcher sends an ultra-compact (<200 bytes) reference prompt:
    ```
@@ -125,7 +125,7 @@ This completely eliminated PTY buffer saturation. The agent boots cleanly and re
 ### 4.3 Pane CWD Binding Ordering (Insight C1)
 Empirical investigation revealed that `herdr pane split` binds the working directory of a terminal pane at **split time** via `--cwd <dir>`, whereas `herdr agent start` has no `--cwd` parameter.
 
-As formalized in [ADR 0007](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md), **worktree provisioning must precede pane splitting**. Splitting the pane first in `$TARGET_DIR` permanently locks the pane's shell to the root repository, breaking worktree isolation. The strict sequencing (`worktree_provision` $\to$ `split_pane --cwd "$wt"` $\to$ `agent start`) ensures that workers always boot inside their isolated sandboxes.
+As formalized in [ADR 0007](../adr/0007-split-pane-cwd-order-and-ledger-v2.md), **worktree provisioning must precede pane splitting**. Splitting the pane first in `$TARGET_DIR` permanently locks the pane's shell to the root repository, breaking worktree isolation. The strict sequencing (`worktree_provision` $\to$ `split_pane --cwd "$wt"` $\to$ `agent start`) ensures that workers always boot inside their isolated sandboxes.
 
 ---
 
@@ -141,14 +141,14 @@ The most critical reliability lesson learned during development was the **peril 
 In an autonomous swarm, **permissive defaults are bugs waiting to execute**. If an autonomous system encounters ambiguous state, it must **fail closed** immediately.
 
 ### 5.2 The Hardened Quality Boundary
-Through [ADR 0001](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0001-fail-closed-profile-and-test-gating.md), [ADR 0002](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0002-exact-sha-supervisor-deduplication.md), and [ADR 0005](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0005-preflight-matrix-and-seat-verification.md), the swarm established strict, fail-closed boundaries:
+Through [ADR 0001](../adr/0001-fail-closed-profile-and-test-gating.md), [ADR 0002](../adr/0002-exact-sha-supervisor-deduplication.md), and [ADR 0005](../adr/0005-preflight-matrix-and-seat-verification.md), the swarm established strict, fail-closed boundaries:
 1. **`test_cmd_is_runnable()` Gate**: Auto-queue mode strictly refuses to launch if `TEST_CMD` is empty, `"none"`, or `"true"`.
 2. **9-Point Preflight Matrix**: Verifies daemon responsiveness, `jq`, `git`, `python3` `tomllib`, and `gh` authentication before creating any panes.
 3. **Exact `(ticket, sha)` Deduplication**: Using `jq` exact matching, identical code states are never re-tested, while new commit SHAs following a `RED` failure are automatically re-evaluated.
 4. **Post-Seating Verification (`swarm_verify_seats`)**: Kickoff dispatches are held until all seated agents settle into `idle` or `done` states after ingesting their briefs, eliminating prompt race conditions during boot.
 
 ### 5.3 Live Scratch Rehearsal Receipt
-The architecture was validated in end-to-end dogfooding against an ephemeral scratch repository ([`docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md)). Running from within an active Herdr orchestrator pane (`wM:p1`), the launcher:
+The architecture was validated in end-to-end dogfooding against an ephemeral scratch repository ([`docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md`](../audits/2026-09-19-dogfooding-rehearsal-receipt.md)). Running from within an active Herdr orchestrator pane (`wM:p1`), the launcher:
 - Successfully targeted the scratch directory via CLI argument (`up /tmp/scratch -m s`).
 - Created a dedicated workspace (`wR`) without hijacking or disturbing the host workspace (`wM`).
 - Verified all seats reached readiness.
@@ -159,7 +159,7 @@ The architecture was validated in end-to-end dogfooding against an ephemeral scr
 ## 6. Human Operator Ergonomics & Sovereign Supervision
 
 ### 6.1 Real-Time ANSI Telemetry
-Autonomous multi-agent swarms can easily feel like opaque black boxes. To restore situational awareness, the Ops anchor pane runs [`lib/telemetry.py`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/telemetry.py), streaming formatted JSONL events as terminal-width clamped ANSI badges in real time:
+Autonomous multi-agent swarms can easily feel like opaque black boxes. To restore situational awareness, the Ops anchor pane runs [`lib/telemetry.py`](../../lib/telemetry.py), streaming formatted JSONL events as terminal-width clamped ANSI badges in real time:
 
 ```
 [11:24:02] [LIFECYCLE] looper-kultivait    Workspace wM initialized (target: kultivait)
@@ -171,7 +171,7 @@ Autonomous multi-agent swarms can easily feel like opaque black boxes. To restor
 ### 6.2 Non-Destructive Teardown & Seat Ledgers
 Human operators frequently run local development servers, tail log files, or keep interactive shells open alongside the swarm. Early swarm scripts wiped out entire workspaces or killed processes indiscriminately.
 
-By maintaining a durable seat ledger (`.herdr-swarm/seats.json` v1 & v2 per [ADR 0004](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md) and [ADR 0007](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)):
+By maintaining a durable seat ledger (`.herdr-swarm/seats.json` v1 & v2 per [ADR 0004](../adr/0004-safe-workspace-lifecycle-and-seat-ledger.md) and [ADR 0007](../adr/0007-split-pane-cwd-order-and-ledger-v2.md)):
 - `swarm_down` queries the ledger and selectively closes **only** swarm-allocated panes.
 - Passing `--keep-workspace` retains the Herdr workspace container and operator shells while retiring the agent processes.
 - Audit logs (`.herdr-swarm/traces/`, `.herdr-swarm/session-verdicts.jsonl`, `profile.env`) are permanently preserved for post-mortem analysis.
@@ -198,13 +198,13 @@ The swarm can branch, commit, run test suites, author ADRs, and prepare Pull Req
 
 ## 8. Summary of Architectural Decisions (ADR 0001–0007)
 
-- **[ADR 0001: Fail-Closed Profile Detection and Test Gating Policy](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0001-fail-closed-profile-and-test-gating.md)**: Eliminated hardcoded `kultivait` and fake-green `TEST_CMD="true"` defaults; added `test_cmd_is_runnable()`.
-- **[ADR 0002: Exact-SHA Supervisor Protocol and Re-Verdict Deduplication](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0002-exact-sha-supervisor-deduplication.md)**: `ARCH DONE #<n> <sha>` protocol; exact `(ticket, sha)` deduplication in `jq`; fix-and-reverdict loops.
-- **[ADR 0003: Dynamic Seating from TOML Registry and Nonce Brief Delivery Protocol](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0003-dynamic-seating-and-nonce-brief-delivery.md)**: Declarative `swarm.config.toml`; safe `seat-<slug>` namespacing; `<200b` pointer brief delivery.
-- **[ADR 0004: Safe Workspace Lifecycle, Physical CWD Resolution, and Seat Ledger](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md)**: Physical pane CWD resolution; prohibition of `--current`; durable `.herdr-swarm/seats.json` ledger.
-- **[ADR 0005: Preflight Dependency Matrix and Post-Seating Readiness Verification Gate](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0005-preflight-matrix-and-seat-verification.md)**: 9-point preflight validation matrix; post-seating `swarm_verify_seats` readiness gate.
-- **[ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md)**: Multi-worker worktree floor layout; shared `.git` object store; isolated branch promotion.
-- **[ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)**: Provisioning precedes pane creation (C1); safe teardown without `--force` (A1); stale branch gate (A2); `seats.json` v2 schema.
+- **[ADR 0001: Fail-Closed Profile Detection and Test Gating Policy](../adr/0001-fail-closed-profile-and-test-gating.md)**: Eliminated hardcoded `kultivait` and fake-green `TEST_CMD="true"` defaults; added `test_cmd_is_runnable()`.
+- **[ADR 0002: Exact-SHA Supervisor Protocol and Re-Verdict Deduplication](../adr/0002-exact-sha-supervisor-deduplication.md)**: `ARCH DONE #<n> <sha>` protocol; exact `(ticket, sha)` deduplication in `jq`; fix-and-reverdict loops.
+- **[ADR 0003: Dynamic Seating from TOML Registry and Nonce Brief Delivery Protocol](../adr/0003-dynamic-seating-and-nonce-brief-delivery.md)**: Declarative `swarm.config.toml`; safe `seat-<slug>` namespacing; `<200b` pointer brief delivery.
+- **[ADR 0004: Safe Workspace Lifecycle, Physical CWD Resolution, and Seat Ledger](../adr/0004-safe-workspace-lifecycle-and-seat-ledger.md)**: Physical pane CWD resolution; prohibition of `--current`; durable `.herdr-swarm/seats.json` ledger.
+- **[ADR 0005: Preflight Dependency Matrix and Post-Seating Readiness Verification Gate](../adr/0005-preflight-matrix-and-seat-verification.md)**: 9-point preflight validation matrix; post-seating `swarm_verify_seats` readiness gate.
+- **[ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](../adr/0006-git-worktree-worker-isolation.md)**: Multi-worker worktree floor layout; shared `.git` object store; isolated branch promotion.
+- **[ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](../adr/0007-split-pane-cwd-order-and-ledger-v2.md)**: Provisioning precedes pane creation (C1); safe teardown without `--force` (A1); stale branch gate (A2); `seats.json` v2 schema.
 
 ---
 

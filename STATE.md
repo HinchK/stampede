@@ -1,8 +1,8 @@
 # Swarm State Checkpoint: Universal Herdr Swarm (`herd-swarm`)
 
 **Updated:** 2026-09-22  
-**Plan of Record:** [maps/universal-herdr-swarm.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/universal-herdr-swarm.md)  
-**Execution Roadmap:** [docs/reordered-plan.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/reordered-plan.md)  
+**Plan of Record:** [maps/universal-herdr-swarm.md](maps/universal-herdr-swarm.md)  
+**Execution Roadmap:** [docs/reordered-plan.md](docs/reordered-plan.md)  
 **Orchestrator:** `looper` (wM:p1, AGY Flash)  
 **Implementer:** `arch` (wM:p5, OpenCode GLM-5.3)  
 **Overseer:** `pm` (wM:p4, Claude Code)  

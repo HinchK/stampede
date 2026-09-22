@@ -142,7 +142,7 @@ re-ordering to: H2 → H3 → H1 (+H4 fields) → P2-4 → H5/H6.
 
 ## Live-exercise status (unchanged since the M3 audit)
 
-`/Users/hinchk/Fun/loop-bot-herd-agy/.herdr-swarm/` holds `profile.env`, `control.json`, `traces/`, `channel/` — **no
+`.herdr-swarm/` holds `profile.env`, `control.json`, `traces/`, `channel/` — **no
 `seats.json`**. With `worktree = true` set on arch, the isolated path has still never run on this herd: no `swarm/*`
 branch, no worktree, no verdict has ever passed through `resolve_seat_gate` outside the probes in this audit.
 Everything above is verified at unit level against scratch repos. **The end-to-end dogfood remains the gating step

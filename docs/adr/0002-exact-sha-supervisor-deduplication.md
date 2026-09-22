@@ -3,7 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-09-19
 - **Deciders**: `arch`, `pm`, `looper`
-- **Consulted**: [T-007a-fix](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/supervisor-reverdict-dedupe-protocol.md), [T-007b](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/supervisor-genericization-and-profile-binding.md), [PM Herd Audit](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-pm-herd-audit.md)
+- **Consulted**: [T-007a-fix](../../maps/tickets/supervisor-reverdict-dedupe-protocol.md), [T-007b](../../maps/tickets/supervisor-genericization-and-profile-binding.md), [PM Herd Audit](../audits/2026-09-19-pm-herd-audit.md)
 
 ---
 
@@ -42,7 +42,7 @@ In addition, verdict lines lacked an explicit code-state identifier, leaving amb
 We adopted **Option C**. We established the **Exact-SHA Completion Protocol** across the architecture:
 
 ### A. Worker Completion Protocol (`ARCH DONE #<ticket> <sha>`)
-Implementation agents (`arch`) are instructed via standing briefs ([`briefs/arch.in.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/briefs/arch.in.md) and [`briefs/arch.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/briefs/arch.md)) to emit completion lines in the explicit format:
+Implementation agents (`arch`) are instructed via standing briefs ([`briefs/arch.in.md`](../../briefs/arch.in.md) and [`briefs/arch.md`](../../briefs/arch.md)) to emit completion lines in the explicit format:
 ```
 ARCH DONE #<ticket> <sha>
 ```
@@ -69,7 +69,7 @@ Every verdict is appended to `${TARGET_DIR}/.herdr-swarm/session-verdicts.jsonl`
 Possible `suite` values are `"green"` (tests passed), `"RED"` (tests failed), or `"skipped"` (no test runner available).
 
 ### C. Two-Tier Deduplication Engine with `jq`
-In [`loop-bot-herd.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/loop-bot-herd.sh), `harvest_verdicts` applies a two-tier evaluation using `jq`:
+In [`loop-bot-herd.sh`](../../loop-bot-herd.sh), `harvest_verdicts` applies a two-tier evaluation using `jq`:
 
 1. **Permanent Retirement (Green / Skipped)**:
    If a ticket has already achieved a `green` or `skipped` verdict, it is permanently retired. Any subsequent completion lines for that ticket are ignored:
@@ -103,5 +103,5 @@ When a new commit SHA is presented for a previously failed ticket, the superviso
 - **Resource Efficiency**: Identical SHAs are never repeatedly tested, conserving compute resources.
 
 ### Negative / Trade-offs
-- **External Dependency**: Requires `jq` on PATH (enforced via preflight matrix in [ADR 0005](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0005-preflight-matrix-and-seat-verification.md)).
+- **External Dependency**: Requires `jq` on PATH (enforced via preflight matrix in [ADR 0005](0005-preflight-matrix-and-seat-verification.md)).
 - **Prompt Adherence**: Worker models must reliably emit the commit SHA or commit changes to git before signalling completion.

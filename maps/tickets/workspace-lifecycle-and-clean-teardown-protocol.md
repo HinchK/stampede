@@ -20,7 +20,7 @@ What exact sequence of pane closures, workspace disposal, and process signals co
 
 ## Resolution
 
-Implemented and validated the lifecycle management protocol in [`lib/lifecycle.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/lifecycle.sh):
+Implemented and validated the lifecycle management protocol in [`lib/lifecycle.sh`](../../lib/lifecycle.sh):
 1. **Directory-Aware Resolution:** Resolves target workspace ID from `$HERDR_WORKSPACE_ID`, workspace label matching repository basename, or agent working directory without hardcoded assumptions.
 2. **Safe Agent Teardown Sequence:** `swarm_down` queries active agents via `herdr agent list`, identifies panes matching the target workspace ID, and closes agent panes individually before calling `herdr workspace close <ID>` (or optionally retaining the workspace via `--keep-workspace`).
 3. **Artifact Retention Policy:** Transient response nonces and IPC pipes in `.herdr-swarm/channel` are cleaned up on teardown, while audit artifacts (`.herdr-swarm/profile.env`, `.herdr-swarm/traces/*.jsonl`, and `verdicts.jsonl`) are strictly preserved.
