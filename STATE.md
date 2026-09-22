@@ -69,7 +69,7 @@
 
 ## 2. Active Status & Open Items
 
-- **Public Multi-Provider Milestone (Wave 11 In-Flight):**
+- **Public Multi-Provider Milestone (COMPLETE — Waves 8–12 Shipped):**
   - **Wave 8 Complete:** `PUB-1` (`19217bc`): `bin/stampede` unified entrypoint and `lib/cli/` subcommand convention with 15 hermetic assertions.
   - **Wave 9 Complete:**
     - `PUB-2` (`9ffdbe8`): Provider registry (`lib/providers.sh`) and `stampede doctor` with 27 hermetic assertions.
@@ -83,20 +83,19 @@
     - Gate fix `6e1521e`: Load-calibrated non-blocking scan assertion in `tests/test_async_gate.sh` (promoted).
     - `PUB-9` (`fa78bd4`): `stampede quota` read-only provider headroom probing with 28 hermetic assertions (promoted).
     - `PUB-8` (`eda9042`): Cross-provider review lane and user guide section (promoted).
-  - **Wave 12 In-Flight (runs alone):**
-    - `PUB-11`: `stampede status --rich` session trust dashboard from traces (`lib/cli/stampede-status.sh`, `tests/test_cli_status.sh`). Released from `maps/tickets-staged/`.
+  - **Wave 12 Complete:**
+    - `PUB-11` (`97a1249`): `stampede status --rich` session trust dashboard from traces (`lib/cli/stampede-status.sh`, `tests/test_cli_status.sh`, `bin/stampede` routing seam) with 27 hermetic assertions (promoted).
 - **Standing Guardrails:**
   - Arch briefs enforce Single-Ticket Scope Guardrail: workers halt and await looper dispatch after reporting completion.
   - Base branch promotion remains human-only (DOG-12).
-- **Total Test Suite Health:** **323 passed, 0 failed** across 14 suites (42 worktree, 39 partition, 38 arbiter, 28 quota, 27 gh_sync, 25 config, 24 cli_init, 18 profile, 17 async gate, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 7 telemetry); `make check` green (lint 0 warnings across 21 shell files).
+- **Total Test Suite Health:** **350 passed, 0 failed** across 15 suites (42 worktree, 39 partition, 38 arbiter, 28 quota, 27 gh_sync, 27 cli_status, 25 config, 24 cli_init, 18 profile, 17 async gate, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 7 telemetry); `make check` green (lint 0 warnings across 22 shell files).
 
 ---
 
 ## 3. Immediate Next Step
 
-- Dispatch `PUB-11` (Wave 12, final ticket of Public Multi-Provider milestone) to an implementer seat (`arch-1` or `arch-2`).
-- Execute independent suite verification on `PUB-11`.
-- CAS-integrate and promote `PUB-11`, closing the milestone.
+- Milestone Complete: All 11 Public Multi-Provider tickets (`PUB-1`..`PUB-11`) implemented, hermetically verified, independently audited, and promoted to `main`.
+- Await next roadmap/milestone directive from project leadership.
 
 
 
