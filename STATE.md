@@ -69,26 +69,29 @@
 
 ## 2. Active Status & Open Items
 
-- **Public Readiness Dogfood Run (Waves 1–7 Complete):**
-  - *Plan Deviation Note:* The planned two-clone dogfooding run (`docs/dogfood/`) was superseded by direct execution on the repo.
-  - **Waves 1–3 Complete:** All 11 tickets resolved (`DOG-1`, `DOG-12`, `DOG-13`, `DOG-2`, `DOG-3`, `DOG-4`, `DOG-5`, `DOG-14`, `DOG-15`, `DOG-6`, `DOG-7`).
-  - **Wave 4 Complete (PR #58, PR #59, PR #60):**
-    - `DOG-8` (`30be2ac`): Hermetic `gh_sync` test suite with 27 assertions wired into aggregate test gate.
-    - `DOG-11` (`bd0b90c`): Fresh-clone partition deadlock fix; inactive tickets no longer block when gitignored `.herdr-swarm/integration.jsonl` is absent.
-  - **Wave 5 Complete (PR #62):**
-    - `DOG-9` (`bb8fda9`): Swept 48 tracked markdown files converting machine-local paths and `file://` URLs into clean repo-relative links.
-  - **Wave 6 Complete (2026-09-21, `a552d34`):**
-    - `DOG-10`: rename + slug migration executed human-attended. Repo at `~/Fun/stampede`; slug derives from `REPO=HinchK/stampede` → `hinchk-stampede`; both merged old-slug branches deleted locally (GitHub already clean); stale worktree registrations and dangling `local-source` remote removed; swarm re-seated (6 seats verified in `wT`); living-file stragglers fixed. Historical receipts retain the old name by decision — verification grep scoped to living files.
-  - **Wave 7 Complete (2026-09-21, `280ae5f`):**
-    - `DOG-16`: supervisor dispatch is partition-guarded and lease-carrying — `cmd_dispatch` resolves the ticket and runs `partition_check` + `lease_acquire` in one locked section before any prompt (collision → fail-closed block naming the holder; no-owns → exclusive-or-nothing). `lease_release_integrated` in the supervisor pass frees leases only on integrated/promoted evidence, never on green (ADR 0012 §5). Non-ticket briefs pass ungated; re-dispatch of a leased ticket blocks until a deliberate release.
-- **Standing Reporting Protocol:** Arch brief updated to mandate direct looper notification (`herdr agent prompt {{LOOPER_NAME}} "ARCH UPDATE: #<ticket> <sha> — <summary>"`) upon completion so the orchestrator is immediately notified without waiting for poll turns.
-- **Total Test Suite Health:** **215 passed, 0 failed** across 8 suites (42 worktree, 39 partition, 38 arbiter, 27 gh_sync, 18 config, 18 profile, 17 async gate, 16 pyenv); `make check` green (lint 0 warnings). Run under `/bin/bash` (3.2 floor).
+- **Public Multi-Provider Milestone (Waves 8–10 + PUB-10 Promoted to `main` at `ec941fd`):**
+  - **Wave 8 Complete:** `PUB-1` (`19217bc`): `bin/stampede` unified entrypoint and `lib/cli/` subcommand convention with 15 hermetic assertions.
+  - **Wave 9 Complete:**
+    - `PUB-2` (`9ffdbe8`): Provider registry (`lib/providers.sh`) and `stampede doctor` with 27 hermetic assertions.
+    - `PUB-3` (`d3a03dd`): Journey-ordered `docs/user-guide.md` (zero to verified verdict).
+    - `PUB-4` (`a9b6e51`): `examples/demo-repo` with real test suite and one-verdict walkthrough.
+    - `PUB-5` (`fb63928`): `VERSION`, `CHANGELOG.md`, `stampede version`, and `make version-check`.
+  - **Wave 10 Complete:** `PUB-6` (`c752a8a`): Per-seat provider fallback chains (`kinds = ["opencode", "claude"]`) with 25 config assertions.
+  - **Wave 11 In-Flight:**
+    - `PUB-10` (`e8a7450`): Trust-tax telemetry schema and string-safe envelope in `lib/telemetry.py` (promoted).
+    - `PUB-9` (Dispatched to `arch-2-hinchk-stampede`): `stampede quota` read-only provider headroom probing across CLI kinds.
+    - `PUB-7` (Dispatched to `arch-1-hinchk-stampede`): `stampede init` provider-interviewed config generator.
+- **Standing Guardrails:**
+  - Arch briefs enforce Single-Ticket Scope Guardrail: workers halt and await looper dispatch after reporting completion.
+  - Base branch promotion remains human-only (DOG-12).
+- **Total Test Suite Health:** **271 passed, 0 failed** across 12 suites (42 worktree, 39 partition, 38 arbiter, 27 gh_sync, 25 config, 18 profile, 17 async gate, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 7 telemetry); `make check` green (lint 0 warnings).
 
 ---
 
 ## 3. Immediate Next Step
 
-- **Public readiness waves complete.** Post-readiness backlog: trust-tax instrumentation, headless execution mode, and P3-4 batched non-blocking arbiter drain.
+- Monitor parallel Wave 11 dispatches: `arch-2` on `PUB-9` and `arch-1` on `PUB-7`.
+- On completion: independent suite gating, arbiter CAS integration, and dispatch of `PUB-8` (cross-provider reviewer lane) and `PUB-11` (rich status).
 
 
 
