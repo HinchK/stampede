@@ -114,12 +114,14 @@ GitHub issues for anything released.
 
 ## Not yet specified
 
-- Trust-tax instrumentation: brief bytes delivered, suite-gate runs per retired
-  ticket, re-verdicts per ticket, dispatches per integration, wall-clock per
-  ticket. Post-publication; publishing real numbers later beats publishing a
-  modelled 80% now.
+- Trust-tax instrumentation: now specified in
+  [maps/public-multi-provider.md](public-multi-provider.md) (PUB-10/PUB-11) —
+  brief bytes delivered, suite-gate runs per retired ticket, re-verdicts per
+  ticket, dispatches per integration, wall-clock per ticket. Publishing real
+  numbers later still beats publishing a modelled 80% now.
 - Headless mode (no panes, no focus calls) — the capability that would make
-  "autonomous" true rather than aspirational.
+  "autonomous" true rather than aspirational. Still unspecified; the
+  multi-provider PRD deliberately does not depend on it.
 
 ## Out of scope
 

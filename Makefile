@@ -7,7 +7,7 @@
 
 SHELL   := /bin/bash
 TESTS   := $(sort $(wildcard tests/test_*.sh))
-LINT_SH := herdr-loop-swarm.sh loop-bot-herd.sh $(wildcard lib/*.sh)
+LINT_SH := bin/stampede herdr-loop-swarm.sh loop-bot-herd.sh $(wildcard lib/*.sh)
 
 .PHONY: test lint check
 

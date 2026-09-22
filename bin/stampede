@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+#
+# bin/stampede — the unified public entrypoint (PUB-1)
+#
+# One command fronts the whole product:
+#   - Lifecycle subcommands (up/down/status/verify, and bare invocation or
+#     leading flags) pass through to herdr-loop-swarm.sh UNCHANGED — this is
+#     delegation by exec, never reimplementation, so launcher behaviour stays
+#     byte-identical however you invoke it.
+#   - Any other first argument dispatches by convention: if
+#     lib/cli/stampede-<cmd>.sh exists it is sourced and
+#     stampede_cmd_<cmd> (dashes folded to underscores) is called with the
+#     remaining arguments. New commands land as new files — this dispatcher
+#     never needs to know the full list (the deep-module rule from
+#     maps/public-multi-provider.md, design tenet 3).
+#   - Anything else: usage + exit 1. Fail closed, like everything here.
+#
+# Paths resolve from this script's own location ($SCRIPT_DIR — the DOG-13
+# lesson), never from $PWD: the entrypoint must work from any cwd against
+# any target repo, including after the DOG-10 directory rename.
+
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+LAUNCHER="$ROOT/herdr-loop-swarm.sh"
+
+stampede_usage() {
+  local cli_cmds="" f
+  for f in "$ROOT"/lib/cli/stampede-*.sh; do
+    [[ -f "$f" ]] || continue
+    f=$(basename "$f")
+    f=${f#stampede-}
+    cli_cmds+="  ${f%.sh}\n"
+  done
+  cat <<EOF
+Usage: stampede <command> [args]
+
+Lifecycle (delegated to herdr-loop-swarm.sh):
+  up [dir] [OPTIONS]      Launch or re-attach the swarm for a repo
+  status [dir]            Show workspace, seats, profile, recent activity
+  verify [dir] [ms]       Check every seat is alive and brief-ready
+  down [dir] [FLAGS]      Tear down the swarm tied to a directory
+
+Additional commands (lib/cli/stampede-<cmd>.sh):
+$(if [[ -n "$cli_cmds" ]]; then printf '%b' "$cli_cmds"; else printf '  (none installed)\n'; fi)
+Run 'stampede <command> --help' for command-specific usage.
+
+The underlying scripts remain valid entry points:
+  ./herdr-loop-swarm.sh   (launcher)   ./loop-bot-herd.sh   (supervisor)
+EOF
+}
+
+cmd="${1:-}"
+
+# Bare invocation or leading flags: the launcher defaults to `up` itself.
+if [[ -z "$cmd" || "$cmd" == -* ]]; then
+  exec "$LAUNCHER" "$@"
+fi
+
+case "$cmd" in
+  up|down|status|verify)
+    exec "$LAUNCHER" "$@"
+    ;;
+  -h|--help|help)
+    stampede_usage
+    exit 0
+    ;;
+esac
+
+# Convention dispatch: lib/cli/stampede-<cmd>.sh defines stampede_cmd_<cmd>.
+cli="$ROOT/lib/cli/stampede-$cmd.sh"
+if [[ -f "$cli" ]]; then
+  # shellcheck source=/dev/null  # convention-dispatched command module
+  source "$cli"
+  fn="stampede_cmd_${cmd//-/_}"
+  if ! declare -f "$fn" >/dev/null 2>&1; then
+    printf 'stampede: %s exists but defines no %s()\n' "lib/cli/stampede-$cmd.sh" "$fn" >&2
+    exit 1
+  fi
+  "$fn" "${@:2}"
+  exit $?
+fi
+
+printf 'stampede: unknown command: %s\n\n' "$cmd" >&2
+stampede_usage >&2
+exit 1
