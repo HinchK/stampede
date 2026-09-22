@@ -69,33 +69,23 @@
 
 ## 2. Active Status & Open Items
 
+- **Autonomous Reviewer Loop Milestone (IN FLIGHT — Wave 1 Complete):**
+  - **Wave 1 Complete:** `REV-1` (`e22697c`): Reviewer config flag (`loop`, `max_rounds`) in `swarm.config.toml` bound in `lib/config.sh`, dual-mode brief with `REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>` anchor and `.herdr-swarm/reviews/<ticket>-<sha>.md` report schema, +8 config assertions (promoted).
+  - **Wave 2 In-Flight (runs alone):** `REV-2`: Critique delivery protocol: implementer refinement on existing worktree branch (`briefs/arch.in.md`, `briefs/arch.md`, `docs/user-guide.md`). Released to `maps/tickets/`.
 - **Public Multi-Provider Milestone (COMPLETE — Waves 8–12 Shipped):**
-  - **Wave 8 Complete:** `PUB-1` (`19217bc`): `bin/stampede` unified entrypoint and `lib/cli/` subcommand convention with 15 hermetic assertions.
-  - **Wave 9 Complete:**
-    - `PUB-2` (`9ffdbe8`): Provider registry (`lib/providers.sh`) and `stampede doctor` with 27 hermetic assertions.
-    - `PUB-3` (`d3a03dd`): Journey-ordered `docs/user-guide.md` (zero to verified verdict).
-    - `PUB-4` (`a9b6e51`): `examples/demo-repo` with real test suite and one-verdict walkthrough.
-    - `PUB-5` (`fb63928`): `VERSION`, `CHANGELOG.md`, `stampede version`, and `make version-check`.
-  - **Wave 10 Complete:** `PUB-6` (`c752a8a`): Per-seat provider fallback chains (`kinds = ["opencode", "claude"]`) with 25 config assertions.
-  - **Wave 11 Complete:**
-    - `PUB-10` (`e8a7450`): Trust-tax telemetry schema and string-safe envelope in `lib/telemetry.py` (promoted).
-    - `PUB-7` (`3a534c0`): `stampede init` provider-interviewed config generator with 24 hermetic assertions (promoted).
-    - Gate fix `6e1521e`: Load-calibrated non-blocking scan assertion in `tests/test_async_gate.sh` (promoted).
-    - `PUB-9` (`fa78bd4`): `stampede quota` read-only provider headroom probing with 28 hermetic assertions (promoted).
-    - `PUB-8` (`eda9042`): Cross-provider review lane and user guide section (promoted).
-  - **Wave 12 Complete:**
-    - `PUB-11` (`97a1249`): `stampede status --rich` session trust dashboard from traces (`lib/cli/stampede-status.sh`, `tests/test_cli_status.sh`, `bin/stampede` routing seam) with 27 hermetic assertions (promoted).
+  - Shipped `PUB-1` through `PUB-11` (all promoted).
 - **Standing Guardrails:**
   - Arch briefs enforce Single-Ticket Scope Guardrail: workers halt and await looper dispatch after reporting completion.
   - Base branch promotion remains human-only (DOG-12).
-- **Total Test Suite Health:** **350 passed, 0 failed** across 15 suites (42 worktree, 39 partition, 38 arbiter, 28 quota, 27 gh_sync, 27 cli_status, 25 config, 24 cli_init, 18 profile, 17 async gate, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 7 telemetry); `make check` green (lint 0 warnings across 22 shell files).
+- **Total Test Suite Health:** **358 passed, 0 failed** across 15 suites (42 worktree, 39 partition, 38 arbiter, 33 config, 28 quota, 27 gh_sync, 27 cli_status, 24 cli_init, 18 profile, 17 async gate, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 7 telemetry); `make check` green (lint 0 warnings across 22 shell files).
 
 ---
 
 ## 3. Immediate Next Step
 
-- Milestone Complete: All 11 Public Multi-Provider tickets (`PUB-1`..`PUB-11`) implemented, hermetically verified, independently audited, and promoted to `main`.
-- Await next roadmap/milestone directive from project leadership.
+- Dispatch `REV-2` (Wave 2, critique delivery and implementer refinement protocol) to an implementer seat (`arch-1` or `arch-2`).
+- Execute independent suite verification on `REV-2`.
+- CAS-integrate and audit `REV-2`.
 
 
 

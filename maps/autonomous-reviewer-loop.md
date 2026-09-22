@@ -16,6 +16,7 @@ An autonomous, config-gated cross-provider reviewer loop where `looper` dispatch
 ## Decisions so far
 
 <!-- the index: one line per closed ticket, enough to judge relevance, then zoom the link for the detail the ticket holds -->
+- [REV-1: Reviewer config flag and harvested verdict protocol](tickets/rev-01-reviewer-config-and-verdict-protocol.md): `[reviewer]` loop/max_rounds in `swarm.config.toml` bound in `lib/config.sh`; dual-mode brief with `REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>` anchor and durable `.herdr-swarm/reviews/<ticket>-<sha>.md` report schema (`e22697c`).
 
 ## Not yet specified
 
@@ -31,7 +32,7 @@ An autonomous, config-gated cross-provider reviewer loop where `looper` dispatch
 
 ## Waves and Dependencies
 
-- [ ] **Wave 1 — Reviewer Config & Verdict Protocol.** REV-1: `[reviewer] loop = true/false` config binding, and formal `REVIEW VERDICT` anchor + `.herdr-swarm/reviews/<ticket>-<sha>.md` report schema.
+- [x] **Wave 1 — Reviewer Config & Verdict Protocol.** REV-1 (`e22697c`): `[reviewer] loop = true/false` config binding, and formal `REVIEW VERDICT` anchor + `.herdr-swarm/reviews/<ticket>-<sha>.md` report schema.
 - [ ] **Wave 2 — Critique Brief & Implementer Refinement Protocol.** REV-2: Implementer brief update for critique dispatches (`round 2/2`) on existing worktree branches.
 - [ ] **Wave 3 — Looper Review Loop State Machine.** REV-3: 2-round autonomous loop state machine in orchestrator with fail-closed human escalation.
 - [ ] **Wave 4 — Review Telemetry, Rich Status & Full Verification.** REV-4: Telemetry event logging, rich status dashboard aggregation, and hermetic multi-round test suite.

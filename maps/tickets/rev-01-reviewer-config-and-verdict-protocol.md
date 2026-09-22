@@ -2,8 +2,8 @@
 id: REV-1
 title: "Reviewer config flag and harvested verdict protocol (REVIEW VERDICT)"
 type: wayfinder:task
-status: ready
-assignee: arch
+status: resolved
+assignee: arch-1
 owns: lib/config.sh,swarm.config.toml,briefs/reviewer.in.md,briefs/reviewer.md,tests/test_config.sh
 parent: maps/autonomous-reviewer-loop.md
 blocked_by: []
@@ -44,3 +44,14 @@ PUB-8 established the reviewer brief as strictly advisory (`REVIEW DONE`), expli
 make check
 bin/stampede doctor
 ```
+
+## 6. Resolution (2026-09-22, `e22697c`)
+
+- **`swarm.config.toml`**: Added `[reviewer]` table with `loop = false` and `max_rounds = 2`.
+- **`lib/config.sh`**: Bound `CONFIG_REVIEW_LOOP` (0|1) and `CONFIG_REVIEW_MAX_ROUNDS` (default 2) with strict fail-closed typing at parse time.
+- **`briefs/reviewer.in.md`**: Implemented dual-mode reporting:
+  - Advisory mode (`loop = false`): Emits `REVIEW DONE #<ticket> <sha>`.
+  - Loop mode (`loop = true`): Writes structured findings to `.herdr-swarm/reviews/<ticket>-<sha>.md` and emits terminal anchor `REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>`.
+- **`briefs/reviewer.md`**: Re-rendered tracked brief through real engine with zero leftover placeholders.
+- **`tests/test_config.sh`**: Added Section 6 with 8 assertions covering defaults, explicit values, and type validation failures (suite grew 25 -> 33).
+- **Verification**: `make check` 15/15 suites green, 358 assertions, 0 failed; `bin/stampede doctor` healthy; 0 shellcheck warnings across modified shell files.

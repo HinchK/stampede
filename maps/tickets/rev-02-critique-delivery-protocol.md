@@ -2,7 +2,7 @@
 id: REV-2
 title: "Critique delivery protocol: implementer refinement on existing worktree branch"
 type: wayfinder:task
-status: staged
+status: ready
 assignee: arch
 owns: briefs/arch.in.md,briefs/arch.md,docs/user-guide.md
 parent: maps/autonomous-reviewer-loop.md
