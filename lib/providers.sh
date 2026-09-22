@@ -61,16 +61,41 @@ providers_kind_probe() {
     return 0
   fi
   bin=$(command -v "$bin")
-  ver=$("$TIMEOUT_BIN" 5 "$bin" --version 2>/dev/null | head -n1 || true)
+  # Bound the probe when timeout(1) is available (DOG-15 resolver); an
+  # unresolved timeout degrades to an unbounded call rather than killing
+  # the probe entirely — version capture is optional, presence is not.
+  if [[ -n "${TIMEOUT_BIN:-}" ]] && command -v "$TIMEOUT_BIN" >/dev/null 2>&1; then
+    ver=$("$TIMEOUT_BIN" 5 "$bin" --version 2>/dev/null | head -n1 || true)
+  else
+    ver=$("$bin" --version 2>/dev/null | head -n1 || true)
+  fi
   printf 'ok %s %s\n' "$bin" "${ver:-unknown-version}"
+}
+
+# ── Chain resolution ───────────────────────────────────────────────────────
+# providers_resolve_chain "kind1 kind2 ..." — walk the ordered chain, return
+# the first healthy kind on stdout; empty output (rc 1) when none is usable.
+# This is the PUB-6 seating seam: the launcher asks only this question.
+providers_resolve_chain() {
+  local k probe
+  for k in $1; do
+    probe=$(providers_kind_probe "$k")
+    if [[ "${probe%% *}" == "ok" ]]; then
+      printf '%s\n' "$k"
+      return 0
+    fi
+  done
+  return 1
 }
 
 # ── Config enumeration ─────────────────────────────────────────────────────
 # providers_seats_from_config <toml-path>
-#   → lines: "<seat-key>|<kind-or-empty>|<enabled:1|0>|<seat-name>"
-# Lists ALL seats (enabled and disabled) in declaration order. Self-contained
-# python (mirrors lib/config.sh's argv-transport rule: the TOML path travels
-# as sys.argv, never interpolated). Requires resolve_python to have run.
+#   → lines: "<seat-key>|<kinds-comma-joined>|<enabled:1|0>|<seat-name>"
+# Lists ALL seats (enabled and disabled) in declaration order. The kind field
+# is the full ordered chain (a lone default_kind is a one-element chain).
+# Self-contained python (mirrors lib/config.sh's argv-transport rule: the
+# TOML path travels as sys.argv, never interpolated). Requires resolve_python
+# to have run.
 providers_seats_from_config() {
   local toml_path="$1"
   "$PYTHON_BIN" - "$toml_path" <<'PYCODE'
@@ -78,9 +103,11 @@ import sys, tomllib
 with open(sys.argv[1], 'rb') as f:
     cfg = tomllib.load(f)
 for k, v in cfg.get('seats', {}).items():
-    kind = v.get('default_kind', '')
+    kinds = v.get('kinds')
+    if kinds is None:
+        kinds = [v['default_kind']] if v.get('default_kind') else []
     enabled = 1 if v.get('enabled', True) else 0
     name = v.get('name', k)
-    print(f'{k}|{kind}|{enabled}|{name}')
+    print(f'{k}|{",".join(kinds)}|{enabled}|{name}')
 PYCODE
 }

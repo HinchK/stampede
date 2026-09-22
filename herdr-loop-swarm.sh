@@ -37,6 +37,8 @@ source "$LIB_DIR/briefs.sh"
 source "$LIB_DIR/worktree.sh"
 # shellcheck disable=SC1091  # dynamically resolved sibling libs
 source "$LIB_DIR/preflight.sh"
+# shellcheck disable=SC1091  # provider registry (PUB-6 fallback chains)
+source "$LIB_DIR/providers.sh"
 
 # ──────────────────────────────────────────────────────────────────────────
 # Lifecycle subcommands (delegating to lib/lifecycle.sh)
@@ -245,6 +247,11 @@ LOOPER_AGENT="${SEAT_NAME_looper:-looper}"
 
 # Stable telemetry session (shared with loop-bot so the Ops stream sees all)
 SESSION_ID=$(telemetry_session_id "${PWD}/.herdr-swarm")
+# Trace dir bound early: seating-time events (seat.fallback, PUB-6) fire
+# long before the Ops pane starts streaming. SWARM_TRACE_DIR is config
+# data (relative to the target repo).
+TRACE_DIR_PATH="${PWD}/${SWARM_TRACE_DIR}"
+mkdir -p "$TRACE_DIR_PATH"
 
 # Workspace discovery (nested-session-safe): the swarm ALWAYS binds to the
 # workspace whose pane cwd is this directory — never to the caller's ambient
@@ -420,11 +427,13 @@ for tab_name in herd ops; do
 
     name_var="SEAT_NAME_${seat_key}"
     kind_var="SEAT_KIND_${seat_key}"
+    kinds_var="SEAT_KINDS_${seat_key}"
     model_var="SEAT_MODEL_${seat_key}"
     brief_var="SEAT_BRIEF_${seat_key}"
     wt_var="SEAT_WORKTREE_${seat_key}"
     seat_name="${!name_var}"
     seat_kind="${!kind_var}"
+    seat_kinds="${!kinds_var:-$seat_kind}"
     seat_model="${!model_var}"
     seat_brief="${!brief_var}"
     seat_isolated="${!wt_var:-0}"
@@ -472,12 +481,32 @@ for tab_name in herd ops; do
         seat_pane="$tab_anchor"
       fi
 
-      step "Starting agent '${seat_name}' (${seat_kind})..."
-      if [[ "$seat_kind" == "opencode" && -n "$seat_model" && "$seat_model" != "auto" ]]; then
-        herdr agent start "$seat_name" --kind "$seat_kind" --pane "$seat_pane" -- --model "$seat_model" >/dev/null 2>&1 \
+      # Provider chain resolution (PUB-6): first healthy kind in the ordered
+      # chain seats. An unhealthy primary is a fallback (telemetry-noted); a
+      # chain with no healthy kind skips the seat — and mode `a` later fails
+      # closed in swarm_verify_seats, preserving the fail-closed contract.
+      resolve_timeout >/dev/null 2>&1 || true
+      if ! resolved_kind=$(providers_resolve_chain "$seat_kinds"); then
+        warn "No healthy provider in chain for '${seat_name}' [${seat_kinds}] — seat skipped (stampede doctor lists remedies)"
+        [[ -n "$prev_pane" ]] || prev_pane="$tab_anchor"
+        seat_idx=$((seat_idx + 1))
+        continue
+      fi
+      if [[ "$resolved_kind" != "${seat_kinds%% *}" ]]; then
+        note "Seat '${seat_name}': primary '${seat_kinds%% *}' unavailable — seating '${resolved_kind}'"
+        _fb_payload=$(jq -cn --arg seat "$seat_name" --arg wanted "${seat_kinds%% *}" --arg used "$resolved_kind" \
+          '{action:"seat_fallback", seat:$seat, wanted:$wanted, used:$used,
+            summary:("primary " + $wanted + " unavailable; seated " + $used)}')
+        "$PYTHON_BIN" "$LIB_DIR/telemetry.py" log "$SESSION_ID" seat.fallback "$seat_name" - "$_fb_payload" \
+          --trace-dir "$TRACE_DIR_PATH" >/dev/null 2>&1 || true
+      fi
+
+      step "Starting agent '${seat_name}' (${resolved_kind})..."
+      if [[ "$resolved_kind" == "opencode" && -n "$seat_model" && "$seat_model" != "auto" ]]; then
+        herdr agent start "$seat_name" --kind "$resolved_kind" --pane "$seat_pane" -- --model "$seat_model" >/dev/null 2>&1 \
           || { warn "Failed to seat agent '${seat_name}' in pane ${seat_pane}"; seat_pane=""; }
       else
-        herdr agent start "$seat_name" --kind "$seat_kind" --pane "$seat_pane" >/dev/null 2>&1 \
+        herdr agent start "$seat_name" --kind "$resolved_kind" --pane "$seat_pane" >/dev/null 2>&1 \
           || { warn "Failed to seat agent '${seat_name}' in pane ${seat_pane}"; seat_pane=""; }
       fi
       if [[ -n "$seat_pane" ]]; then
@@ -491,7 +520,7 @@ for tab_name in herd ops; do
       # v2 ledger entry (jq-built; paths may contain any character)
       root_branch=$(git -C "$PWD" rev-parse --abbrev-ref HEAD 2>/dev/null || printf '')
       SEAT_LEDGER+=$(jq -cn \
-        --arg name "$seat_name" --arg kind "$seat_kind" --arg pane "$seat_pane" \
+        --arg name "$seat_name" --arg kind "${resolved_kind:-$seat_kind}" --arg pane "$seat_pane" \
         --arg wt_dir "${seat_cwd:-$PWD}" --arg branch "${wt_branch:-$root_branch}" \
         --argjson isolated "$seat_isolated" \
         '{name: $name, kind: $kind, pane: $pane, worktree_dir: $wt_dir, branch: $branch, isolated: $isolated}')$'\n'

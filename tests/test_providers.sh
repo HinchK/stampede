@@ -100,5 +100,19 @@ else
   ok "missing config fails"
 fi
 
+# [8] chain resolution (PUB-6): first healthy kind wins, empty chain of
+# healthy kinds returns nothing
+out=$(providers_resolve_chain "opencode claude")
+[[ "$out" == "claude" ]] && ok "resolver skips missing primary, lands on claude" || bad "resolve: '$out'"
+out=$(providers_resolve_chain "claude opencode")
+[[ "$out" == "claude" ]] && ok "healthy primary used directly" || bad "resolve2: '$out'"
+if providers_resolve_chain "opencode pi" >/dev/null 2>&1; then
+  bad "chain with no healthy kind must fail"
+else
+  ok "chain with no healthy kind fails"
+fi
+out=$(providers_resolve_chain "brand-new-llm claude")
+[[ "$out" == "claude" ]] && ok "unknown kinds are skipped, not fatal" || bad "resolve3: '$out'"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

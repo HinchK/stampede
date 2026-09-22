@@ -105,5 +105,53 @@ check "4c" "shipped config: serve_cmd empty by default" \
 check "4d" "shipped config: credentials path empty by default" \
   '[[ -z $(config_get "proxy.credentials" "" "$SHIPPED") ]]'
 
+# ── 5. provider fallback chains (PUB-6) ────────────────────────────────────
+C5="$TEST_DIR/kinds-chain.toml"
+cat > "$C5" <<'TOML'
+[seats.alpha]
+name = "alpha"
+kinds = ["opencode", "claude"]
+
+[seats.beta]
+name = "beta"
+default_kind = "agy"
+TOML
+check "5a" "kinds chain emitted in order" \
+  'eval "$(config_dump_env x "$C5")" && [[ $SEAT_KINDS_alpha == "opencode claude" ]]'
+check "5b" "SEAT_KIND stays the primary (backward compat)" \
+  'eval "$(config_dump_env x "$C5")" && [[ $SEAT_KIND_alpha == "opencode" ]]'
+check "5c" "default_kind sugar -> single-element chain" \
+  'eval "$(config_dump_env x "$C5")" && [[ $SEAT_KINDS_beta == "agy" && $SEAT_KIND_beta == "agy" ]]'
+check "5d" "shipped config: arch seats carry opencode->claude chains" \
+  'eval "$(config_dump_env x "$SCRIPT_DIR/swarm.config.toml")" && [[ $SEAT_KINDS_arch_1 == "opencode claude" ]]'
+
+C5B="$TEST_DIR/kinds-conflict.toml"
+cat > "$C5B" <<'TOML'
+[seats.alpha]
+name = "alpha"
+kinds = ["opencode", "claude"]
+default_kind = "agy"
+TOML
+check "5e" "default_kind conflicting with kinds[0] fails closed" \
+  'if config_dump_env x "$C5B" >/dev/null 2>&1; then false; else true; fi'
+
+C5C="$TEST_DIR/kinds-empty.toml"
+cat > "$C5C" <<'TOML'
+[seats.alpha]
+name = "alpha"
+kinds = []
+TOML
+check "5f" "empty kinds array fails closed" \
+  'if config_dump_env x "$C5C" >/dev/null 2>&1; then false; else true; fi'
+
+C5D="$TEST_DIR/kinds-junk.toml"
+cat > "$C5D" <<'TOML'
+[seats.alpha]
+name = "alpha"
+kinds = ["opencode", 7]
+TOML
+check "5g" "non-string chain entry fails closed" \
+  'if config_dump_env x "$C5D" >/dev/null 2>&1; then false; else true; fi'
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))
