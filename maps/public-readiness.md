@@ -74,6 +74,7 @@ every claim in the docs backed by something the repo can show.
 - **DOG-8 resolved (`30be2ac`, PR #58):** Hermetic test suite for `lib/gh_sync.sh` added in `tests/test_gh_sync.sh` (27 assertions) with stubbed `gh` on PATH testing zero-write dry-run default, drift detection, CREATE proposal label contracts, auth error handling, and directory requirements. Wired into aggregate gate (all 8 suites green).
 - **DOG-11 resolved (`bd0b90c`, PR #59):** Fixed fresh-clone partition deadlock where gitignored `.herdr-swarm/integration.jsonl` caused all resolved tickets to be treated as active leaseholders. Inactive determination no longer treats missing gitignored evidence as active; warns once on absent state file. 29 partition suite assertions pass cleanly.
 - **DOG-9 resolved (`bb8fda9`, PR #62):** Swept 48 tracked markdown files converting machine-local paths and `file://` URLs into clean relative repository links. Zero broken in-tree links; `grep 'file://'` and `grep '/Users/'` return empty (rc=1); all 8 suites green.
+- **DOG-16 resolved (`280ae5f`):** Hazard 1 closed — `partition_check` / `lease_acquire` have a live caller: `cmd_dispatch` gates every ticket dispatch on them (collision blocks with the holding lease named; no-owns acquires an exclusive whole-repo lease or nothing), and the supervisor's pass releases leases only when `integration.jsonl` records integrated/promoted — green-queued never releases (ADR 0012 §5). Partition suite grew 29 → 39 assertions covering the supervisor acquire/release lifecycle; all 8 suites green, shellcheck 0 warnings.
 
 ## Active Frontier
 
@@ -104,7 +105,12 @@ GitHub issues for anything released.
       repo at `~/Fun/stampede`, slug `hinchk-stampede`, old-slug branches
       deleted, swarm re-seated, living stragglers fixed — receipts in
       [`maps/tickets/rename-and-slug-migration.md`](tickets/rename-and-slug-migration.md))*
-- [ ] **Wave 7 — Dispatch Safety.** DOG-16 wire partition checking and lease acquisition into supervisor dispatch (graduated from fog; staged).
+- [x] **Wave 7 — Dispatch Safety.** DOG-16 wire partition checking and lease acquisition
+      into supervisor dispatch *(complete 2026-09-21, `280ae5f`: `cmd_dispatch` resolves
+      the ticket and acquires through `lease_acquire`'s locked section before any prompt;
+      collisions block fail-closed with the holder named, no-owns runs exclusive-or-nothing;
+      the release pass fires only on integrated/promoted evidence — receipts in
+      [`maps/tickets/dispatch-partition-lease-wiring.md`](tickets/dispatch-partition-lease-wiring.md))*
 
 ## Not yet specified
 

@@ -2,8 +2,9 @@
 id: DOG-16
 title: "Wire partition checking and path lease acquisition into supervisor dispatch"
 type: wayfinder:task
-status: ready
-assignee: arch
+status: resolved
+commit: 280ae5f
+assignee: arch-2
 owns: loop-bot-herd.sh,lib/partition.sh,tests/test_partition.sh
 parent: maps/public-readiness.md
 ---
@@ -55,3 +56,10 @@ from an advisory human discipline into an active, automated fail-closed invarian
 make check
 shellcheck loop-bot-herd.sh lib/partition.sh
 ```
+
+## 6. Resolution (2026-09-21, `280ae5f`)
+
+- `loop-bot-herd.sh` sources `lib/partition.sh` (orchestrator-only, same governance rule as the arbiter) and its dispatch path now runs `partition_check` → `lease_acquire` inside `cmd_dispatch` before any prompt: rc 0 leases and proceeds, rc 2 acquires an exclusive whole-repo lease or blocks, rc 1 blocks fail-closed with the holding lease and overlap paths logged. The ticket id comes from the brief's frontmatter (`id:`/`owns:`) or an explicit third argument; plain non-ticket briefs pass ungated.
+- Release side: `lease_release_integrated` runs in every supervisor pass (`cmd_once`) and frees a lease only when `integration.jsonl` names the ticket `integrated`/`promoted`. Green/queued never releases (ADR 0012 §5, premature-release anti-pattern). Re-dispatch of a leased ticket is blocked like any overlap — re-briefing requires a deliberate `lease release`.
+- Regression: `tests/test_partition.sh` sources the real supervisor and asserts the lifecycle end-to-end (17a–17h): acquire-on-dispatch, collision blocked with holder named, `cmd_dispatch` exit 1, re-dispatch blocked, exclusive fallback once idle, integrated-released/queued-held, promoted-released, unresolvable named ticket fail-closed, lease-free plain briefs. Suite grew 29 → 39 assertions.
+- Receipts: `make check` — lint clean (14 shell files, 0 shellcheck warnings) and all 8 suites green (215 assertions, 0 failed), including `shellcheck loop-bot-herd.sh lib/partition.sh` clean.
