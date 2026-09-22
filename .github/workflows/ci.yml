@@ -41,12 +41,19 @@ jobs:
       # 3.9, and tomllib is 3.11+), so lib/pyenv.sh must be exercised against
       # the unpinned image. Pinning would hide the regression this job catches.
 
-      - name: Install jq
+      - name: Install jq and coreutils
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
             sudo apt-get update && sudo apt-get install -y jq
           else
             brew list jq >/dev/null 2>&1 || brew install jq
+            # coreutils supplies timeout(1), which every suite gate uses to
+            # bound its run. macOS ships none and the runner image does not
+            # install it, so without this the gate exits 127 and the arbiter
+            # recorded a RED verdict for a tree it never measured (DOG-15).
+            # The code declares this dependency in lib/preflight.sh and fails
+            # loudly without it; CI's job is to provide it.
+            brew list coreutils >/dev/null 2>&1 || brew install coreutils
           fi
 
       # shellcheck is PINNED (DOG-14). Taking apt's or Homebrew's current build
@@ -94,6 +101,10 @@ jobs:
           # Informational only — `make check` is the authoritative gate.
           bash lib/pyenv.sh \
             || echo "pyenv.sh: no tomllib-capable interpreter on PATH (lint will report it)"
+          # Name the resolved timeout(1) in the log: which of timeout/gtimeout
+          # wins is exactly what was unknown while DOG-15 was being diagnosed.
+          bash -c 'source lib/common.sh; resolve_timeout && echo "timeout -> $TIMEOUT_BIN"' \
+            || echo "resolve_timeout: none found (the suite preconditions will report it)"
 
       - name: make check
         run: make check

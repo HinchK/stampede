@@ -59,6 +59,14 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/loop-bot-herd.sh" statu
 # shellcheck disable=SC1091
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/worktree.sh"
 
+# Every gate this suite exercises bounds its run with timeout(1), which macOS
+# does not ship. Fail once with the remedy rather than cascading into a dozen
+# failures that all blame the supervisor for a missing binary (DOG-15).
+if ! resolve_timeout; then
+  printf 'test_async_gate: cannot run — no runnable timeout(1) (remedy above)\n' >&2
+  exit 1
+fi
+
 mk_seat() { # SEAT SLEEP_SECONDS [EXTRA_GATE_LINES]
   local prov wt
   prov=$(worktree_provision "$1" ag HEAD "$RD" 2>/dev/null)
