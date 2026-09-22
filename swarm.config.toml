@@ -1,5 +1,10 @@
 # Swarm Configuration: Herdr + AGY + Claude + OpenCode (GLM-5.3) + Kultivait
 # Location: ~/Fun/stampede/swarm.config.toml
+#
+# New here? `stampede init` generates this file from the providers actually
+# installed on your machine (preset + provider chain, fail-closed when
+# nothing is usable). Hand edits remain first-class; regeneration needs
+# --force and keeps a .bak (PUB-7).
 
 [swarm]
 name = "stampede"
