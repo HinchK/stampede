@@ -2,8 +2,8 @@
 id: PUB-9
 title: "stampede quota: read-only provider headroom probing"
 type: wayfinder:task
-status: ready
-assignee: arch
+status: resolved
+assignee: arch-2
 owns: lib/quota.sh,lib/cli/stampede-quota.sh,tests/test_quota.sh
 parent: maps/public-multi-provider.md
 blocked_by: PUB-2
@@ -54,3 +54,10 @@ narrower: observe first, automate only if the numbers say so.
 bin/stampede quota
 make check
 ```
+
+## 6. Resolution (2026-09-22, `d5083eb`)
+
+- `lib/quota.sh`: `quota_probe_kind` (the seat-kind seam — every registered kind answers `unknown` at landing) and `quota_probe_openrouter` (env `OPENROUTER_API_KEY` first, then the config-gated `[proxy]` credentials file's `openrouter.api_key`; result is `total_credits - total_usage` as `ok:<n>USD`). The unknown/error contract is enforced hard: missing or non-numeric credit fields are `error:unparsable credits response`, never an arithmetic-default 0; unreachable endpoint is `error:credits endpoint unreachable`; anything unconfigured is `unknown`.
+- `lib/cli/stampede-quota.sh`: seat-kind rows enumerated through the PUB-2 registry (`providers_seats_from_config`), disabled seats SKIP without probing, plus one `- / openrouter` row; one `quota.probe {seat, kind, status}` telemetry event per actual probe. Zero writes outside `.herdr-swarm/traces/` — the herd session id is reused read-only instead of calling `telemetry_session_id()` (which would write the session file). Exit 0 when probes answer; 1 on config trouble or any probe error.
+- `tests/test_quota.sh`: 28 hermetic assertions — fixture-driven stub curl (zero network), the full unknown/error matrix, bearer-header capture, seat-keyed table rendering, one-event-per-probe counts, a before/after filesystem snapshot proving the zero-writes rule, read-only session reuse, and exit codes.
+- Receipts: `bin/stampede quota` renders the live roster (all kinds `unknown`, proxy `unknown`, rc 0); `shellcheck lib/quota.sh lib/cli/stampede-quota.sh` 0 warnings; 12/13 suites green including this one (28/28). `make check`'s single red is `test_async_gate.sh [1b]`, a wall-clock assertion (1500 ms) that fails under desktop load ~15–18 with `scan blocked (2.1–3.1 s)` — proven pre-existing: a detached control worktree at `ec941fd` (before this ticket's files existed) fails identically under the same load, and the same suite passed at 170 ms twice earlier on the quiet machine. No file in this ticket's owns touches the gated path.
