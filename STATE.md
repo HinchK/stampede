@@ -68,33 +68,24 @@
 
 ## 2. Active Status & Open Items
 
-- **Public Readiness Dogfood Run (Waves 1–3 Complete; Waves 4–6 Charted):**
+- **Public Readiness Dogfood Run (Waves 1–5 Complete; Wave 6 Staged):**
   - **Waves 1–3 Complete:** All 11 tickets resolved (`DOG-1`, `DOG-12`, `DOG-13`, `DOG-2`, `DOG-3`, `DOG-4`, `DOG-5`, `DOG-14`, `DOG-15`, `DOG-6`, `DOG-7`).
-  - **DOG-3 Retirement:** Issue #5 closed; retirement commit `7526d9a` rides PR #16 (pending human merge).
-  - **Waves 4–6 Charted:** Four ticket files in `maps/tickets-staged/` (on PR #17, stacked on #16): `gh-sync-test-suite.md` and `fresh-clone-partition-deadlock.md` (Wave 4, parallel); `relative-links-sweep.md` (Wave 5); `rename-and-slug-migration.md` (Wave 6, HUMAN-only).
-  - **Queue / Frontier Status:** Active frontier is empty of released tickets. Next act is human operator: merge PR #16 and PR #17, then `mv` Wave 4 files from `maps/tickets-staged/` into `maps/tickets/` to release.
-- **Milestones M1, M2, M3 Complete & Audited.**
-- **Phase 2 Parallel Worktree Swarm Fan-Out: 100% COMPLETE & HARDENED.**
-- **Phase 3 Autonomous Multi-Worker Concurrent Fan-Out Progress:**
-  - **P3-1 (Multi-Worker Config & Roster Expansion):** Complete (`b62faf1`).
-  - **P3-2 (Task Intake Partition Checking & Lease Protocol):** Complete (`1992e37`); bash-3.2 normalization defect fixed (`b9678f3`, #BASH32-FLOOR). **Still library-only — nothing in `herdr-loop-swarm.sh` / `loop-bot-herd.sh` calls `partition_check` or `lease_acquire` yet** (next wiring task).
-  - **P3-LOCAL (Local Engine Activation - pi + kultivait):** Complete (`f6ead53`); proxy now config-gated, off by default (#PROXY-GATE).
-  - **P3-3 (Asynchronous Supervisor Harvesting):** Complete (`eafdc91`, resolved `144efea`).
-  - **P3-FLAKE-1 (Concurrent Provision Race):** Complete (`cf8b546`).
-  - **P3-4 (Arbiter Batch Integration & Non-Blocking Drain):** Spec + ticket authored by `pm`, integrated and promoted (`97d31e2`); ticket `arbiter-batch-integration` is **backlog — next implementation target**.
-- **PM branch topology:** reconciled (#PM-BRANCH-RECON) — zero unmerged branches; `main`, `swarm/loop-bot-herd-agy/integration` (arbiter CAS baseline), and the live `pi` seat branch remain.
-- **Total Test Suite Health:** **175 passed, 0 failed** across 7 suites (42 worktree, 38 arbiter, 26 partition, 18 config, 18 profile, 17 async-gate, 16 pyenv); `make check` green (lint 0 warnings). Run under `/bin/bash` (3.2 floor).
+  - **Wave 4 Complete (PR #58, PR #59, PR #60):**
+    - `DOG-8` (`30be2ac`): Hermetic `gh_sync` test suite with 27 assertions wired into aggregate test gate.
+    - `DOG-11` (`bd0b90c`): Fresh-clone partition deadlock fix; inactive tickets no longer block when gitignored `.herdr-swarm/integration.jsonl` is absent.
+  - **Wave 5 Complete (PR #62):**
+    - `DOG-9` (`bb8fda9`): Swept 48 tracked markdown files converting machine-local paths and `file://` URLs into clean repo-relative links.
+  - **Wave 6 Staged:** `maps/tickets-staged/rename-and-slug-migration.md` (`DOG-10`: rename + slug migration, reserved for HUMAN execution).
+- **Standing Reporting Protocol:** Arch brief updated to mandate direct looper notification (`herdr agent prompt {{LOOPER_NAME}} "ARCH UPDATE: #<ticket> <sha> — <summary>"`) upon completion so the orchestrator is immediately notified without waiting for poll turns.
+- **Total Test Suite Health:** **184 passed, 0 failed** across 8 suites (42 worktree, 29 partition, 27 gh_sync, 20 arbiter, 18 config, 18 profile, 16 pyenv, 14 briefs); `make check` green (lint 0 warnings). Run under `/bin/bash` (3.2 floor).
 
 ---
 
 ## 3. Immediate Next Step
 
-- **Awaiting Wave 2 Release:** Wave 1 complete, queue empty for current wave, awaiting Wave 2 release from orchestrator (parallel file-disjoint tickets: DOG-2 through DOG-6).
-- Dispatch `arch` to implement **P3-4**: batched, non-blocking arbiter drain (spec: `docs/audits/2026-09-19-p3-4-arbiter-batching-spec.md`, ticket `maps/tickets/arbiter-batch-integration.md`).
-- Wire `partition_check` / `lease_acquire` into the launcher's dispatch path (P3-2 is implemented and green but has no callers — grep before assuming a behaviour is live).
-- Push gate: `main` is ahead of `origin/main` — human approval required (`git push origin main`).
-- Dispatch `agy-gh` to run `lib/gh_sync.sh --dry-run` and reconcile the new tickets with GitHub issues.
-- Dispatch `agy-docs` to author ADR 0014 (bash 3.2 platform floor + aggregate gate as the CI contract).
+- **Wave 6 (HUMAN):** DOG-10 rename + slug migration (`maps/tickets-staged/rename-and-slug-migration.md`). Handled by human operator.
+- **Supervisor Dispatch Wiring:** Wire `partition_check` / `lease_acquire` into the supervisor/launcher dispatch path (unblocked by DOG-11 fix).
+- **Post-Readiness Backlog:** Trust-tax instrumentation, headless execution mode, and P3-4 batched non-blocking arbiter drain.
 
 
 
