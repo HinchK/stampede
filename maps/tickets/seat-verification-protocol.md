@@ -9,7 +9,7 @@ owns: lib/lifecycle.sh,herdr-loop-swarm.sh
 parent: maps/universal-herdr-swarm.md
 github_issue: 44
 github_url: "https://github.com/HinchK/stampede/issues/44"
-synced_at: "2026-09-22T03:16:07Z"
+synced_at: "2026-09-22T03:50:13Z"
 ---
 
 # Seat Verification Protocol and Brief Acknowledgment Gate (T-010)

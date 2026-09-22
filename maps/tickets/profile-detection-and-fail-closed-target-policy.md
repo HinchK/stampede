@@ -9,7 +9,7 @@ owns: lib/profile.sh
 parent: maps/universal-herdr-swarm.md
 github_issue: 37
 github_url: "https://github.com/HinchK/stampede/issues/37"
-synced_at: "2026-09-22T03:16:07Z"
+synced_at: "2026-09-22T03:50:13Z"
 ---
 
 # Profile Detection and Fail-Closed Target Policy

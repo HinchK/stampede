@@ -2,10 +2,13 @@
 id: DOG-9
 title: "Docs link to machine-local absolute paths"
 type: wayfinder:task
-status: ready
-assignee: arch
+status: in_progress
+assignee: arch-1
 owns: docs/,maps/,STATE.md,README.md,CONTEXT.md,CLAUDE.md,CONTRIBUTING.md,SECURITY.md
 parent: maps/public-readiness.md
+github_issue: 61
+github_url: "https://github.com/HinchK/stampede/issues/61"
+synced_at: "2026-09-22T03:50:13Z"
 ---
 
 # DOG-9 — Relative links across the docs (WAVE 5)

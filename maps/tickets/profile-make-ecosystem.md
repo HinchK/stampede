@@ -9,7 +9,7 @@ owns: lib/profile.sh,tests/test_profile.sh,profile.env.example
 parent: maps/universal-herdr-swarm.md
 github_issue: 38
 github_url: "https://github.com/HinchK/stampede/issues/38"
-synced_at: "2026-09-22T03:16:07Z"
+synced_at: "2026-09-22T03:50:13Z"
 ---
 
 # PROFILE-MAKE: the gate repo couldn't gate itself

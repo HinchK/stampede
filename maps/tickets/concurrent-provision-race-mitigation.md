@@ -9,7 +9,7 @@ owns: lib/worktree.sh,tests/test_worktree.sh
 parent: maps/universal-herdr-swarm.md
 github_issue: 24
 github_url: "https://github.com/HinchK/stampede/issues/24"
-synced_at: "2026-09-22T03:16:07Z"
+synced_at: "2026-09-22T03:50:13Z"
 ---
 
 # Concurrent `worktree_provision` Race: Non-Idempotent Retry (P3-FLAKE-1)

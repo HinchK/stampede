@@ -9,7 +9,7 @@ owns: lib/arbiter.sh,tests/test_arbiter.sh
 parent: maps/universal-herdr-swarm.md
 github_issue: 20
 github_url: "https://github.com/HinchK/stampede/issues/20"
-synced_at: "2026-09-22T03:16:07Z"
+synced_at: "2026-09-22T03:50:13Z"
 ---
 
 # ARB-STR: the queue schema rejected the repo's own ticket ids

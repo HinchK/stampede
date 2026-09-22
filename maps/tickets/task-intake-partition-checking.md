@@ -10,7 +10,7 @@ owns: lib/partition.sh,tests/test_partition.sh,docs/adr/0012-task-partitioning-a
 parent: maps/universal-herdr-swarm.md
 github_issue: 50
 github_url: "https://github.com/HinchK/stampede/issues/50"
-synced_at: "2026-09-22T03:16:07Z"
+synced_at: "2026-09-22T03:50:13Z"
 ---
 
 # Task Intake Partition Checking and Ledger Lease Protocol (P3-2)

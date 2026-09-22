@@ -9,7 +9,7 @@ owns: lib/partition.sh,tests/test_partition.sh,tests/test_worktree.sh
 parent: maps/universal-herdr-swarm.md
 github_issue: 22
 github_url: "https://github.com/HinchK/stampede/issues/22"
-synced_at: "2026-09-22T03:16:07Z"
+synced_at: "2026-09-22T03:50:13Z"
 ---
 
 # BASH32-FLOOR: bash 3.2 platform-floor reds

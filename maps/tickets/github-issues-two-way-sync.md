@@ -9,7 +9,7 @@ owns: docs/findings/github-issues-sync.md,lib/gh_sync.sh
 parent: maps/universal-herdr-swarm.md
 github_issue: 28
 github_url: "https://github.com/HinchK/stampede/issues/28"
-synced_at: "2026-09-22T03:16:07Z"
+synced_at: "2026-09-22T03:50:13Z"
 ---
 
 # GitHub Issues Two-Way Synchronization Protocol & Tooling (T-017)

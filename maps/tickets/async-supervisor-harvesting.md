@@ -10,7 +10,7 @@ owns: loop-bot-herd.sh,tests/test_async_gate.sh
 parent: maps/universal-herdr-swarm.md
 github_issue: 21
 github_url: "https://github.com/HinchK/stampede/issues/21"
-synced_at: "2026-09-22T03:16:07Z"
+synced_at: "2026-09-22T03:50:13Z"
 ---
 
 # Asynchronous Supervisor Harvesting and Durable Gate Jobs (P3-3)

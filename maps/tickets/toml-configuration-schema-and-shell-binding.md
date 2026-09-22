@@ -9,7 +9,7 @@ owns: lib/config.sh
 parent: maps/universal-herdr-swarm.md
 github_issue: 53
 github_url: "https://github.com/HinchK/stampede/issues/53"
-synced_at: "2026-09-22T03:16:07Z"
+synced_at: "2026-09-22T03:50:13Z"
 ---
 
 # TOML Configuration Schema and Shell Binding

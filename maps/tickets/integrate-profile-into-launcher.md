@@ -13,7 +13,7 @@ resolution:
   date: "2026-09-19"
 github_issue: 31
 github_url: "https://github.com/HinchK/stampede/issues/31"
-synced_at: "2026-09-22T03:16:07Z"
+synced_at: "2026-09-22T03:50:13Z"
 ---
 
 # Integrate Profile Detection into Swarm Launcher (T-INT-1)
