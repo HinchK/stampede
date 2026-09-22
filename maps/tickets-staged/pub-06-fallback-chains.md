@@ -4,10 +4,17 @@ title: "Per-seat provider fallback chains (kinds = [...])"
 type: wayfinder:task
 status: ready
 assignee: arch
-owns: herdr-loop-swarm.sh,lib/config.sh,swarm.config.toml,tests/test_config.sh
+owns: herdr-loop-swarm.sh,lib/config.sh,swarm.config.toml,tests/test_config.sh,lib/providers.sh,lib/cli/stampede-doctor.sh,tests/test_providers.sh,tests/test_cli_doctor.sh,Makefile
 parent: maps/public-multi-provider.md
 blocked_by: PUB-2
 ---
+
+> owns amended at execution (receipted): added `lib/providers.sh` (chain
+> resolver + timeout-optional probe hardening), `lib/cli/stampede-doctor.sh`
+> (chain-aware rows), `tests/test_providers.sh` / `tests/test_cli_doctor.sh`
+> (resolver + FALLBACK assertions), and `Makefile` (lint coverage for
+> `lib/cli/*.sh` — a coverage hole PUB-1 left). No other live ticket owns
+> these files in this wave.
 
 # PUB-6 — Fallback chains: seats survive a missing provider (Wave 10, runs alone)
 
