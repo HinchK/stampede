@@ -3,15 +3,15 @@
 - **Status**: Accepted
 - **Date**: 2026-09-19
 - **Deciders**: `arch`, `pm`, `looper`, `agy-docs`
-- **Consulted**: [Phase 3 Fan-Out Roadmap §1.3](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md), [Ticket P3-3 (Async Supervisor Harvesting)](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/async-supervisor-harvesting.md), [ADR 0002](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0002-exact-sha-supervisor-deduplication.md), [ADR 0008](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md), [ADR 0009](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0009-arbiter-branch-integration-and-cas-merge.md), [ADR 0011](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0011-multi-worker-floor-topologies-and-concurrency.md), [ADR 0012](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0012-task-partitioning-and-disjoint-dispatches.md)
+- **Consulted**: [Phase 3 Fan-Out Roadmap §1.3](../audits/2026-09-19-phase3-concurrent-fanout-roadmap.md), [Ticket P3-3 (Async Supervisor Harvesting)](../../maps/tickets/async-supervisor-harvesting.md), [ADR 0002](0002-exact-sha-supervisor-deduplication.md), [ADR 0008](0008-supervisor-worktree-suite-gating-and-drift.md), [ADR 0009](0009-arbiter-branch-integration-and-cas-merge.md), [ADR 0011](0011-multi-worker-floor-topologies-and-concurrency.md), [ADR 0012](0012-task-partitioning-and-disjoint-dispatches.md)
 
 ---
 
 ## 1. Context and Problem Statement
 
-In Phase 1 and Phase 2, the supervisor daemon ([`loop-bot-herd.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/loop-bot-herd.sh)) harvested completion verdicts by sequentially iterating over `EXPECTED_SEATS` and executing the project test suite (`TEST_CMD`) synchronously inline within the poll loop (`loop-bot-herd.sh:223`).
+In Phase 1 and Phase 2, the supervisor daemon ([`loop-bot-herd.sh`](../../loop-bot-herd.sh)) harvested completion verdicts by sequentially iterating over `EXPECTED_SEATS` and executing the project test suite (`TEST_CMD`) synchronously inline within the poll loop (`loop-bot-herd.sh:223`).
 
-In a single-worker environment, synchronous test execution was acceptable. However, Phase 3 scales the swarm to $N$ concurrent implementation seats (`arch-1`, `arch-2`, etc. per [ADR 0011](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0011-multi-worker-floor-topologies-and-concurrency.md)). In a multi-worker topology, inline synchronous suite gating introduces a severe head-of-line blocking bottleneck:
+In a single-worker environment, synchronous test execution was acceptable. However, Phase 3 scales the swarm to $N$ concurrent implementation seats (`arch-1`, `arch-2`, etc. per [ADR 0011](0011-multi-worker-floor-topologies-and-concurrency.md)). In a multi-worker topology, inline synchronous suite gating introduces a severe head-of-line blocking bottleneck:
 1. **Harvest Loop Starvation**: When worker `arch-1` emits an `ARCH DONE #<ticket> <sha>` verdict with a long-running test suite (e.g. 60–300s under `SUITE_TIMEOUT_S=300`), the supervisor blocks on that single test run. During this time, the supervisor cannot read terminal panes from other seats, evaluate other completed tickets, update telemetry, release task leases, or trigger Arbiter promotions. With $N$ active seats, a sequential poll pass can stall for $N \times 300$ seconds.
 2. **Resource Thrashing Risk**: Spawning unconstrained background test suites simultaneously across all workers risks CPU starvation, disk I/O bottlenecks, memory pressure, and port/database collisions (Advisory Finding H5).
 3. **TOCTOU Drift Vulnerability in Background Execution**: If a test suite runs asynchronously in the background of an isolated worktree, the worker agent might continue modifying files, creating new commits, or generating untracked test fixtures while the runner is active, invalidating the test result.
@@ -46,7 +46,7 @@ To achieve scalable multi-worker fan-out, the supervisor suite gate must be tran
 
 ## 4. Decision
 
-We adopted **Option C**. We establish the following architectural standards across [`loop-bot-herd.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/loop-bot-herd.sh) and the supervisor daemon:
+We adopted **Option C**. We establish the following architectural standards across [`loop-bot-herd.sh`](../../loop-bot-herd.sh) and the supervisor daemon:
 
 ### A. Durable Gate Job Records (`.herdr-swarm/gates/<seat>-<sha7>.job`)
 When a seat emits an eligible `ARCH DONE #<ticket> <sha>` verdict and passes initial reality checks:
@@ -127,7 +127,7 @@ On each iteration of `harvest_verdicts` (running every few seconds):
    ```bash
    arbiter_enqueue "$ticket" "$sha" "$seat"
    ```
-   This hands off the candidate branch directly to the transactional Compare-and-Swap Arbiter ([ADR 0009](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0009-arbiter-branch-integration-and-cas-merge.md)).
+   This hands off the candidate branch directly to the transactional Compare-and-Swap Arbiter ([ADR 0009](0009-arbiter-branch-integration-and-cas-merge.md)).
 4. **Cleanup**: The `.job` and `.rc` files are safely removed upon conclusive recording.
 
 ### D. Crash Safety and Cold Restart Recovery
@@ -178,10 +178,10 @@ Running parallel test runners on a single machine can lead to temporary file col
 
 ## 7. References
 
-- [Phase 3 Fan-Out Roadmap §1.3: Asynchronous Supervisor Harvesting](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md)
-- [Ticket P3-3: Asynchronous Supervisor Harvesting and Durable Gate Jobs](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/async-supervisor-harvesting.md)
-- [ADR 0002: Exact-SHA Supervisor Protocol and Re-Verdict Deduplication](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0002-exact-sha-supervisor-deduplication.md)
-- [ADR 0008: Supervisor Worktree Suite Gating, Provenance, and Drift Detection](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md)
-- [ADR 0009: Arbiter Branch Integration, Compare-and-Swap Ref Updates, and Human Promotion Gates](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0009-arbiter-branch-integration-and-cas-merge.md)
-- [ADR 0011: Multi-Worker Floor Topologies, Worktree Namespacing, and Heterogeneous Concurrency](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0011-multi-worker-floor-topologies-and-concurrency.md)
-- [ADR 0012: Task Partitioning, File Disjointness, and Durable Ledger Leases](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0012-task-partitioning-and-disjoint-dispatches.md)
+- [Phase 3 Fan-Out Roadmap §1.3: Asynchronous Supervisor Harvesting](../audits/2026-09-19-phase3-concurrent-fanout-roadmap.md)
+- [Ticket P3-3: Asynchronous Supervisor Harvesting and Durable Gate Jobs](../../maps/tickets/async-supervisor-harvesting.md)
+- [ADR 0002: Exact-SHA Supervisor Protocol and Re-Verdict Deduplication](0002-exact-sha-supervisor-deduplication.md)
+- [ADR 0008: Supervisor Worktree Suite Gating, Provenance, and Drift Detection](0008-supervisor-worktree-suite-gating-and-drift.md)
+- [ADR 0009: Arbiter Branch Integration, Compare-and-Swap Ref Updates, and Human Promotion Gates](0009-arbiter-branch-integration-and-cas-merge.md)
+- [ADR 0011: Multi-Worker Floor Topologies, Worktree Namespacing, and Heterogeneous Concurrency](0011-multi-worker-floor-topologies-and-concurrency.md)
+- [ADR 0012: Task Partitioning, File Disjointness, and Durable Ledger Leases](0012-task-partitioning-and-disjoint-dispatches.md)

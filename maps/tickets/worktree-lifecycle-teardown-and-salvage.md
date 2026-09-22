@@ -17,7 +17,7 @@ synced_at: "2026-09-22T03:50:13Z"
 
 ## Context & Problem Statement
 
-In the [Phase 2 Worktree Swarm Milestone Audit](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-milestone-audit.md), `pm` verified that P2-1 through P2-4 are functionally implemented with 100% test pass rates. However, empirical probes identified three critical lifecycle hardening defects:
+In the [Phase 2 Worktree Swarm Milestone Audit](../../docs/audits/2026-09-19-phase2-worktree-milestone-audit.md), `pm` verified that P2-1 through P2-4 are functionally implemented with 100% test pass rates. However, empirical probes identified three critical lifecycle hardening defects:
 
 1. **H1 (Stale Branch Gate):** `worktree_provision` attaches to pre-existing seat branches without checking if they contain unmerged commits from previous runs, violating ADR 0007 §C.
 2. **H2 (Untracked File Deletion):** `worktree_prune` checkpoints tracked edits via `git add -u`, but then runs `git worktree remove --force`, destroying untracked files written by workers.

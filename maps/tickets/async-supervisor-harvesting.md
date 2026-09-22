@@ -19,7 +19,7 @@ synced_at: "2026-09-22T03:50:13Z"
 
 In single-worker swarms, the supervisor (`loop-bot-herd.sh`) executes the test suite synchronously during its poll loop. In Phase 3 with $N$ concurrent workers, a long-running test gate (e.g. 60–300s) on one worker completely stalls verdict harvesting for all other workers.
 
-Per [Phase 3 Roadmap](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md) §1.3:
+Per [Phase 3 Roadmap](../../docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md) §1.3:
 - The suite gate becomes an asynchronous background job with durable state files in `.herdr-swarm/gates/<seat>-<sha7>.job`.
 - The supervisor poll loop never blocks. It checks for finished jobs (`rc` file present), re-verifies post-run tree drift, writes verdicts to session logs, and calls `arbiter_enqueue`.
 - A concurrency cap (`gate_concurrency`, default 2) bounds CPU and test runner contention.
@@ -42,8 +42,8 @@ Per [Phase 3 Roadmap](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/202
 ## Resolution
 
 - **Commit**: `eafdc91` (`feat: implement asynchronous supervisor harvesting and durable gate jobs (#P3-3)`)
-- **ADR**: [ADR 0013: Asynchronous Supervisor Gate Jobs](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0013-asynchronous-supervisor-gate-jobs.md) (`9c3ec4f`)
-- **Specification**: [P3-3 Specification](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p3-3-async-supervisor-harvesting-spec.md) (`cb3dad7`)
+- **ADR**: [ADR 0013: Asynchronous Supervisor Gate Jobs](../../docs/adr/0013-asynchronous-supervisor-gate-jobs.md) (`9c3ec4f`)
+- **Specification**: [P3-3 Specification](../../docs/audits/2026-09-19-p3-3-async-supervisor-harvesting-spec.md) (`cb3dad7`)
 - **Key Implementation Details**:
   - Non-blocking harvest loop via `gate_spawn`, `gate_reap`, `gate_recover`, `gate_running_count`, and `gate_job_running`.
   - Concurrency bounded by `FANOUT_GATE_CONCURRENCY` (default 2 in `swarm.config.toml`).

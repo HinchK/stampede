@@ -3,20 +3,20 @@
 - **Status**: Accepted
 - **Date**: 2026-09-19
 - **Deciders**: `arch`, `pm`, `looper`, `agy-docs`
-- **Consulted**: [Phase 2 Milestone Audit](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-milestone-audit.md), [Ticket P2-H](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/worktree-lifecycle-teardown-and-salvage.md), [Phase 2 Advisory](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-advisory.md), [ADR 0006](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md), [ADR 0007](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)
+- **Consulted**: [Phase 2 Milestone Audit](../audits/2026-09-19-phase2-worktree-milestone-audit.md), [Ticket P2-H](../../maps/tickets/worktree-lifecycle-teardown-and-salvage.md), [Phase 2 Advisory](../audits/2026-09-19-phase2-worktree-advisory.md), [ADR 0006](0006-git-worktree-worker-isolation.md), [ADR 0007](0007-split-pane-cwd-order-and-ledger-v2.md)
 
 ---
 
 ## 1. Context and Problem Statement
 
-Following the initial implementation of Phase 2 Git worktree worker isolation ([ADR 0006](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md), [ADR 0007](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md), [ADR 0008](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md)), comprehensive empirical auditing ([Phase 2 Milestone Audit](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-milestone-audit.md)) against live scratch repositories identified three severe operational defects in worktree lifecycle management:
+Following the initial implementation of Phase 2 Git worktree worker isolation ([ADR 0006](0006-git-worktree-worker-isolation.md), [ADR 0007](0007-split-pane-cwd-order-and-ledger-v2.md), [ADR 0008](0008-supervisor-worktree-suite-gating-and-drift.md)), comprehensive empirical auditing ([Phase 2 Milestone Audit](../audits/2026-09-19-phase2-worktree-milestone-audit.md)) against live scratch repositories identified three severe operational defects in worktree lifecycle management:
 
 1. **Silent Stale Branch Re-attachment (Audit Finding H1)**:
-   In [`lib/worktree.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/worktree.sh), while the dangerous `-B` flag was successfully eliminated to avoid resetting branches, `worktree_provision` blindly attached to any pre-existing branch `refs/heads/$branch` without evaluating its staleness. When an earlier aborted run left unmerged commits on a seat-scoped branch, subsequent launches silently adopted that branch. The worker inherited an obsolete, contaminated baseline without warning, violating [ADR 0007 §4.C](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md).
+   In [`lib/worktree.sh`](../../lib/worktree.sh), while the dangerous `-B` flag was successfully eliminated to avoid resetting branches, `worktree_provision` blindly attached to any pre-existing branch `refs/heads/$branch` without evaluating its staleness. When an earlier aborted run left unmerged commits on a seat-scoped branch, subsequent launches silently adopted that branch. The worker inherited an obsolete, contaminated baseline without warning, violating [ADR 0007 §4.C](0007-split-pane-cwd-order-and-ledger-v2.md).
 2. **Untracked File Destruction during Worktree Pruning (Audit Finding H2)**:
-   [`lib/worktree.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/worktree.sh) implemented dirty worktree checkpointing via `git add -u` onto a temporary checkpoint branch before calling `git worktree remove --force`. However, `git add -u` strictly stages *tracked* file modifications. Any **untracked files** written by an autonomous worker—such as newly created test files (`*_test.py`), new source modules, or scratch notes—were completely omitted from the checkpoint commit. When `git worktree remove --force` subsequently executed, Git silently wiped all untracked files from disk, resulting in permanent data loss. Widening the checkpoint command to `git add -A` was strictly forbidden by Advisory Hazard H8 because blind `-A` commits credentials, `.env` files, build caches, and large binary artifacts.
+   [`lib/worktree.sh`](../../lib/worktree.sh) implemented dirty worktree checkpointing via `git add -u` onto a temporary checkpoint branch before calling `git worktree remove --force`. However, `git add -u` strictly stages *tracked* file modifications. Any **untracked files** written by an autonomous worker—such as newly created test files (`*_test.py`), new source modules, or scratch notes—were completely omitted from the checkpoint commit. When `git worktree remove --force` subsequently executed, Git silently wiped all untracked files from disk, resulting in permanent data loss. Widening the checkpoint command to `git add -A` was strictly forbidden by Advisory Hazard H8 because blind `-A` commits credentials, `.env` files, build caches, and large binary artifacts.
 3. **Orphaned Worktree Leakage across Teardown Cycles (Audit Finding H3)**:
-   [`lib/lifecycle.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/lifecycle.sh) (`swarm_down`) closed Herdr terminal panes but contained no logic to manage or prune Git worktrees. Furthermore, `worktree_provision` sets administrative locks (`git worktree lock --reason "herd:<ws>:<seat>"`) to mark active seats. Because `swarm_down` never unlocked or pruned worktrees, every `up`/`down` cycle leaked locked worktrees on disk. Native `git worktree prune` intentionally skips locked worktrees, resulting in disk bloat and stale worktree registries across development sessions.
+   [`lib/lifecycle.sh`](../../lib/lifecycle.sh) (`swarm_down`) closed Herdr terminal panes but contained no logic to manage or prune Git worktrees. Furthermore, `worktree_provision` sets administrative locks (`git worktree lock --reason "herd:<ws>:<seat>"`) to mark active seats. Because `swarm_down` never unlocked or pruned worktrees, every `up`/`down` cycle leaked locked worktrees on disk. Native `git worktree prune` intentionally skips locked worktrees, resulting in disk bloat and stale worktree registries across development sessions.
 
 ---
 
@@ -40,7 +40,7 @@ Following the initial implementation of Phase 2 Git worktree worker isolation ([
 
 ## 4. Decision
 
-We adopted **Option C**. We established the following architectural standards across [`lib/worktree.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/worktree.sh) and [`lib/lifecycle.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/lifecycle.sh):
+We adopted **Option C**. We established the following architectural standards across [`lib/worktree.sh`](../../lib/worktree.sh) and [`lib/lifecycle.sh`](../../lib/lifecycle.sh):
 
 ### A. Stale Branch Re-attachment Gating (`worktree_provision`)
 When `worktree_provision` checks for an existing branch `refs/heads/$branch`:
@@ -60,7 +60,7 @@ When `worktree_provision` checks for an existing branch `refs/heads/$branch`:
    This prevents autonomous agents from building upon orphaned or conflicting historical experiments.
 
 ### B. Untracked File Salvage Protocol (`.herdr-swarm/salvage/`)
-To resolve the data-loss vulnerability (H2) without violating the Hazard H8 constraint (`git add -A` prohibition), [`lib/worktree.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/worktree.sh) introduces the **Untracked File Salvage Protocol** inside `worktree_prune`:
+To resolve the data-loss vulnerability (H2) without violating the Hazard H8 constraint (`git add -A` prohibition), [`lib/worktree.sh`](../../lib/worktree.sh) introduces the **Untracked File Salvage Protocol** inside `worktree_prune`:
 
 ```
 [worktree_prune]
@@ -91,7 +91,7 @@ To resolve the data-loss vulnerability (H2) without violating the Hazard H8 cons
 4. **Transparency**: The salvage location is logged to the terminal and recorded in telemetry.
 
 ### C. Teardown Lifecycle Integration in `swarm_down`
-[`lib/lifecycle.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/lifecycle.sh) is updated to fully manage the worktree lifecycle during `swarm_down`:
+[`lib/lifecycle.sh`](../../lib/lifecycle.sh) is updated to fully manage the worktree lifecycle during `swarm_down`:
 
 1. **Ledger Inspection**: Reads `.herdr-swarm/seats.json` v2 to identify all seats with `"isolated": true`.
 2. **Pane Teardown**: Closes Herdr agent terminal panes.
@@ -130,8 +130,8 @@ To resolve the data-loss vulnerability (H2) without violating the Hazard H8 cons
 
 ## 7. References
 
-- [Phase 2 Worktree Swarm Milestone Audit (Findings H1–H3)](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-milestone-audit.md)
-- [Ticket P2-H: Worktree Lifecycle Teardown, Untracked Salvage, and Stale Branch Gate](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/worktree-lifecycle-teardown-and-salvage.md)
-- [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md)
-- [ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)
-- [ADR 0008: Supervisor Worktree Suite Gating, Provenance, and Drift Detection](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md)
+- [Phase 2 Worktree Swarm Milestone Audit (Findings H1–H3)](../audits/2026-09-19-phase2-worktree-milestone-audit.md)
+- [Ticket P2-H: Worktree Lifecycle Teardown, Untracked Salvage, and Stale Branch Gate](../../maps/tickets/worktree-lifecycle-teardown-and-salvage.md)
+- [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](0006-git-worktree-worker-isolation.md)
+- [ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](0007-split-pane-cwd-order-and-ledger-v2.md)
+- [ADR 0008: Supervisor Worktree Suite Gating, Provenance, and Drift Detection](0008-supervisor-worktree-suite-gating-and-drift.md)

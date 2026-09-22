@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-19  
 **Source Analysis:** `lib/telemetry.py`, `lib/agent_guard.sh`, `herdr-loop-swarm.sh`, `loop-bot-herd.sh`, `swarm.config.toml`  
-**Resolves Ticket:** [Telemetry Event Schema and Live Ops Streaming](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/telemetry-event-schema-and-live-ops-streaming.md)
+**Resolves Ticket:** [Telemetry Event Schema and Live Ops Streaming](../../maps/tickets/telemetry-event-schema-and-live-ops-streaming.md)
 
 ---
 

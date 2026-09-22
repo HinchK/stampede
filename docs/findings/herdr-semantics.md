@@ -51,7 +51,7 @@ Agent names occupy a single registry across all workspaces. Attempting to seat `
 $ herdr agent start looper --kind opencode --pane wN:p1
 {"error":{"code":"agent_name_taken",
  "message":"agent name looper is already used; candidates: terminal_id=… pane_id=wM:p6
-            workspace_id=wM tab_id=wM:t2 cwd=/Users/hinchk/Fun/loop-bot-herd-agy status=Idle"}}
+            workspace_id=wM tab_id=wM:t2 cwd=/path/to/loop-bot-herd-agy status=Idle"}}
 ```
 
 Same error for duplicates within one workspace. The error's candidate diagnostics conveniently report the existing holder's pane/workspace/cwd/status.

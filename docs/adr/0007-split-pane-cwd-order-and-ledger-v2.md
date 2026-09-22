@@ -3,22 +3,22 @@
 - **Status**: Accepted
 - **Date**: 2026-09-19
 - **Deciders**: `arch`, `pm`, `looper`, `agy-docs`
-- **Consulted**: [ADR 0004](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md), [ADR 0006](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md), [P2-2 Configuration Integration Spec](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-2-config-integration-spec.md), [Phase 2 PM Worktree Advisory](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-advisory.md)
+- **Consulted**: [ADR 0004](0004-safe-workspace-lifecycle-and-seat-ledger.md), [ADR 0006](0006-git-worktree-worker-isolation.md), [P2-2 Configuration Integration Spec](../audits/2026-09-19-p2-2-config-integration-spec.md), [Phase 2 PM Worktree Advisory](../audits/2026-09-19-phase2-worktree-advisory.md)
 
 ---
 
 ## 1. Context and Problem Statement
 
-During Phase 2 implementation planning and architectural specification for Git worktree worker isolation ([P2-2 Specification](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-2-config-integration-spec.md)), three critical operational insights emerged regarding Herdr CLI semantics, worktree teardown safety, and seat state accounting:
+During Phase 2 implementation planning and architectural specification for Git worktree worker isolation ([P2-2 Specification](../audits/2026-09-19-p2-2-config-integration-spec.md)), three critical operational insights emerged regarding Herdr CLI semantics, worktree teardown safety, and seat state accounting:
 
 1. **Herdr Pane CWD Binding Semantics (Correction C1)**:
    In the Herdr terminal multiplexer, `herdr pane split` accepts `--cwd <dir>`, but `herdr agent start` **has no `--cwd` argument**. An agent hosted in a pane strictly inherits the pane's initial working directory at creation time. If the swarm launcher splits a pane *before* provisioning the worktree, the pane is created in the repository root (`$TARGET_DIR`). Once created, the pane's working directory cannot be changed via Herdr agent start commands. The agent is seated in the root working tree, completely violating the isolation boundary and risking shared checkout collisions.
 2. **Destructive Teardown Risk in ADR 0006 (Amendment A1)**:
-   [ADR 0006 §4.D.3](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md) originally specified that `swarm_down` would execute `git worktree remove --force "$worktree_dir"`. Using `--force` unconditionally discards uncommitted file modifications if an agent crashes, stalls, or is interrupted mid-task. This contradicts the fundamental safety guarantee that "work is never lost." Git's native refusal to remove a dirty worktree is an essential safety net that must be respected.
+   [ADR 0006 §4.D.3](0006-git-worktree-worker-isolation.md) originally specified that `swarm_down` would execute `git worktree remove --force "$worktree_dir"`. Using `--force` unconditionally discards uncommitted file modifications if an agent crashes, stalls, or is interrupted mid-task. This contradicts the fundamental safety guarantee that "work is never lost." Git's native refusal to remove a dirty worktree is an essential safety net that must be respected.
 3. **Stale Branch Contamination (Amendment A2)**:
-   [ADR 0006 §4.C.2](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md) originally specified: "if branch exists, attach." Because branch names are seat-scoped (`swarm/<slug>/<seat>`), branches persist across swarm runs. Silently attaching to a pre-existing branch from an earlier run hands the worker stale, unintegrated commits, leading to spurious merge conflicts and dirty baselines (Hazard H3).
+   [ADR 0006 §4.C.2](0006-git-worktree-worker-isolation.md) originally specified: "if branch exists, attach." Because branch names are seat-scoped (`swarm/<slug>/<seat>`), branches persist across swarm runs. Silently attaching to a pre-existing branch from an earlier run hands the worker stale, unintegrated commits, leading to spurious merge conflicts and dirty baselines (Hazard H3).
 4. **State Schema Limitations (Ledger v1)**:
-   The v1 seat ledger (`.herdr-swarm/seats.json`) defined in [ADR 0004](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md) tracked only `workspace_id` and `{name, kind, pane}`. It lacked fields to record worktree paths, branch names, baseline commit SHAs, or isolation flags, preventing downstream tooling (`loop-bot-herd.sh` and `swarm_down`) from determining where each seat executes and which worktrees require lifecycle management.
+   The v1 seat ledger (`.herdr-swarm/seats.json`) defined in [ADR 0004](0004-safe-workspace-lifecycle-and-seat-ledger.md) tracked only `workspace_id` and `{name, kind, pane}`. It lacked fields to record worktree paths, branch names, baseline commit SHAs, or isolation flags, preventing downstream tooling (`loop-bot-herd.sh` and `swarm_down`) from determining where each seat executes and which worktrees require lifecycle management.
 
 ---
 
@@ -114,7 +114,7 @@ When `worktree_provision` encounters an existing branch `swarm/<slug>/<seat>`:
       "kind": "agy",
       "pane": "wM:p1",
       "isolated": false,
-      "worktree_dir": "/Users/hinchk/Fun/kultivait",
+      "worktree_dir": "/path/to/target-repo",
       "branch": "main",
       "branch_created": false,
       "provisioned_at": "2026-09-19T13:40:00Z"
@@ -124,7 +124,7 @@ When `worktree_provision` encounters an existing branch `swarm/<slug>/<seat>`:
       "kind": "opencode",
       "pane": "wM:p2",
       "isolated": true,
-      "worktree_dir": "/Users/hinchk/Fun/kultivait/.herdr-swarm/worktrees/arch-kultivait",
+      "worktree_dir": "/path/to/target-repo/.herdr-swarm/worktrees/arch-kultivait",
       "branch": "swarm/kultivait/arch",
       "branch_created": true,
       "provisioned_at": "2026-09-19T13:40:00Z"

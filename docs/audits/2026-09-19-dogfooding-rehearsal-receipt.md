@@ -2,9 +2,9 @@
 
 **Date:** 2026-09-19  
 **Orchestrator:** `looper` (wM:p1, AGY Flash)  
-**Host Workspace:** `wM` (`/Users/hinchk/Fun/loop-bot-herd-agy`)  
+**Host Workspace:** `wM` (`loop-bot-herd-agy`)  
 **Target Scratch Repository:** `/tmp/herdr-dogfood-scratch-rehearsal`  
-**Parent Ticket / Audit Ref:** [PM M3 Audit Recommendation 2](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-m3-completion-audit.md), [T-016c](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/safe-workspace-targeting-in-launcher.md)
+**Parent Ticket / Audit Ref:** [PM M3 Audit Recommendation 2](2026-09-19-m3-completion-audit.md), [T-016c](../../maps/tickets-parked/safe-workspace-targeting-in-launcher.md)
 
 ---
 

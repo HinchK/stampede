@@ -10,8 +10,8 @@ parent: maps/universal-herdr-swarm.md
 
 # Phase 3: Arbiter Batch Integration and Non-Blocking Drain Pipeline (P3-4)
 
-**Specification:** [P3-4 Arbiter Batching Spec](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p3-4-arbiter-batching-spec.md)
-**Roadmap:** [Phase 3 Concurrent Fan-Out](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md) §1.4 (lever P3-a)
+**Specification:** [P3-4 Arbiter Batching Spec](../../docs/audits/2026-09-19-p3-4-arbiter-batching-spec.md)
+**Roadmap:** [Phase 3 Concurrent Fan-Out](../../docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md) §1.4 (lever P3-a)
 
 ## 1. Intended Outcome
 

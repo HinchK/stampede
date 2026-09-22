@@ -19,7 +19,7 @@ synced_at: "2026-09-22T03:50:13Z"
 
 In Phase 2, multiple worker agents develop concurrently in isolated Git worktrees (`.herdr-swarm/worktrees/<seat>`). Once a worker's task achieves a verified GREEN suite gate in its isolated worktree, the resulting branch must be merged cleanly without race conditions or corrupting the root working checkout.
 
-PM's comprehensive specification in [docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md) defines the exact deterministic shell tooling (`lib/arbiter.sh`) for serializing integration into a dedicated `swarm/<slug>/integration` branch using Compare-and-Swap (CAS), gating the combined tree in a detached worktree, and providing human-supervised promotion.
+PM's comprehensive specification in [docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md](../../docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md) defines the exact deterministic shell tooling (`lib/arbiter.sh`) for serializing integration into a dedicated `swarm/<slug>/integration` branch using Compare-and-Swap (CAS), gating the combined tree in a detached worktree, and providing human-supervised promotion.
 
 ## Preamble
 

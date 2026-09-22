@@ -1,16 +1,16 @@
 # Phase 3 Multi-Worker Fan-Out: GitHub Milestone, Project Board & Issue Mapping Structure
 
 **Date:** 2026-09-19 · **Agent:** `agy-gh` · **Status:** Active Architecture & Sync Specification  
-**Associated Roadmap:** [`docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md)  
-**Parent Map:** [`maps/universal-herdr-swarm.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/universal-herdr-swarm.md)  
-**Tooling Under Test:** [`lib/gh_sync.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/gh_sync.sh)  
+**Associated Roadmap:** [`docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md`](../audits/2026-09-19-phase3-concurrent-fanout-roadmap.md)  
+**Parent Map:** [`maps/universal-herdr-swarm.md`](../../maps/universal-herdr-swarm.md)  
+**Tooling Under Test:** [`lib/gh_sync.sh`](../../lib/gh_sync.sh)  
 **Ticket Ref:** `#T-GH-P3SYNC`
 
 ---
 
 ## 1. Executive Summary
 
-Phase 2 established verified Git worktree isolation ([ADR 0006](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md)), durable seat ledgers v2 ([ADR 0007](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)), worktree-scoped suite gating with TOCTOU drift detection ([ADR 0008](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md)), and atomic Compare-and-Swap branch integration via the Arbiter ([ADR 0009](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0009-arbiter-branch-integration-and-cas-merge.md)).
+Phase 2 established verified Git worktree isolation ([ADR 0006](../adr/0006-git-worktree-worker-isolation.md)), durable seat ledgers v2 ([ADR 0007](../adr/0007-split-pane-cwd-order-and-ledger-v2.md)), worktree-scoped suite gating with TOCTOU drift detection ([ADR 0008](../adr/0008-supervisor-worktree-suite-gating-and-drift.md)), and atomic Compare-and-Swap branch integration via the Arbiter ([ADR 0009](../adr/0009-arbiter-branch-integration-and-cas-merge.md)).
 
 **Phase 3** scales the architecture from sequential single-worker execution into an **Autonomous Concurrent Multi-Ticket Fan-Out Swarm**. In Phase 3:
 - Implementation seats expand into replicable worker pools (`arch-1`, `arch-2`, etc.).
@@ -40,9 +40,9 @@ The core Phase 3 tickets are mapped to the GitHub milestone, standard issue titl
 
 | Local Ticket ID | Title & Local Spec Path | Remote Issue Title | Milestone | Default Assigned Worker | Issue Labels |
 | :---: | :--- | :--- | :---: | :---: | :--- |
-| **`P3-1`** | Multi-Worker Config & Dynamic Roster Expansion<br>[`maps/tickets/multi-worker-config-and-roster-expansion.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/multi-worker-config-and-roster-expansion.md) | `[P3-1] Multi-Worker Config & Dynamic Roster Expansion` | `Phase 3 — Fan-Out` | `worker:arch-1` | `swarm:ticket`, `phase:3`, `type:prototype`, `worker:arch-1`, `area:config` |
-| **`P3-2`** | Task Intake Partition Checking and Ledger Lease Protocol<br>[`maps/tickets/task-intake-partition-checking.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/task-intake-partition-checking.md) | `[P3-2] Task Intake Partition Checking and Ledger Lease Protocol` | `Phase 3 — Fan-Out` | `worker:arch-1` | `swarm:ticket`, `phase:3`, `type:prototype`, `worker:arch-1`, `area:partitioning` |
-| **`P3-3`** | Asynchronous Supervisor Harvesting and Durable Gate Jobs<br>[`maps/tickets/async-supervisor-harvesting.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/async-supervisor-harvesting.md) | `[P3-3] Asynchronous Supervisor Harvesting and Durable Gate Jobs` | `Phase 3 — Fan-Out` | `worker:arch-2` | `swarm:ticket`, `phase:3`, `type:prototype`, `worker:arch-2`, `area:supervisor` |
+| **`P3-1`** | Multi-Worker Config & Dynamic Roster Expansion<br>[`maps/tickets/multi-worker-config-and-roster-expansion.md`](../../maps/tickets/multi-worker-config-and-roster-expansion.md) | `[P3-1] Multi-Worker Config & Dynamic Roster Expansion` | `Phase 3 — Fan-Out` | `worker:arch-1` | `swarm:ticket`, `phase:3`, `type:prototype`, `worker:arch-1`, `area:config` |
+| **`P3-2`** | Task Intake Partition Checking and Ledger Lease Protocol<br>[`maps/tickets/task-intake-partition-checking.md`](../../maps/tickets/task-intake-partition-checking.md) | `[P3-2] Task Intake Partition Checking and Ledger Lease Protocol` | `Phase 3 — Fan-Out` | `worker:arch-1` | `swarm:ticket`, `phase:3`, `type:prototype`, `worker:arch-1`, `area:partitioning` |
+| **`P3-3`** | Asynchronous Supervisor Harvesting and Durable Gate Jobs<br>[`maps/tickets/async-supervisor-harvesting.md`](../../maps/tickets/async-supervisor-harvesting.md) | `[P3-3] Asynchronous Supervisor Harvesting and Durable Gate Jobs` | `Phase 3 — Fan-Out` | `worker:arch-2` | `swarm:ticket`, `phase:3`, `type:prototype`, `worker:arch-2`, `area:supervisor` |
 
 ### Detailed Ticket Specifications
 
@@ -139,7 +139,7 @@ flowchart LR
 
 ## 6. Dry-Run Validation (`lib/gh_sync.sh`)
 
-The synchronization engine [`lib/gh_sync.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/gh_sync.sh) was executed in `--dry-run` mode against the Phase 3 ticket set to confirm parsing, schema adherence, and planned remote issue generation.
+The synchronization engine [`lib/gh_sync.sh`](../../lib/gh_sync.sh) was executed in `--dry-run` mode against the Phase 3 ticket set to confirm parsing, schema adherence, and planned remote issue generation.
 
 ### Terminal Execution Receipt
 
@@ -149,7 +149,7 @@ $ bash lib/gh_sync.sh --dry-run maps/tickets --ticket "P3-1,P3-2,P3-3"
 
 ```text
 === Universal Swarm: GitHub Issues Sync ===
-Target Directory : /Users/hinchk/Fun/loop-bot-herd-agy
+Target Directory : /path/to/loop-bot-herd-agy
 GitHub Repo      : HinchK/prototype
 Mode             : DRY-RUN (safe, zero unconfirmed writes)
 Direction        : push

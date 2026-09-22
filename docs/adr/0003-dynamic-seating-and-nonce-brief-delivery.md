@@ -3,7 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-09-19
 - **Deciders**: `arch`, `pm`, `looper`
-- **Consulted**: [T-001](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/herdr-semantics.md), [T-003](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/toml-configuration-schema-and-shell-binding.md), [T-006](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/brief-templating-syntax-and-nonce-file-protocol.md), [T-INT-2](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/integrate-config-and-briefs-into-launcher.md)
+- **Consulted**: [T-001](../findings/herdr-semantics.md), [T-003](../../maps/tickets/toml-configuration-schema-and-shell-binding.md), [T-006](../../maps/tickets/brief-templating-syntax-and-nonce-file-protocol.md), [T-INT-2](../../maps/tickets/integrate-config-and-briefs-into-launcher.md)
 
 ---
 
@@ -12,7 +12,7 @@
 The original swarm launcher (`herdr-loop-swarm.sh`) suffered from tightly coupled seat configuration and an unreliable brief dispatch mechanism:
 
 1. **Hardcoded Seating Matrix**: The launcher hardcoded seats (`arch`, `looper`, `pm`, `docs`, `gh`, `reviewer`), agent runtime kinds (`opencode`, `agy`, `claude`), and model identifiers directly into shell script arrays. Changing agent models or enabling optional seats required modifying launcher code directly.
-2. **Global Agent Name Collisions**: Empirical research ([`docs/findings/herdr-semantics.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/herdr-semantics.md)) confirmed that Herdr agent names occupy a **single, server-global registry**. Attempting to run swarms concurrently in two different directories failed because `arch` or `looper` was already registered. Moreover, Herdr agent names strictly enforce the grammar `^[a-z][a-z0-9_-]*$`; proposed naming schemes using unicode middle dots (e.g. `arch·slug`) are rejected with `invalid_agent_name`.
+2. **Global Agent Name Collisions**: Empirical research ([`docs/findings/herdr-semantics.md`](../findings/herdr-semantics.md)) confirmed that Herdr agent names occupy a **single, server-global registry**. Attempting to run swarms concurrently in two different directories failed because `arch` or `looper` was already registered. Moreover, Herdr agent names strictly enforce the grammar `^[a-z][a-z0-9_-]*$`; proposed naming schemes using unicode middle dots (e.g. `arch·slug`) are rejected with `invalid_agent_name`.
 3. **Terminal Input Buffer Overflow**: Standing briefs are 3–10 KB markdown documents. The legacy launcher dumped raw brief text directly into the agent prompt interface:
    ```bash
    # DANGEROUS: Floods terminal buffer
@@ -65,7 +65,7 @@ We adopted **Option C**. We implemented dynamic seating, safe slug namespacing, 
 - At swarm launch, `render_all_briefs` renders templates into `.herdr-swarm/briefs/<seat>.md` for the specific target repository and seated identities.
 
 ### D. Nonce Brief Delivery Protocol (`deliver_brief_nonce`)
-Instead of injecting massive prompt strings, [`lib/briefs.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/briefs.sh) dispatches a compact (<200 bytes) reference prompt:
+Instead of injecting massive prompt strings, [`lib/briefs.sh`](../../lib/briefs.sh) dispatches a compact (<200 bytes) reference prompt:
 
 ```bash
 deliver_brief_nonce() {

@@ -3,15 +3,15 @@
 - **Status**: Accepted
 - **Date**: 2026-09-19
 - **Deciders**: `arch`, `pm`, `looper`, `agy-docs`
-- **Consulted**: [P2-4 Specification](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md), [Ticket P2-4](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/arbiter-and-branch-reconciliation.md), [Phase 2 Advisory](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-advisory.md), [ADR 0006](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md), [ADR 0007](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md), [ADR 0008](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md)
+- **Consulted**: [P2-4 Specification](../audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md), [Ticket P2-4](../../maps/tickets/arbiter-and-branch-reconciliation.md), [Phase 2 Advisory](../audits/2026-09-19-phase2-worktree-advisory.md), [ADR 0006](0006-git-worktree-worker-isolation.md), [ADR 0007](0007-split-pane-cwd-order-and-ledger-v2.md), [ADR 0008](0008-supervisor-worktree-suite-gating-and-drift.md)
 
 ---
 
 ## 1. Context and Problem Statement
 
-In Phase 2, autonomous workers develop in parallel inside isolated Git worktrees (`.herdr-swarm/worktrees/<seat>`) and commit to task-scoped branches (`swarm/<slug>/<seat>`). Once a worker's implementation passes the independent worktree Suite Gate ([ADR 0008](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md)), its commits must be reconciled and integrated into the primary project baseline.
+In Phase 2, autonomous workers develop in parallel inside isolated Git worktrees (`.herdr-swarm/worktrees/<seat>`) and commit to task-scoped branches (`swarm/<slug>/<seat>`). Once a worker's implementation passes the independent worktree Suite Gate ([ADR 0008](0008-supervisor-worktree-suite-gating-and-drift.md)), its commits must be reconciled and integrated into the primary project baseline.
 
-Early designs contemplated having an arbiter process automatically merge or fast-forward green worker commits directly into `main` ([`docs/worktree-swarm.md` §7 Rule 1](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/worktree-swarm.md)). However, empirical testing ([P2-4 Spec §2.3](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md)) revealed critical concurrency hazards and Git index corruption traps when updating checked-out branches:
+Early designs contemplated having an arbiter process automatically merge or fast-forward green worker commits directly into `main` ([`docs/worktree-swarm.md` §7 Rule 1](../worktree-swarm.md)). However, empirical testing ([P2-4 Spec §2.3](../audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md)) revealed critical concurrency hazards and Git index corruption traps when updating checked-out branches:
 
 1. **The Staged Deletion Index Desync Hazard (Probed)**:
    In the Herdr workspace, the root repository checkout (`$REPO_DIR`) hosts the orchestrator (`looper`), strategic supervisor (`pm`), and human operator on `main`.
@@ -23,7 +23,7 @@ Early designs contemplated having an arbiter process automatically merge or fast
 2. **Combination Breakdown (Two Greens $\neq$ Combined Green)**:
    Two isolated branches can each pass their independent test suite gates in isolation (e.g. seat A modifies an internal API, while seat B implements a caller assuming the old API). When merged, the combination breaks. Integrating branches directly into `main` without pre-gating the merged combination causes broken builds on the baseline branch.
 3. **Silent Data Loss via Non-Atomic Ref Updates**:
-   Empirical testing in the [Phase 2 Advisory](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-advisory.md) proved that concurrent plain `git update-ref` calls without expected-old checks silently overwrite each other (11 out of 12 updates lost).
+   Empirical testing in the [Phase 2 Advisory](../audits/2026-09-19-phase2-worktree-advisory.md) proved that concurrent plain `git update-ref` calls without expected-old checks silently overwrite each other (11 out of 12 updates lost).
 4. **Tip Drift vs Gated SHA**:
    Workers frequently continue committing in their worktree after emitting a verdict. Merging the worker's branch tip rather than the explicitly gated commit SHA violates auditability and incorporates untested code.
 
@@ -149,9 +149,9 @@ Advancing `main` is strictly reserved for human-authorized promotion (`lib/arbit
 
 ## 7. References
 
-- [P2-4 Specification: Arbiter Branch Merge and PR Reconciliation](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md)
-- [Ticket P2-4: Phase 2 Arbiter and Branch Reconciliation](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/arbiter-and-branch-reconciliation.md)
-- [Phase 2 Advisory: Git Index and Ref Concurrency Hazards](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-advisory.md)
-- [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md)
-- [ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)
-- [ADR 0008: Supervisor Worktree Suite Gating, Provenance, and Drift Detection](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md)
+- [P2-4 Specification: Arbiter Branch Merge and PR Reconciliation](../audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md)
+- [Ticket P2-4: Phase 2 Arbiter and Branch Reconciliation](../../maps/tickets/arbiter-and-branch-reconciliation.md)
+- [Phase 2 Advisory: Git Index and Ref Concurrency Hazards](../audits/2026-09-19-phase2-worktree-advisory.md)
+- [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](0006-git-worktree-worker-isolation.md)
+- [ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](0007-split-pane-cwd-order-and-ledger-v2.md)
+- [ADR 0008: Supervisor Worktree Suite Gating, Provenance, and Drift Detection](0008-supervisor-worktree-suite-gating-and-drift.md)

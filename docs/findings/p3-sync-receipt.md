@@ -1,18 +1,18 @@
 # GitHub Issues Sync Validation Receipt: Phase 3 Multi-Worker & `owns:` Schema Audit
 
 **Date:** 2026-09-19 · **Agent:** `agy-gh` · **Status:** Validated (PASS — 34/34 Tickets Audited)  
-**Tooling Under Test:** [`lib/gh_sync.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/gh_sync.sh)  
+**Tooling Under Test:** [`lib/gh_sync.sh`](../../lib/gh_sync.sh)  
 **Target Scope:** Complete Catalog in `maps/tickets/*.md` (34 tickets, including Phase 3 fanout & partition tickets)  
 **Target Repository:** `HinchK/prototype` (via `.herdr-swarm/profile.env`)  
-**Associated Architecture:** [`docs/adr/0012-task-partitioning-and-disjoint-dispatches.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0012-task-partitioning-and-disjoint-dispatches.md)  
-**Audit Specification:** [`docs/audits/2026-09-19-p3-2-task-partition-check-spec.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-p3-2-task-partition-check-spec.md)  
+**Associated Architecture:** [`docs/adr/0012-task-partitioning-and-disjoint-dispatches.md`](../adr/0012-task-partitioning-and-disjoint-dispatches.md)  
+**Audit Specification:** [`docs/audits/2026-09-19-p3-2-task-partition-check-spec.md`](../audits/2026-09-19-p3-2-task-partition-check-spec.md)  
 **Ticket Ref:** `#T-GH-P3RECEIPT`
 
 ---
 
 ## 1. Executive Summary
 
-This receipt captures the comprehensive dry-run validation pass of [`lib/gh_sync.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/gh_sync.sh) against all 34 active ticket specifications in `maps/tickets/` following the Phase 3 schema enhancement that introduced single-line comma-separated `owns:` frontmatter paths across the catalog.
+This receipt captures the comprehensive dry-run validation pass of [`lib/gh_sync.sh`](../../lib/gh_sync.sh) against all 34 active ticket specifications in `maps/tickets/` following the Phase 3 schema enhancement that introduced single-line comma-separated `owns:` frontmatter paths across the catalog.
 
 ### Key Validation Outcomes
 
@@ -21,7 +21,7 @@ This receipt captures the comprehensive dry-run validation pass of [`lib/gh_sync
 2. **100% Frontmatter Parse Success (0 Errors):**
    All 34 markdown tickets in `maps/tickets/*.md` parsed cleanly through the Python YAML extraction engine in `lib/gh_sync.sh`. The newly added `owns:` paths conformed strictly to the single-line comma-delimited requirement (`owns: path1,path2`), completely avoiding multi-line list truncation bugs.
 3. **Task Partitioning & Lease Alignment:**
-   The annotated `owns:` paths provide the source of truth for [`lib/partition.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/partition.sh) and the lease protocol ([ADR 0012](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0012-task-partitioning-and-disjoint-dispatches.md)), ensuring that multi-worker dispatches verify disjoint asset ownership prior to worktree creation while maintaining full bi-directional GitHub sync compatibility.
+   The annotated `owns:` paths provide the source of truth for [`lib/partition.sh`](../../lib/partition.sh) and the lease protocol ([ADR 0012](../adr/0012-task-partitioning-and-disjoint-dispatches.md)), ensuring that multi-worker dispatches verify disjoint asset ownership prior to worktree creation while maintaining full bi-directional GitHub sync compatibility.
 
 ---
 
@@ -72,7 +72,7 @@ The following table reflects the verified metadata, ownership scope, status, and
 
 ```text
 === Universal Swarm: GitHub Issues Sync ===
-Target Directory : /Users/hinchk/Fun/loop-bot-herd-agy
+Target Directory : /path/to/loop-bot-herd-agy
 GitHub Repo      : HinchK/prototype
 Mode             : DRY-RUN (safe, zero unconfirmed writes)
 Direction        : push

@@ -3,7 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-09-19
 - **Deciders**: `arch`, `pm`, `looper`
-- **Consulted**: [T-001](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/herdr-semantics.md), [T-011](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/workspace-lifecycle-and-clean-teardown-protocol.md), [T-011-fix](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/lifecycle-safe-teardown-and-targeting.md)
+- **Consulted**: [T-001](../findings/herdr-semantics.md), [T-011](../../maps/tickets/workspace-lifecycle-and-clean-teardown-protocol.md), [T-011-fix](../../maps/tickets/lifecycle-safe-teardown-and-targeting.md)
 
 ---
 
@@ -13,7 +13,7 @@ Herdr is an agent-centric terminal workspace multiplexer. Unlike tmux sessions, 
 
 During empirical testing and lifecycle hardening, multiple severe safety hazards were identified in earlier lifecycle implementations:
 
-1. **Dangerous `--current` Targeting**: The flag `--current` in `herdr pane split` resolves to whichever pane currently has interactive focus in the GUI/TUI, **not** to the workspace being scripted. Splitting with `--current` from an automated script while a human operator or orchestrator clicked elsewhere resulted in panes splitting inside the wrong workspace ([`docs/findings/herdr-semantics.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/herdr-semantics.md) §A3).
+1. **Dangerous `--current` Targeting**: The flag `--current` in `herdr pane split` resolves to whichever pane currently has interactive focus in the GUI/TUI, **not** to the workspace being scripted. Splitting with `--current` from an automated script while a human operator or orchestrator clicked elsewhere resulted in panes splitting inside the wrong workspace ([`docs/findings/herdr-semantics.md`](../findings/herdr-semantics.md) §A3).
 2. **Accidental Workspace Teardown**: Running `swarm down /path/to/other-project` from inside a running Herdr pane previously fell back to `$HERDR_WORKSPACE_ID`. This caused the command to destroy the operator's current workspace rather than targeting the intended project directory (Disaster Scenario D1).
 3. **Destruction of Operator Panes**: When closing agents, Herdr has no `agent stop` command; agents are retired when their hosting pane is closed. Naive teardown routines closed all panes in a workspace or killed processes by PID, destroying human operator shells and dev servers.
 
@@ -38,7 +38,7 @@ During empirical testing and lifecycle hardening, multiple severe safety hazards
 
 ## 4. Decision
 
-We adopted **Option C**. We implemented strict workspace targeting, durable seat accounting, and safe selective teardown in [`lib/lifecycle.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/lifecycle.sh):
+We adopted **Option C**. We implemented strict workspace targeting, durable seat accounting, and safe selective teardown in [`lib/lifecycle.sh`](../../lib/lifecycle.sh):
 
 ### A. Strict Physical CWD Workspace Resolution (`find_workspace_by_cwd`)
 `find_workspace_by_cwd` resolves workspaces strictly by verifying that the panes in a workspace physically reside at the target directory:

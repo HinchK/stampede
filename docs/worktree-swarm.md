@@ -2,9 +2,9 @@
 
 > **Status:** Draft / Accepted for Phase 2  
 > **Author:** `agy-docs`  
-> **Associated Decision Record:** [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md)  
-> **Master Roadmap:** [Wayfinder Map: Universal Herdr Swarm](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/universal-herdr-swarm.md)  
-> **Reference Prototype:** [`loop-bot-herd-claude/herdr-loop-claude-pm.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/loop-bot-herd-claude/herdr-loop-claude-pm.sh)
+> **Associated Decision Record:** [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](adr/0006-git-worktree-worker-isolation.md)  
+> **Master Roadmap:** [Wayfinder Map: Universal Herdr Swarm](../maps/universal-herdr-swarm.md)  
+> **Reference Prototype:** `loop-bot-herd-claude/herdr-loop-claude-pm.sh` (external lineage — not part of this repo)
 
 ---
 
@@ -127,7 +127,7 @@ Prior to launching parallel worktrees, `lib/worktree.sh` runs `partition_check`:
 
 ## 5. Durable State Accounting (`seats.json`)
 
-To preserve idempotent lifecycle management, `.herdr-swarm/seats.json` (introduced in [ADR 0004](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0004-safe-workspace-lifecycle-and-seat-ledger.md)) is extended with worktree and branch metadata:
+To preserve idempotent lifecycle management, `.herdr-swarm/seats.json` (introduced in [ADR 0004](adr/0004-safe-workspace-lifecycle-and-seat-ledger.md)) is extended with worktree and branch metadata:
 
 ```json
 {
@@ -139,7 +139,7 @@ To preserve idempotent lifecycle management, `.herdr-swarm/seats.json` (introduc
       "name": "looper-kultivait",
       "kind": "agy",
       "pane": "wM:p1",
-      "worktree_dir": "/Users/hinchk/Fun/kultivait",
+      "worktree_dir": "/path/to/target-repo",
       "branch": "main",
       "isolated": false
     },
@@ -147,7 +147,7 @@ To preserve idempotent lifecycle management, `.herdr-swarm/seats.json` (introduc
       "name": "arch-kultivait",
       "kind": "opencode",
       "pane": "wM:p2",
-      "worktree_dir": "/Users/hinchk/Fun/kultivait/.herdr-swarm/worktrees/arch-kultivait",
+      "worktree_dir": "/path/to/target-repo/.herdr-swarm/worktrees/arch-kultivait",
       "branch": "swarm/kultivait/arch",
       "isolated": true,
       "task_id": "T-101",
@@ -157,7 +157,7 @@ To preserve idempotent lifecycle management, `.herdr-swarm/seats.json` (introduc
       "name": "worker-docs-kultivait",
       "kind": "agy",
       "pane": "wM:p4",
-      "worktree_dir": "/Users/hinchk/Fun/kultivait/.herdr-swarm/worktrees/worker-docs-kultivait",
+      "worktree_dir": "/path/to/target-repo/.herdr-swarm/worktrees/worker-docs-kultivait",
       "branch": "swarm/kultivait/docs",
       "isolated": true,
       "task_id": "T-102",
@@ -171,7 +171,7 @@ To preserve idempotent lifecycle management, `.herdr-swarm/seats.json` (introduc
 
 ## 6. Independent Suite Gate in Worktree Context
 
-The supervisor daemon ([`loop-bot-herd.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/loop-bot-herd.sh)) evaluates each worker independently within that worker's assigned worktree:
+The supervisor daemon ([`loop-bot-herd.sh`](../loop-bot-herd.sh)) evaluates each worker independently within that worker's assigned worktree:
 
 1. **Detection**: Worker emits `ARCH DONE #<ticket> <sha>`.
 2. **Context Resolution**: The supervisor checks `seats.json` to find the worker's `worktree_dir`.

@@ -3,18 +3,18 @@
 - **Status**: Accepted
 - **Date**: 2026-09-19
 - **Deciders**: `arch`, `pm`, `looper`, `agy-docs`
-- **Consulted**: [Phase 3 Fan-Out Roadmap](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md), [Ticket P3-1 (Multi-Worker Config)](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/multi-worker-config-and-roster-expansion.md), [ADR 0006](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md), [ADR 0007](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md), [ADR 0008](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md), [ADR 0009](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0009-arbiter-branch-integration-and-cas-merge.md), [ADR 0010](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0010-worktree-teardown-lifecycle-and-salvage.md)
+- **Consulted**: [Phase 3 Fan-Out Roadmap](../audits/2026-09-19-phase3-concurrent-fanout-roadmap.md), [Ticket P3-1 (Multi-Worker Config)](../../maps/tickets/multi-worker-config-and-roster-expansion.md), [ADR 0006](0006-git-worktree-worker-isolation.md), [ADR 0007](0007-split-pane-cwd-order-and-ledger-v2.md), [ADR 0008](0008-supervisor-worktree-suite-gating-and-drift.md), [ADR 0009](0009-arbiter-branch-integration-and-cas-merge.md), [ADR 0010](0010-worktree-teardown-lifecycle-and-salvage.md)
 
 ---
 
 ## 1. Context and Problem Statement
 
-Phase 2 established the primitives of Git worktree isolation ([ADR 0006](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md)), CWD binding ordering ([ADR 0007](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)), isolated suite gating ([ADR 0008](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md)), transactional merge arbitration ([ADR 0009](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0009-arbiter-branch-integration-and-cas-merge.md)), and safe teardown/salvage ([ADR 0010](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0010-worktree-teardown-lifecycle-and-salvage.md)). However, the execution model in Phase 2 remained constrained to a single active implementation seat (`arch`), gating and integrating tickets one at a time.
+Phase 2 established the primitives of Git worktree isolation ([ADR 0006](0006-git-worktree-worker-isolation.md)), CWD binding ordering ([ADR 0007](0007-split-pane-cwd-order-and-ledger-v2.md)), isolated suite gating ([ADR 0008](0008-supervisor-worktree-suite-gating-and-drift.md)), transactional merge arbitration ([ADR 0009](0009-arbiter-branch-integration-and-cas-merge.md)), and safe teardown/salvage ([ADR 0010](0010-worktree-teardown-lifecycle-and-salvage.md)). However, the execution model in Phase 2 remained constrained to a single active implementation seat (`arch`), gating and integrating tickets one at a time.
 
-As empirical benchmarking demonstrated ([Phase 3 Fan-Out Roadmap](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md)), single-worker execution serializes throughput. To achieve autonomous scale, Phase 3 expands the swarm from 1 singleton worker to $N$ concurrent workers (`arch_1`, `arch_2`, etc.) operating simultaneously in isolated git worktrees.
+As empirical benchmarking demonstrated ([Phase 3 Fan-Out Roadmap](../audits/2026-09-19-phase3-concurrent-fanout-roadmap.md)), single-worker execution serializes throughput. To achieve autonomous scale, Phase 3 expands the swarm from 1 singleton worker to $N$ concurrent workers (`arch_1`, `arch_2`, etc.) operating simultaneously in isolated git worktrees.
 
 Scaling to concurrent multi-worker execution introduces four architectural challenges:
-1. **Herdr Floor Topologies and Geometry Constraints**: Herdr terminal panes must honor an 80×20 character floor (`MIN_COLS=80`, `MIN_ROWS=20` in [`lib/layout_engine.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/layout_engine.sh)). Packing multiple worker terminals into the primary `herd` tab rapidly crushes panes below minimum dimensions, causing terminal ANSI escape corruption, truncated model inputs, and agent failures.
+1. **Herdr Floor Topologies and Geometry Constraints**: Herdr terminal panes must honor an 80×20 character floor (`MIN_COLS=80`, `MIN_ROWS=20` in [`lib/layout_engine.sh`](../../lib/layout_engine.sh)). Packing multiple worker terminals into the primary `herd` tab rapidly crushes panes below minimum dimensions, causing terminal ANSI escape corruption, truncated model inputs, and agent failures.
 2. **Worktree Path and Branch Namespacing**: Parallel workers concurrently executing Git operations will conflict if filesystem paths or branch references collide or overlap.
 3. **Model Tier Routing & Token Economics**: Deploying frontier reasoning models across all $N$ parallel workers causes catastrophic token burn and rate-limit exhaustion. Conversely, deploying lightweight models on complex architectural tasks leads to hallucinations and structural defects.
 4. **Lifecycle Fault Tolerance and Crash Isolation**: A crashed, looping, or failing worker must not contaminate the root checkout, corrupt peer workers' workspaces, or block the swarm's supervisor loops.
@@ -51,10 +51,10 @@ We adopted **Option C**. We establish the following architectural standards acro
 To support $N$ workers without degrading terminal usability:
 1. **Tab Separation**:
    - **Root Anchor Tab (`herd`)**: Houses the orchestration anchors (`looper`, `pm`) executing in `$PWD` on the baseline ref.
-   - **Worker Floor (`workers` tab / Dedicated Seat Tabs)**: Autonomous implementation seats are placed in a dedicated `workers` tab. If $N \le 2$, a 50/50 split is used. If $N > 2$ or terminal width is restricted, [`lib/layout_engine.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/layout_engine.sh) automatically moves cramped panes to dedicated tabs (`seat-<slug>-<id>`).
+   - **Worker Floor (`workers` tab / Dedicated Seat Tabs)**: Autonomous implementation seats are placed in a dedicated `workers` tab. If $N \le 2$, a 50/50 split is used. If $N > 2$ or terminal width is restricted, [`lib/layout_engine.sh`](../../lib/layout_engine.sh) automatically moves cramped panes to dedicated tabs (`seat-<slug>-<id>`).
    - **Operations Tab (`ops`)**: Houses real-time telemetry streaming (`telemetry.py`), GitHub operations (`agy-gh`), documentation agents (`agy-docs`), and proxy hosts.
 2. **80×20 Geometry Floor Enforcement**:
-   [`lib/layout_engine.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/layout_engine.sh) continuously inspects pane rectangles. Any pane whose geometry drops below `MIN_COLS=80` or `MIN_ROWS=20` is immediately relocated via `herdr pane move --tab <rescue_tab>` before agent launch, preventing PTY text wrapping failures.
+   [`lib/layout_engine.sh`](../../lib/layout_engine.sh) continuously inspects pane rectangles. Any pane whose geometry drops below `MIN_COLS=80` or `MIN_ROWS=20` is immediately relocated via `herdr pane move --tab <rescue_tab>` before agent launch, preventing PTY text wrapping failures.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -86,7 +86,7 @@ To avoid cross-seat collisions and Git lock contention:
 4. **CWD Binding Order (ADR 0007 Enforcement)**: `worktree_provision` executes prior to `split_pane`, guaranteeing the terminal pane permanently attaches to the isolated directory.
 
 ### C. Heterogeneous Model Tier Routing
-To balance throughput, cost, and reasoning depth, seats in [`swarm.config.toml`](file:///Users/hinchk/Fun/loop-bot-herd-agy/swarm.config.toml) are mapped to specialized engine tiers:
+To balance throughput, cost, and reasoning depth, seats in [`swarm.config.toml`](../../swarm.config.toml) are mapped to specialized engine tiers:
 
 | Tier | Engine (`default_kind`) | Model (`model`) | Primary Allocation | Economic / Cognitive Profile |
 |---|---|---|---|---|
@@ -95,17 +95,17 @@ To balance throughput, cost, and reasoning depth, seats in [`swarm.config.toml`]
 | **Autonomous Loop Orchestration** | `agy` | `gemini-2.5-pro` | `looper` | Multimodal tool use, supervisor telemetry parsing, arbitration triggers. |
 | **Documentation & CI Operations** | `agy` | `gemini-2.5-flash` | `agy-docs`, `agy-gh` | Structured markdown generation, ADR authoring, GitHub CLI operations, ultra-low cost. |
 
-Configuration permits expanding implementation workers via explicit seats or replica templates (`replicas = N` in `swarm.config.toml`), which [`lib/config.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/config.sh) expands into `SEAT_KEYS="arch_1 arch_2 ..."`.
+Configuration permits expanding implementation workers via explicit seats or replica templates (`replicas = N` in `swarm.config.toml`), which [`lib/config.sh`](../../lib/config.sh) expands into `SEAT_KEYS="arch_1 arch_2 ..."`.
 
 ### D. Independent Lifecycle Isolation and Fault Tolerance
 1. **Crash Isolation**:
    - If worker `arch_1` crashes, loops indefinitely, or produces a RED suite verdict, worker `arch_2` continues uninhibited.
    - A crashed worker never pollutes `main` because its changes remain confined to `swarm/<slug>/arch_1`.
 2. **Asynchronous Suite Gating & Harvesting**:
-   - As specified in the [Phase 3 Fan-Out Roadmap](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md), suite gating jobs execute in the background with durable job records (`.herdr-swarm/gates/<seat>-<sha7>.job`).
+   - As specified in the [Phase 3 Fan-Out Roadmap](../audits/2026-09-19-phase3-concurrent-fanout-roadmap.md), suite gating jobs execute in the background with durable job records (`.herdr-swarm/gates/<seat>-<sha7>.job`).
    - A slow or stalled test suite on one worker does not block the supervisor from harvesting verdicts or dispatching tasks to other seats.
 3. **Safe Teardown & Salvage**:
-   - On shutdown (`swarm_down`), each worker worktree is processed per [ADR 0010](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0010-worktree-teardown-lifecycle-and-salvage.md): untracked files are archived to `.herdr-swarm/salvage/<seat>-<timestamp>/`, tracked changes are preserved on checkpoint branches, and administrative locks are released.
+   - On shutdown (`swarm_down`), each worker worktree is processed per [ADR 0010](0010-worktree-teardown-lifecycle-and-salvage.md): untracked files are archived to `.herdr-swarm/salvage/<seat>-<timestamp>/`, tracked changes are preserved on checkpoint branches, and administrative locks are released.
 
 ---
 
@@ -136,11 +136,11 @@ Configuration permits expanding implementation workers via explicit seats or rep
 
 ## 7. References
 
-- [Phase 3 Fan-Out Roadmap: Autonomous Concurrent Multi-Ticket Fan-Out](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase3-concurrent-fanout-roadmap.md)
-- [Ticket P3-1: Multi-Worker Config & Dynamic Roster Expansion](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/multi-worker-config-and-roster-expansion.md)
-- [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md)
-- [ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)
-- [ADR 0008: Supervisor Worktree Suite Gating, Provenance, and Drift Detection](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md)
-- [ADR 0009: Arbiter Branch Integration, Compare-and-Swap Ref Updates, and Human Promotion Gates](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0009-arbiter-branch-integration-and-cas-merge.md)
-- [ADR 0010: Worktree Teardown Lifecycle, Untracked File Salvage, and Stale Branch Re-attachment Gating](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0010-worktree-teardown-lifecycle-and-salvage.md)
-- [Swarm Orchestration Retrospective](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/swarm-orchestration-retrospective.md)
+- [Phase 3 Fan-Out Roadmap: Autonomous Concurrent Multi-Ticket Fan-Out](../audits/2026-09-19-phase3-concurrent-fanout-roadmap.md)
+- [Ticket P3-1: Multi-Worker Config & Dynamic Roster Expansion](../../maps/tickets/multi-worker-config-and-roster-expansion.md)
+- [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](0006-git-worktree-worker-isolation.md)
+- [ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](0007-split-pane-cwd-order-and-ledger-v2.md)
+- [ADR 0008: Supervisor Worktree Suite Gating, Provenance, and Drift Detection](0008-supervisor-worktree-suite-gating-and-drift.md)
+- [ADR 0009: Arbiter Branch Integration, Compare-and-Swap Ref Updates, and Human Promotion Gates](0009-arbiter-branch-integration-and-cas-merge.md)
+- [ADR 0010: Worktree Teardown Lifecycle, Untracked File Salvage, and Stale Branch Re-attachment Gating](0010-worktree-teardown-lifecycle-and-salvage.md)
+- [Swarm Orchestration Retrospective](../findings/swarm-orchestration-retrospective.md)

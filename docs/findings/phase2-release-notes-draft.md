@@ -2,14 +2,14 @@
 
 **Release Version:** `v0.2.0-phase2`  
 **Date:** 2026-09-19 · **Author:** `agy-gh` · **Status:** Draft / Accepted Release Candidate  
-**Master Roadmap:** [`maps/universal-herdr-swarm.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/universal-herdr-swarm.md)  
+**Master Roadmap:** [`maps/universal-herdr-swarm.md`](../../maps/universal-herdr-swarm.md)  
 **Associated Architecture Decisions:**  
-- [ADR 0006: Git Worktree Worker Isolation](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md)  
-- [ADR 0007: Split-Pane CWD Order and Durable Seat Ledger v2](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0007-split-pane-cwd-order-and-ledger-v2.md)  
-- [ADR 0008: Supervisor Worktree Suite Gating and Drift Detection](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0008-supervisor-worktree-suite-gating-and-drift.md)  
-- [Phase 2 Architecture Specification (`docs/worktree-swarm.md`)](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/worktree-swarm.md)  
-- [GitHub Issues Two-Way Synchronization Protocol (`docs/findings/github-issues-sync.md`)](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/github-issues-sync.md)  
-- [Phase 2 Release Verification Checklist (`docs/findings/phase2-release-checklist.md`)](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/phase2-release-checklist.md)
+- [ADR 0006: Git Worktree Worker Isolation](../adr/0006-git-worktree-worker-isolation.md)  
+- [ADR 0007: Split-Pane CWD Order and Durable Seat Ledger v2](../adr/0007-split-pane-cwd-order-and-ledger-v2.md)  
+- [ADR 0008: Supervisor Worktree Suite Gating and Drift Detection](../adr/0008-supervisor-worktree-suite-gating-and-drift.md)  
+- [Phase 2 Architecture Specification (`docs/worktree-swarm.md`)](../worktree-swarm.md)  
+- [GitHub Issues Two-Way Synchronization Protocol (`docs/findings/github-issues-sync.md`)](github-issues-sync.md)  
+- [Phase 2 Release Verification Checklist (`docs/findings/phase2-release-checklist.md`)](phase2-release-checklist.md)
 
 ---
 
@@ -39,7 +39,7 @@ The seat ledger (`.herdr-swarm/seats.json`) is upgraded from v1 to schema v2, es
   "schema_version": 2,
   "workspace_id": "wM",
   "project_slug": "preview",
-  "target_dir": "/Users/hinchk/Fun/loop-bot-herd-agy",
+  "target_dir": "/path/to/loop-bot-herd-agy",
   "seats": [
     {
       "key": "arch",
@@ -47,7 +47,7 @@ The seat ledger (`.herdr-swarm/seats.json`) is upgraded from v1 to schema v2, es
       "kind": "opencode",
       "pane": "wM:p3",
       "isolated": true,
-      "worktree_dir": "/Users/hinchk/Fun/loop-bot-herd-agy/.herdr-swarm/worktrees/arch",
+      "worktree_dir": "/path/to/loop-bot-herd-agy/.herdr-swarm/worktrees/arch",
       "branch": "swarm/preview/arch",
       "base_sha": "0cfae5d18e47"
     },
@@ -57,7 +57,7 @@ The seat ledger (`.herdr-swarm/seats.json`) is upgraded from v1 to schema v2, es
       "kind": "agy",
       "pane": "wM:p1",
       "isolated": false,
-      "worktree_dir": "/Users/hinchk/Fun/loop-bot-herd-agy",
+      "worktree_dir": "/path/to/loop-bot-herd-agy",
       "branch": "main",
       "base_sha": "0cfae5d18e47"
     }

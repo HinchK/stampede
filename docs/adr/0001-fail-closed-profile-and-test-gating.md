@@ -3,7 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-09-19
 - **Deciders**: `arch`, `pm`, `looper`
-- **Consulted**: [T-002](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/profile-detection-and-fail-closed-target-policy.md), [T-002-fix](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/profile-validation-and-safe-slug-emitter.md), [T-INT-1](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/integrate-profile-into-launcher.md), [PM Herd Audit](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-pm-herd-audit.md)
+- **Consulted**: [T-002](../../maps/tickets/profile-detection-and-fail-closed-target-policy.md), [T-002-fix](../../maps/tickets/profile-validation-and-safe-slug-emitter.md), [T-INT-1](../../maps/tickets/integrate-profile-into-launcher.md), [PM Herd Audit](../audits/2026-09-19-pm-herd-audit.md)
 
 ---
 
@@ -39,7 +39,7 @@ Furthermore, early iterations allowed empty interactive inputs to silently cache
 
 ## 4. Decision
 
-We adopted **Option C**. We created [`lib/profile.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/profile.sh) to establish a universal, fail-closed profiling engine with the following concrete rules:
+We adopted **Option C**. We created [`lib/profile.sh`](../../lib/profile.sh) to establish a universal, fail-closed profiling engine with the following concrete rules:
 
 ### A. Fallback and Caching Hierarchy
 1. **Explicit Cache Check**: Read `${TARGET_DIR}/.herdr-swarm/profile.env` first for cached configuration (`REPO`, `TEST_CMD`, `ECOSYSTEM`, `DOCS_DIR`).

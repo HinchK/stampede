@@ -20,7 +20,7 @@ How should the swarm manage the physical lifecycle of isolated worker worktrees,
 
 ## Preamble
 
-1. **Intended Outcome**: `arch` implements `lib/worktree.sh` following the specifications in [ADR 0006](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/adr/0006-git-worktree-worker-isolation.md) and [PM Phase 2 Advisory](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/audits/2026-09-19-phase2-worktree-advisory.md), accompanied by an automated test suite `tests/test_worktree.sh`.
+1. **Intended Outcome**: `arch` implements `lib/worktree.sh` following the specifications in [ADR 0006](../../docs/adr/0006-git-worktree-worker-isolation.md) and [PM Phase 2 Advisory](../../docs/audits/2026-09-19-phase2-worktree-advisory.md), accompanied by an automated test suite `tests/test_worktree.sh`.
 2. **Explicit Done-Criteria**:
    - `lib/worktree.sh` provides:
      - `worktree_provision(seat, slug, [base_ref], [target_dir])`:

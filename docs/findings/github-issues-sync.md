@@ -1,8 +1,8 @@
 # GitHub Issues Two-Way Synchronization Protocol (T-017)
 
 **Date:** 2026-09-19 · **Agent:** `agy-gh` · **Context:** Universal Herdr Swarm (`herd-swarm`)  
-**Prototype Assets:** [`docs/findings/github-issues-sync.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/findings/github-issues-sync.md), [`lib/gh_sync.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/gh_sync.sh)  
-**Ticket:** [T-017 (GitHub Issues Two-Way Synchronization Protocol & Tooling)](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/tickets/github-issues-two-way-sync.md) · **Parent Map:** [`maps/universal-herdr-swarm.md`](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/universal-herdr-swarm.md)
+**Prototype Assets:** [`docs/findings/github-issues-sync.md`](github-issues-sync.md), [`lib/gh_sync.sh`](../../lib/gh_sync.sh)  
+**Ticket:** [T-017 (GitHub Issues Two-Way Synchronization Protocol & Tooling)](../../maps/tickets/github-issues-two-way-sync.md) · **Parent Map:** [`maps/universal-herdr-swarm.md`](../../maps/universal-herdr-swarm.md)
 
 ---
 
@@ -201,7 +201,7 @@ REPO=$(detect_repo "$TARGET_DIR") || fail "No canonical GitHub remote detected"
 
 ## 5. Tooling Prototype: `lib/gh_sync.sh`
 
-The shell prototype [`lib/gh_sync.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/gh_sync.sh) implements this protocol.
+The shell prototype [`lib/gh_sync.sh`](../../lib/gh_sync.sh) implements this protocol.
 
 ### A. CLI Synopsis & Flags
 
@@ -225,7 +225,7 @@ Options:
 
 ```text
 === Universal Swarm: GitHub Issues Sync ===
-Target Directory : /Users/hinchk/Fun/loop-bot-herd-agy
+Target Directory : /path/to/loop-bot-herd-agy
 GitHub Repo      : HinchK/loop-bot-herd-agy
 Authentication   : Verified (@HinchK)
 Direction        : push
@@ -257,7 +257,7 @@ When executed in a repository without a configured git remote:
 
 ```text
 $ bash lib/gh_sync.sh --dry-run
-ERROR: No canonical GitHub repository detected for /Users/hinchk/Fun/loop-bot-herd-agy.
+ERROR: No canonical GitHub repository detected for /path/to/loop-bot-herd-agy.
 
 Fail-Closed Policy: Cannot synchronize issues without a verified GitHub remote.
 Remediation:

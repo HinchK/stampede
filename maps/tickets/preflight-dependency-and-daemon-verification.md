@@ -33,7 +33,7 @@ What exact set of daemon checks, CLI binary dependencies, GitHub authentication 
 
 ## Resolution
 
-Implemented and validated in [`lib/preflight.sh`](file:///Users/hinchk/Fun/loop-bot-herd-agy/lib/preflight.sh):
+Implemented and validated in [`lib/preflight.sh`](../../lib/preflight.sh):
 1. **Multi-Stage Validation Matrix:** Inspects 9 discrete requirements across daemon liveness (3 retries with 1s backoff), core CLIs (`jq`, `git`, `python3` validating `tomllib` module), GitHub authentication (`gh auth status`), agent executables (`agy`, `claude`, `opencode`), and git repository presence.
 2. **Dual-Mode Execution & Shell Portability:** Exposes public functions (`preflight_run`, `preflight_report_text`, `preflight_report_json`, `preflight_exit_code`) for sourcing into `herdr-loop-swarm.sh`, with robust guards (`${BASH_SOURCE[0]:-}`) ensuring seamless sourcing in both Bash 3.2+ and Zsh.
 3. **Machine-Readable & Quiet Flags:** Supports `--json` for automated health logging and `--quiet` for silent gate assertions. Exits 0 on clean environments and exits 1 with human-actionable remediation instructions when mandatory tools are absent.
