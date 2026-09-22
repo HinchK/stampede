@@ -111,7 +111,20 @@ For comprehensive architectural design and technical specifications, see:
 
 ## CLI Usage and Subcommands
 
-The universal launcher binary [`herdr-loop-swarm.sh`](herdr-loop-swarm.sh) provides a unified CLI interface for managing swarm lifecycles across any repository:
+The public entry point is [`bin/stampede`](bin/stampede):
+
+```bash
+bin/stampede <command> [args]
+```
+
+Lifecycle commands (`up`, `down`, `status`, `verify`, and bare invocation)
+delegate by `exec` to the launcher below — behaviour is identical however
+you call it. Any other command dispatches by convention: a file at
+`lib/cli/stampede-<cmd>.sh` defining `stampede_cmd_<cmd>()` becomes the
+`stampede <cmd>` subcommand, no dispatcher edit required. Unknown commands
+print usage and exit `1`.
+
+The underlying scripts remain valid entry points:
 
 ```bash
 ./herdr-loop-swarm.sh [up] [OPTIONS] | status [dir] | down [dir] [FLAGS] | verify [dir] [timeout_ms]

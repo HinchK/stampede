@@ -4,12 +4,16 @@ title: "bin/stampede unified entrypoint and lib/cli subcommand convention"
 type: wayfinder:task
 status: ready
 assignee: arch
-owns: bin/stampede,Makefile,README.md
+owns: bin/stampede,Makefile,README.md,tests/test_cli.sh
 parent: maps/public-multi-provider.md
 blocked_by: DOG-10
 ---
 
 # PUB-1 — `bin/stampede` entrypoint + CLI convention (Wave 8, runs alone)
+
+> Amendment at execution (receipted here, not silently): `owns` grew
+> `tests/test_cli.sh` — a dispatcher without a hermetic suite would violate
+> the repo's own receipts rule.
 
 ## 1. Intended Outcome
 
