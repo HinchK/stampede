@@ -195,7 +195,7 @@ fi
 
 if [[ ! "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
   echo "${RED}ERROR: Invalid repository slug format: '$REPO'${RESET}" >&2
-  echo "Expected format: OWNER/REPO (e.g. 'Standard-Pentest/kultivait' or 'HinchK/loop-bot-herd-agy')" >&2
+    echo "Expected format: OWNER/REPO (e.g. 'HinchK/stampede' or 'octocat/hello-world')" >&2
   exit 1
 fi
 

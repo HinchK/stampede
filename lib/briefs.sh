@@ -83,7 +83,7 @@ vars_map = {
     'GH_NAME': os.environ.get('SEAT_NAME_gh', 'agy-gh-$slug'),
     'REVIEWER_NAME': os.environ.get('SEAT_NAME_reviewer', 'reviewer-$slug'),
     'TRACE_DIR': os.environ.get('SWARM_TRACE_DIR', '.herdr-swarm/traces'),
-    'PROXY_ENDPOINT': os.environ.get('PROXY_ENDPOINT', 'http://localhost:4114/v1'),
+    'PROXY_ENDPOINT': os.environ.get('PROXY_ENDPOINT', ''),
 }
 print(json.dumps(vars_map))
 ")

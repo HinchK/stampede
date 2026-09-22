@@ -132,9 +132,12 @@ emit('SWARM_WORKTREE_ROOT', swarm.get('worktree_root', '.herdr-swarm/worktrees')
 emit('FANOUT_GATE_CONCURRENCY', fanout.get('gate_concurrency', 2))
 emit('FANOUT_MAX_WORKERS', fanout.get('max_workers', 2))
 emit('PROXY_ENABLED', str(proxy.get('enabled', False)).lower())
-emit('PROXY_ENDPOINT', proxy.get('endpoint', 'http://localhost:4114/v1'))
-emit('PROXY_HEALTH_URL', proxy.get('health_check_url', 'http://localhost:4114/openapi.json'))
+# No localhost fallbacks (DOG-7): a config without [proxy] endpoint/health
+# keys binds empty; the only live proxy URLs live in swarm.config.toml.
+emit('PROXY_ENDPOINT', proxy.get('endpoint', ''))
+emit('PROXY_HEALTH_URL', proxy.get('health_check_url', ''))
 emit('PROXY_SERVE_CMD', proxy.get('serve_cmd', ''))
+emit('PROXY_CREDENTIALS', proxy.get('credentials', ''))
 emit('GEOM_MIN_COLS', geom.get('min_cols', 80))
 emit('GEOM_MIN_ROWS', geom.get('min_rows', 20))
 

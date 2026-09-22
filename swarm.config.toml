@@ -22,7 +22,13 @@ enabled = false
 endpoint = "http://localhost:4114/v1"
 model_override = "auto"
 health_check_url = "http://localhost:4114/openapi.json"
-serve_cmd = "uv run kultivait serve"
+# No serve command ships: a fresh clone must not launch a proxy it never
+# configured. On a kultivait machine set this to "uv run kultivait serve".
+serve_cmd = ""
+# Same policy for the OpenRouter credentials file read by the supervisor's
+# credit probe (PROXY_CREDENTIALS). No default path. On a kultivait machine
+# set it to "~/.kultivait/credentials.toml".
+credentials = ""
 
 [geometry]
 min_cols = 80
@@ -60,15 +66,21 @@ tab = "herd"
 position = "bottom-right"
 worktree = true
 
+# Optional local engine, disabled by default (DOG-7): a fresh clone has no
+# pi/kultivait runtime, and `herdr agent start --kind pi` would fail to seat.
+# To enable on a machine that runs the local proxy: flip enabled, set model
+# back to "kultivait/auto", and author briefs/pi.md (git history keeps the
+# kultivait-era template).
 [seats.pi]
 name = "pi"
-role = "Local Fast Implementation Engine (pi / kultivait)"
+role = "Local Fast Implementation Engine (optional)"
 default_kind = "pi"
-model = "kultivait/auto"
+model = "auto"
 brief = "briefs/pi.md"
 tab = "herd"
 position = "bottom-left"
 worktree = true
+enabled = false
 
 [seats.looper]
 name = "looper"
