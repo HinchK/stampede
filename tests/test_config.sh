@@ -153,5 +153,71 @@ TOML
 check "5g" "non-string chain entry fails closed" \
   'if config_dump_env x "$C5D" >/dev/null 2>&1; then false; else true; fi'
 
+# ── 6. reviewer loop knobs (REV-1) ─────────────────────────────────────────
+C6="$TEST_DIR/reviewer-defaults.toml"
+cat > "$C6" <<'TOML'
+[seats.alpha]
+name = "alpha"
+default_kind = "agy"
+TOML
+check "6a" "no [reviewer] table → CONFIG_REVIEW_LOOP 0" \
+  'eval "$(config_dump_env x "$C6")" && [[ $CONFIG_REVIEW_LOOP == "0" ]]'
+check "6b" "no [reviewer] table → CONFIG_REVIEW_MAX_ROUNDS default 2" \
+  'eval "$(config_dump_env x "$C6")" && [[ $CONFIG_REVIEW_MAX_ROUNDS == "2" ]]'
+
+C6B="$TEST_DIR/reviewer-set.toml"
+cat > "$C6B" <<'TOML'
+[reviewer]
+loop = true
+max_rounds = 3
+
+[seats.alpha]
+name = "alpha"
+default_kind = "agy"
+TOML
+check "6c" "loop = true → CONFIG_REVIEW_LOOP 1" \
+  'eval "$(config_dump_env x "$C6B")" && [[ $CONFIG_REVIEW_LOOP == "1" ]]'
+check "6d" "max_rounds = 3 → CONFIG_REVIEW_MAX_ROUNDS 3" \
+  'eval "$(config_dump_env x "$C6B")" && [[ $CONFIG_REVIEW_MAX_ROUNDS == "3" ]]'
+check "6e" "shipped config: reviewer loop off by default" \
+  'eval "$(config_dump_env x "$SCRIPT_DIR/swarm.config.toml")" && [[ $CONFIG_REVIEW_LOOP == "0" && $CONFIG_REVIEW_MAX_ROUNDS == "2" ]]'
+
+C6C="$TEST_DIR/reviewer-badloop.toml"
+cat > "$C6C" <<'TOML'
+[reviewer]
+loop = "yes"
+
+[seats.alpha]
+name = "alpha"
+default_kind = "agy"
+TOML
+check "6f" "loop as truthy string fails closed" \
+  'if config_dump_env x "$C6C" >/dev/null 2>&1; then false; else true; fi'
+
+C6D="$TEST_DIR/reviewer-badrounds.toml"
+cat > "$C6D" <<'TOML'
+[reviewer]
+loop = true
+max_rounds = 0
+
+[seats.alpha]
+name = "alpha"
+default_kind = "agy"
+TOML
+check "6g" "max_rounds = 0 fails closed" \
+  'if config_dump_env x "$C6D" >/dev/null 2>&1; then false; else true; fi'
+
+C6E="$TEST_DIR/reviewer-strrounds.toml"
+cat > "$C6E" <<'TOML'
+[reviewer]
+max_rounds = "two"
+
+[seats.alpha]
+name = "alpha"
+default_kind = "agy"
+TOML
+check "6h" "max_rounds as string fails closed" \
+  'if config_dump_env x "$C6E" >/dev/null 2>&1; then false; else true; fi'
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))

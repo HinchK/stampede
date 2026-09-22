@@ -123,6 +123,7 @@ proxy = cfg.get('proxy', {})
 geom = cfg.get('geometry', {})
 fanout = cfg.get('fanout', {})
 seats = cfg.get('seats', {})
+reviewer = cfg.get('reviewer', {})
 
 emit('SWARM_CONFIG_NAME', swarm.get('name', 'herd'))
 emit('SWARM_WORKSPACE_LABEL', swarm.get('workspace_label', 'herd'))
@@ -131,6 +132,18 @@ emit('SWARM_TRACE_DIR', swarm.get('trace_dir', '.herdr-swarm/traces'))
 emit('SWARM_WORKTREE_ROOT', swarm.get('worktree_root', '.herdr-swarm/worktrees'))
 emit('FANOUT_GATE_CONCURRENCY', fanout.get('gate_concurrency', 2))
 emit('FANOUT_MAX_WORKERS', fanout.get('max_workers', 2))
+# Reviewer loop knobs (REV-1): strict types — `loop` must be a real TOML
+# boolean (a truthy string would silently enable an autonomous loop) and
+# `max_rounds` an integer >= 1 (0 rounds means "never review", which is
+# loop=false, not a number).
+reviewer_loop = reviewer.get('loop', False)
+if not isinstance(reviewer_loop, bool):
+    sys.exit("config error: reviewer.loop must be a boolean (true/false)")
+reviewer_rounds = reviewer.get('max_rounds', 2)
+if not isinstance(reviewer_rounds, int) or isinstance(reviewer_rounds, bool) or reviewer_rounds < 1:
+    sys.exit("config error: reviewer.max_rounds must be an integer >= 1")
+emit('CONFIG_REVIEW_LOOP', 1 if reviewer_loop else 0)
+emit('CONFIG_REVIEW_MAX_ROUNDS', reviewer_rounds)
 emit('PROXY_ENABLED', str(proxy.get('enabled', False)).lower())
 # No localhost fallbacks (DOG-7): a config without [proxy] endpoint/health
 # keys binds empty; the only live proxy URLs live in swarm.config.toml.

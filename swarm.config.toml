@@ -19,6 +19,16 @@ worktree_root = ".herdr-swarm/worktrees"
 gate_concurrency = 2      # concurrent suite gates (0 = legacy inline gating)
 max_workers = 2           # back-pressure comparison point
 
+[reviewer]
+# Autonomous review loop (REV-1). loop = false keeps the reviewer advisory
+# (terminal anchor REVIEW DONE, nothing harvested). loop = true runs
+# verdict-anchored rounds: durable findings land in
+# .herdr-swarm/reviews/<ticket>-<sha>.md and the terminal anchor becomes
+# REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>. max_rounds bounds re-review
+# rounds per (ticket, sha).
+loop = false
+max_rounds = 2
+
 [proxy]
 # Off by default: a universal target repo must not inherit this machine's
 # kultivait setup. Flip to true (and set serve_cmd) to route seats through
