@@ -69,26 +69,25 @@
 
 ## 2. Active Status & Open Items
 
-- **Autonomous Reviewer Loop Milestone (Waves 1–4 Shipped & Promoted; Wave 5 In-Flight):**
+- **Autonomous Reviewer Loop Milestone (COMPLETE — Waves 1–5 Shipped & Promoted):**
   - **Wave 1 Complete:** `REV-1` (`e22697c`): Reviewer config flag (`loop`, `max_rounds`) in `swarm.config.toml` bound in `lib/config.sh`, dual-mode brief with `REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>` anchor and `.herdr-swarm/reviews/<ticket>-<sha>.md` report schema, +8 config assertions (promoted).
   - **Wave 2 Complete:** `REV-2` (`efc857e`): Critique delivery protocol: implementer refinement on existing worktree branch (`briefs/arch.in.md`, `briefs/arch.md`, `docs/user-guide.md`) (promoted).
   - **Wave 3 Complete:** `REV-3` (`ed86598`): Looper autonomous review loop state machine and fail-closed gate (`lib/lifecycle.sh`, `herdr-loop-swarm.sh`, `tests/test_review_loop.sh`). Durable `reviews.json`, directive contract, `--no-review-loop` flag, +40 assertions (promoted).
   - **Wave 4 Complete:** `REV-4` (`950e264`): Review domain telemetry events and badges in `lib/telemetry.py`, rich status `.reviews` aggregation in `lib/cli/stampede-status.sh`, fast-follow directive contract fix in `lib/lifecycle.sh`, +14 assertions (promoted).
-  - **Wave 5 In-Flight:** `REV-5`: Supervisor review loop wiring, verdict harvesting, and telemetry (`loop-bot-herd.sh`, `tests/test_async_gate.sh`). Released to `maps/tickets/`.
+  - **Wave 5 Complete:** `REV-5` (`debd73e`): Supervisor review loop wiring, verdict harvesting, telemetry, string ticket support end-to-end (JSON quoting fix), and tput dumb-terminal fallback (`loop-bot-herd.sh`, `tests/test_async_gate.sh`), +16 assertions (promoted).
 - **Public Multi-Provider Milestone (COMPLETE — Waves 8–12 Shipped):**
   - Shipped `PUB-1` through `PUB-11` (all promoted).
 - **Standing Guardrails:**
   - Arch briefs enforce Single-Ticket Scope Guardrail: workers halt and await looper dispatch after reporting completion.
-  - Base branch promotion remains human-only (DOG-12).
-- **Total Test Suite Health:** **412 passed, 0 failed** across 16 suites (43 review loop, 42 worktree, 39 partition, 38 arbiter, 33 config, 32 cli_status, 28 quota, 27 gh_sync, 24 cli_init, 18 profile, 17 async gate, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 13 telemetry); `make check` green (lint 0 warnings across 22 shell files).
+  - Base branch promotion remains human-only (DOG-12), with explicit user command authorization for arbiter promote runs.
+- **Total Test Suite Health:** **428 passed, 0 failed** across 16 suites (43 review loop, 42 worktree, 39 partition, 38 arbiter, 33 async gate, 33 config, 32 cli_status, 28 quota, 27 gh_sync, 24 cli_init, 18 profile, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 13 telemetry); `make check` green (lint 0 warnings across 22 shell files).
 
 ---
 
 ## 3. Immediate Next Step
 
-- Dispatch `REV-5` (Supervisor review loop wiring, verdict harvesting, and telemetry) to `arch-1-hinchk-stampede`.
-- Verify and integrate `REV-5` via Arbiter.
-- Run PM audit, promote ff-only to `main`, and push to remote.
+- Milestone Complete: Autonomous Reviewer Loop PRD is fully shipped, end-to-end wired, verified, and promoted to `main`.
+- Stand by for human driver instructions or next epic chart in the roadmap.
 
 
 

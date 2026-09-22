@@ -20,6 +20,7 @@ An autonomous, config-gated cross-provider reviewer loop where `looper` dispatch
 - [REV-2: Critique delivery protocol: implementer refinement on existing worktree branch](tickets/rev-02-critique-delivery-protocol.md): `briefs/arch.in.md` Section 4 `DISPATCH CRITIQUE: #<ticket> round <N>/<MAX> — see <path>` protocol; in-flight branch refinement with `ARCH DONE #<ticket> <sha2>` re-verdict; user guide §9 multi-turn loop documentation (`efc857e`).
 - [REV-3: Looper autonomous review loop state machine and fail-closed gate](tickets/rev-03-looper-review-state-machine.md): Review loop state machine in `lib/lifecycle.sh` with durable `.herdr-swarm/reviews.json`, directive contract (`ENQUEUE`/`DISPATCH_*`/`ALERT_*`), fail-closed budget bounds, `--no-review-loop` CLI flag and status visibility (`ed86598`).
 - [REV-4: Review telemetry events, rich status review dashboard, and end-to-end verification](tickets/rev-04-review-telemetry-and-verification.md): Review domain telemetry events and badges in `lib/telemetry.py`, rich status `.reviews` aggregation and human summary in `lib/cli/stampede-status.sh`, fast-follow directive stdout fix in `lib/lifecycle.sh`, and 412 green test assertions (`950e264`).
+- [REV-5: Supervisor review loop wiring, verdict harvesting, and telemetry](tickets/rev-05-supervisor-review-loop-wiring.md): Lifecycle sourced into daemon, directives executed (`ENQUEUE`, `DISPATCH_REVIEWER`, `DISPATCH_CRITIQUE`, `ALERT_*`), `gate_reap` green routed through state machine, verdict harvesting with exact-line seen-file dedup, string ticket support end-to-end (JSON record fix), tput dumb-terminal hardening, and 428 green test assertions across 16 suites (`debd73e`).
 
 ## Not yet specified
 
@@ -39,7 +40,7 @@ An autonomous, config-gated cross-provider reviewer loop where `looper` dispatch
 - [x] **Wave 2 — Critique Brief & Implementer Refinement Protocol.** REV-2 (`efc857e`): Implementer brief update for critique dispatches (`round 2/2`) on existing worktree branches.
 - [x] **Wave 3 — Looper Review Loop State Machine.** REV-3 (`ed86598`): 2-round autonomous loop state machine in orchestrator with fail-closed human escalation.
 - [x] **Wave 4 — Review Telemetry, Rich Status & Full Verification.** REV-4 (`950e264`): Telemetry event logging, rich status dashboard aggregation, fast-follow contract fix, and full verification suite (412 assertions).
-- [ ] **Wave 5 — Supervisor Review Loop Wiring & String Ticket Harvesting.** REV-5: Wire review state machine directives into `loop-bot-herd.sh`, harvest `REVIEW VERDICT` anchors and alphanumeric ticket IDs, emit `review.*` telemetry.
+- [x] **Wave 5 — Supervisor Review Loop Wiring & String Ticket Harvesting.** REV-5 (`debd73e`): Wire review state machine directives into `loop-bot-herd.sh`, harvest `REVIEW VERDICT` anchors and alphanumeric ticket IDs, emit `review.*` telemetry, tput dumb-terminal hardening, 33/33 async gate assertions (428 total across 16 suites).
 
 Dependency edges:
 REV-2 ← REV-1 · REV-3 ← REV-1,REV-2 · REV-4 ← REV-3 · REV-5 ← REV-3,REV-4.

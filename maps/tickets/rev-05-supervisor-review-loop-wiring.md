@@ -2,11 +2,15 @@
 id: REV-5
 title: "Supervisor review loop wiring, verdict harvesting, and telemetry"
 type: wayfinder:task
-status: ready
+status: resolved
 assignee: arch
 owns: loop-bot-herd.sh,tests/test_async_gate.sh
 parent: maps/autonomous-reviewer-loop.md
 blocked_by: [REV-3, REV-4]
+resolution:
+  commit: debd73e
+  promoted_at: 2026-09-22
+  verification: "make check green (16 suites, 428 passed, 0 failed; tests/test_async_gate.sh 33/33; shellcheck 0 warnings); PM sign-off"
 ---
 
 # REV-5 — Supervisor review loop wiring, verdict harvesting, and telemetry (Wave 5)
