@@ -2,7 +2,7 @@
 id: PUB-7
 title: "stampede init: provider-interviewed config generator"
 type: wayfinder:task
-status: ready
+status: resolved
 assignee: arch
 owns: lib/cli/stampede-init.sh,tests/test_cli_init.sh,swarm.config.toml
 parent: maps/public-multi-provider.md
@@ -58,3 +58,11 @@ bin/stampede init --non-interactive --preset minimal --kinds opencode
 bash lib/config.sh dump scratch-slug ; echo "rc=$? (want 0)"
 make check
 ```
+
+## 6. Resolution (2026-09-22, `3a534c0`)
+
+- `lib/cli/stampede-init.sh`: Provider-interviewed configuration generator supporting interactive interview and `--non-interactive --preset minimal|standard --kinds <k1,k2,...>`. Enforces non-destructive overwrites requiring `--force` with `.bak` backup preservation. Validates rendered config through the real parser (`config_dump_env`) in a temporary staging location before installation.
+- `tests/test_cli_init.sh`: 24 hermetic assertions covering preset × provider matrix parsed through the real parser; rosters, worktree isolation, chain ordering; zero-provider, bad-kind, no-preset, non-tty, missing-briefs, and overwrite/`.bak` discipline.
+- `tests/test_async_gate.sh` (`6e1521e`): Load-calibrated non-blocking scan assertion self-calibrating against reference spawn times with sub-second timestamps.
+- ShellCheck: 0 warnings; 14/14 suites green across the integrated combined tree.
+
