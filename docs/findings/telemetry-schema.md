@@ -1,94 +1,68 @@
-# Telemetry Event Schema and Live Ops Streaming — Research Findings (T-009)
+# Telemetry Event Schema
 
-**Date:** 2026-09-19  
-**Source Analysis:** `lib/telemetry.py`, `lib/agent_guard.sh`, `herdr-loop-swarm.sh`, `loop-bot-herd.sh`, `swarm.config.toml`  
-**Resolves Ticket:** [Telemetry Event Schema and Live Ops Streaming](../../maps/tickets/telemetry-event-schema-and-live-ops-streaming.md)
+The trust ledger of the swarm: every event a stranger would need in order
+to audit what the herd claimed, measured, and merged. Emitted as JSONL to
+`.herdr-swarm/traces/<session>.jsonl` by `lib/telemetry.py`; rendered as
+one-line ANSI badges by `stampede`'s Ops pane (`stream`).
 
----
+Standing rule (from the DOG-4 lesson): **measured numbers only.** A field
+that nobody measured is absent, never `0`, never modelled. Absence IS
+information: `usage` missing means the provider CLI reported nothing.
 
-## 1. Existing Telemetry Schema & Disconnections
+## Envelope
 
-### Current `telemetry.py` Contract
-Appends single-line JSON entries to `~/.herdr-loop-swarm/traces/{session_id}.jsonl`:
-- `timestamp`: Epoch seconds (float)
-- `iso`: UTC ISO-8601 string (`YYYY-MM-DDTHH:MM:SSZ`)
-- `event_type`: String tag
-- `agent`: Agent seat identifier (or null)
-- `ticket_num`: Numeric ticket integer (or null)
-- `payload`: Arbitrary JSON dictionary
+| Field | Type | Notes |
+|---|---|---|
+| `timestamp` | float | epoch seconds |
+| `iso` | string | `YYYY-MM-DDTHH:MM:SSZ` |
+| `session_id` | string | stable per project (minted once, shared by launcher + supervisor) |
+| `event_type` | string | `domain.action` vocabulary below |
+| `agent` | string or null | seat the event is about |
+| `ticket_num` | string or null | ticket id **verbatim** — `DEMO-1`, `PUB-10`, `23`. Never coerced to int; never dropped (PUB-10 / ARB-STR) |
+| `payload` | object | event-specific fields below |
 
-### Root Causes of Disconnection
-1. **Launcher Inaction (`herdr-loop-swarm.sh`)**: Creates `$SESSION_ID` and displays the traces path, but never calls `telemetry.py` during workspace setup, seat allocation, or mode dispatch.
-2. **Supervisor Bypass (`loop-bot-herd.sh`)**: Bypasses `telemetry.py` entirely, maintaining an ad-hoc, flat JSON file at `$HOME/.kultivait/loop-bot/session-verdicts.jsonl` with conflicting field names (`ts`, `ticket`, `seat`, `suite`).
-3. **Guard Silence (`lib/agent_guard.sh`)**: `wait_agent_with_circuit_breaker()` only prints ANSI to stdout on timeouts/blocked states; it accepts no session context and calls no logger.
-4. **Ops Log Pane Miswiring**: Launcher runs `tail -n 40 -f /tmp/herdr-process.log`, a file that nothing in the codebase writes to.
-5. **Global Path Pollution**: Traces write to user-global `~/.herdr-loop-swarm/traces/` rather than project-scoped `.herdr-swarm/traces/`.
+## Event vocabulary
 
----
+### Lifecycle (launcher)
 
-## 2. Standardized JSONL Event Contract
+- `swarm.lifecycle` — payload: `action`, `mode`, `slug`, `repo`, `seats`, `summary`
+- `seat.fallback` (PUB-6) — a seat seated on a non-primary provider.
+  Payload: `seat`, `wanted` (primary kind), `used` (seated kind), `summary`.
 
-All events follow a common envelope:
-```json
-{
-  "timestamp": 1726748263.123,
-  "iso": "2026-09-19T12:17:43Z",
-  "session_id": "swarm-20260919-051800",
-  "event_type": "domain.action",
-  "agent": "arch-kultivait",
-  "ticket_num": 104,
-  "payload": {}
-}
-```
+### Dispatch / verdict / gate (supervisor)
 
-### Event Domain Specifications
-1. **`agent.dispatch`**:
-   - `sender`: `"looper"` | `"supervisor"` | `"launcher"`
-   - `ticket_id`: String identifier (e.g. `"T-009"`, `"#104"`)
-   - `brief_path`: Relative path to brief/spec file
-   - `channel_file`: Path to file-based nonce response channel
-   - `prompt_summary`: 1-line summary of intended outcome
-   - `mode`: `"wayfinder"` | `"brainstorm"` | `"drain"` | `"auto_queue"`
+- `swarm.dispatch` — payload: `ticket`, `seat`, `summary`
+- `suite.verdict` — payload: `ticket`, `sha`, `suite` (`green`|`red`|`skipped`),
+  `summary`, and **measured** trust-tax fields when available:
+  - `gate.duration_ms` — wall-clock of the supervisor's own suite run
+    (integer ms). Absent when the gate never ran (skipped/invalidated).
+  - `verdict.attempt` — 1-based count of verdicts recorded for this
+    ticket so far this session (re-verdicts included). Derived from the
+    verdicts JSONL at emit time — a count, never a guess.
 
-2. **`suite.verdict`**:
-   - `verdict`: `"green"` | `"red"` | `"skipped"`
-   - `test_cmd`: Executed test runner command
-   - `exit_code`: Process exit code (0, 1, 124)
-   - `duration_s`: Test execution runtime in seconds
-   - `raw_verdict_line`: Unwrapped verdict text from worker pane
-   - `summary`: Truncated test runner summary (`28 passed in 4.15s`)
-   - `action`: `"accepted"` | `"rejected"` | `"bypassed"`
+### Quota (PUB-9)
 
-3. **`guard.circuit_breaker`**:
-   - `reason`: `"timeout"` | `"blocked"` | `"stall"` | `"missing"`
-   - `timeout_s`: Configured timeout threshold in seconds
-   - `elapsed_s`: Actual elapsed seconds before trip
-   - `last_status`: Raw Herdr agent status
-   - `diagnostics`: Sanitized 1-line snippet from terminal output
-   - `action`: `"alert_human"` | `"nudge"` | `"respawn"`
+- `quota.probe` — payload: `kind`, `status` (`ok`|`unknown`|`error`),
+  `detail`, `summary`. Emitted once per probed provider per `stampede quota`
+  run. `unknown` means the provider exposes nothing probeable — it is not
+  an error and is never reported as zero.
 
----
+### Briefs
 
-## 3. Ops Log Pane Real-Time Streaming Specification
+- `brief.deliver` — payload: `seat`, `brief.bytes` (integer, size of the
+  rendered standing brief actually delivered), `summary`.
 
-To eliminate terminal clutter and line wrapping in standard 80-column split panes:
-- Extend `lib/telemetry.py` with a `stream` command:
-  ```bash
-  python3 -u lib/telemetry.py stream <session_id> [trace_dir]
-  ```
-- Formats each JSONL event into a single, column-clamped ANSI badge line:
-  `[HH:MM:SS] [BADGE] SEAT-NAME #TICKET  Summary Details...`
+## Optional measurement fields (any payload)
 
-| Event Type | Badge | Color | Example Line |
-|---|---|---|---|
-| `agent.dispatch` | `[DISPATCH]` | Cyan | `[12:17:43] [DISPATCH]  arch-kultivait #104  T-007a: Fix supervisor deduplication` |
-| `suite.verdict` (green) | `[VERDICT:✓]` | Bold Green | `[12:18:35] [VERDICT:✓] arch-kultivait #104  GREEN (28 passed in 4.15s)` |
-| `suite.verdict` (red) | `[VERDICT:✗]` | Bold Red | `[12:18:50] [VERDICT:✗] arch-kultivait #104  RED (pytest exit 1: 2 failed)` |
-| `guard.circuit_breaker` | `[BREAKER:⚠]` | Yellow/Red | `[12:23:35] [BREAKER:⚠] arch-kultivait #104  TIMEOUT after 300s -> alert_human` |
-| `swarm.lifecycle` | `[LIFECYCLE]` | Blue | `[12:15:00] [LIFECYCLE] launcher        -    Topology seated: herd & ops tabs` |
+- `usage` — object; sub-fields `tokens_in`, `tokens_out`, `cost` — only
+  when a provider CLI or API reported them verbatim. Absent = unreported.
+- `duration_ms` — integer; only for an operation this code timed itself.
 
-- Rewire `herdr-loop-swarm.sh` Ops Anchor pane:
-  ```bash
-  herdr pane rename "$OpsAnchor" "telemetry-stream"
-  herdr pane run "$OpsAnchor" "python3 -u '$LIB_DIR/telemetry.py' stream '$SESSION_ID' '$TRACE_DIR'"
-  ```
+## Absence semantics (normative)
+
+1. Missing `usage` ≠ zero cost. Renderers must not default it.
+2. Missing `gate.duration_ms` means no gate ran — do not average over it.
+3. `ticket_num: null` means no ticket context — it never means "ticket
+   unknown so drop the id".
+4. Counting re-verdicts: count `suite.verdict` events for a ticket;
+   `verdict.attempt` is that count at emit time.

@@ -45,12 +45,18 @@ def log_event(
     session_id: str,
     event_type: str,
     agent: Optional[str] = None,
-    ticket_num: Optional[int] = None,
+    ticket_num: Optional[str] = None,
     payload: Optional[dict] = None,
     trace_dir: Optional[str] = None,
 ) -> None:
     d = resolve_trace_dir(trace_dir)
     d.mkdir(parents=True, exist_ok=True)
+    # ticket_num is string-typed end-to-end (the ARB-STR rule): ticket ids
+    # like "DEMO-1" or "PUB-10" must survive verbatim. Ints are accepted
+    # for backward compatibility and stored as-is; anything else is kept
+    # as its string form — never silently dropped to null (PUB-10).
+    if isinstance(ticket_num, int) and not isinstance(ticket_num, bool):
+        ticket_num = str(ticket_num)
     event = {
         "timestamp": time.time(),
         "iso": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -61,7 +67,9 @@ def log_event(
         "payload": payload or {},
     }
     with open(d / f"{session_id}.jsonl", "a", encoding="utf-8") as f:
-        f.write(json.dumps(event) + "\n")
+        # ensure_ascii=False: the trust ledger is read by humans auditing
+        # events; a ✓ must land in the file as a ✓, not \u2713 (PUB-10).
+        f.write(json.dumps(event, ensure_ascii=False) + "\n")
 
 
 # ── streaming ──────────────────────────────────────────────────────────────
@@ -212,7 +220,10 @@ def main(argv: List[str]) -> int:
             return 1
         session_id, event_type = rest[0], rest[1]
         agent = rest[2] if len(rest) > 2 and rest[2] != "-" else None
-        ticket = int(rest[3]) if len(rest) > 3 and str(rest[3]).isdigit() else None
+        # String ticket ids pass through verbatim (PUB-10 / ARB-STR);
+        # numeric-looking ids keep their textual form too — a ticket id is
+        # an identifier, not a number.
+        ticket = rest[3] if len(rest) > 3 and str(rest[3]) != "-" else None
         payload = json.loads(rest[4]) if len(rest) > 4 else {}
         log_event(session_id, event_type, agent=agent, ticket_num=ticket, payload=payload, trace_dir=trace_dir)
         return 0
