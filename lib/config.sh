@@ -149,7 +149,23 @@ for k in enabled_seats:
     base_name = s.get('name', k)
     full_name = f'{base_name}-{slug}' if slug else base_name
     emit(f'SEAT_NAME_{k}', full_name)
-    emit(f'SEAT_KIND_{k}', s.get('default_kind', 'agy'))
+    # Provider chain (PUB-6): `kinds` is the ordered fallback chain; a lone
+    # `default_kind` is sugar for a single-element chain. kinds[0] is the
+    # primary. A conflicting default_kind, an empty chain, or non-string
+    # entries are config errors — a seat that can never resolve must fail
+    # at parse time, not mid-seating.
+    kinds = s.get('kinds', None)
+    dk = s.get('default_kind', None)
+    if kinds is not None:
+        if not isinstance(kinds, list) or not kinds or not all(isinstance(x, str) and x for x in kinds):
+            sys.exit(f"config error: seats.{k}.kinds must be a non-empty array of provider kind strings")
+        if dk is not None and dk != kinds[0]:
+            sys.exit(f"config error: seats.{k}: default_kind ({dk}) conflicts with kinds[0] ({kinds[0]}) — kinds[0] is the primary; drop default_kind or align it")
+        chain = kinds
+    else:
+        chain = [dk if dk is not None else 'agy']
+    emit(f'SEAT_KIND_{k}', chain[0])
+    emit(f'SEAT_KINDS_{k}', ' '.join(chain))
     emit(f'SEAT_MODEL_{k}', s.get('model', 'auto'))
     emit(f'SEAT_BRIEF_{k}', s.get('brief', ''))
     emit(f'SEAT_TAB_{k}', s.get('tab', 'herd'))

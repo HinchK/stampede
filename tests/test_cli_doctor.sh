@@ -105,5 +105,18 @@ out=$(STAMPEDE_CONFIG="$SCRATCH/nope.toml" "$REPO_ROOT/bin/stampede" doctor 2>&1
 check "missing config → rc 1" 1 "$rc"
 [[ "$out" == *"config not found"* ]] && ok "missing config message" || bad "cfg msg: $out"
 
+# [6] provider chains (PUB-6): healthy fallback kind → rc 0 + FALLBACK row;
+# dead whole chain → rc 1 + MISSING with the primary's remedy
+stub gh 'exit 0'   # restore: case 4 sabotaged auth for its own assertion
+cat > "$cfg" <<'EOF'
+[seats.arch_1]
+name = "arch-1"
+kinds = ["opencode", "claude"]
+EOF
+out=$(STAMPEDE_CONFIG="$cfg" "$REPO_ROOT/bin/stampede" doctor 2>&1); rc=$?
+check "chain with healthy fallback → rc 0" 0 "$rc"
+printf '%s\n' "$out" | grep -Eq 'arch_1 +opencode,claude +FALLBACK' \
+  && ok "FALLBACK row names primary and live kind" || bad "fallback row: $out"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

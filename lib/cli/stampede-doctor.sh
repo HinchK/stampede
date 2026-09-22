@@ -36,29 +36,53 @@ stampede_cmd_doctor() {
   fi
 
   printf 'stampede doctor — provider health (%s)\n\n' "$config"
-  printf '  %-10s %-10s %-9s %s\n' "SEAT" "KIND" "STATE" "DETAIL"
-  local fail=0 line probe state detail bin ver
-  while IFS='|' read -r seat kind enabled name; do
+  printf '  %-10s %-20s %-9s %s\n' "SEAT" "KINDS" "STATE" "DETAIL"
+  local fail=0 probe state detail bin ver k first chain
+  while IFS='|' read -r seat kind enabled _name; do
     [[ -n "$seat" ]] || continue
     if [[ "$enabled" != "1" ]]; then
-      printf '  %-10s %-10s %-9s %s\n' "$seat" "${kind:--}" "SKIP" "disabled in config"
+      printf '  %-10s %-20s %-9s %s\n' "$seat" "${kind:--}" "SKIP" "disabled in config"
       continue
     fi
-    probe=$(providers_kind_probe "$kind")
-    state=${probe%% *}
-    detail=${probe#* }
+    # Chain-aware (PUB-6): OK when ANY kind in the ordered chain is healthy;
+    # a healthy non-primary kind is called out as the live fallback.
+    first=""
+    state="fail"
+    detail=""
+    IFS=',' read -ra chain <<<"$kind"
+    for k in "${chain[@]}"; do
+      [[ -z "$k" ]] && { state="bad-kind"; detail="no provider kind configured"; continue; }
+      [[ -z "$first" ]] && first="$k"
+      probe=$(providers_kind_probe "$k")
+      case "${probe%% *}" in
+        ok)
+          if [[ "$k" == "$first" || -z "$first" ]]; then state="ok"; detail="$probe"
+          else state="ok-fallback"; detail="primary ${first} unavailable — ${k} usable (${probe#ok })"; fi
+          break
+          ;;
+        missing) state="missing"; detail="${probe#missing }" ;;
+        unknown-kind) state="bad-kind"; detail="no registry entry for kind '${k}' — see lib/providers.sh" ;;
+      esac
+    done
     case "$state" in
       ok)
-        bin=$(printf '%s' "$detail" | cut -d' ' -f1)
-        ver=$(printf '%s' "$detail" | cut -s -d' ' -f2-)
-        printf '  %-10s %-10s %-9s %s (%s)\n' "$seat" "$kind" "OK" "$bin" "${ver:-unknown-version}"
+        bin=$(printf '%s' "$detail" | cut -d' ' -f2)
+        ver=$(printf '%s' "$detail" | cut -s -d' ' -f3-)
+        printf '  %-10s %-20s %-9s %s (%s)\n' "$seat" "$kind" "OK" "$bin" "${ver:-unknown-version}"
+        ;;
+      ok-fallback)
+        printf '  %-10s %-20s %-9s %s\n' "$seat" "$kind" "FALLBACK" "$detail"
         ;;
       missing)
-        printf '  %-10s %-10s %-9s %s\n' "$seat" "$kind" "MISSING" "$detail"
+        printf '  %-10s %-20s %-9s %s\n' "$seat" "$kind" "MISSING" "$detail"
         fail=1
         ;;
-      unknown-kind)
-        printf '  %-10s %-10s %-9s %s\n' "$seat" "${kind:--}" "BAD-KIND" "no registry entry for kind '$kind' — see lib/providers.sh"
+      bad-kind)
+        printf '  %-10s %-20s %-9s %s\n' "$seat" "${kind:--}" "BAD-KIND" "$detail"
+        fail=1
+        ;;
+      fail)
+        printf '  %-10s %-20s %-9s %s\n' "$seat" "${kind:--}" "MISSING" "no provider kinds configured"
         fail=1
         ;;
     esac

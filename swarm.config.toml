@@ -49,7 +49,10 @@ position = "top-left"
 [seats.arch_1]
 name = "arch-1"
 role = "Implementation Engine (GLM-5.3)"
-default_kind = "opencode"
+# Fallback chain (PUB-6): primary opencode, claude when opencode is
+# absent/unhealthy. kinds[0] is the primary; default_kind is the
+# single-element sugar.
+kinds = ["opencode", "claude"]
 model = "zai/glm-5.3"
 brief = "briefs/arch.md"
 tab = "herd"
@@ -59,7 +62,7 @@ worktree = true
 [seats.arch_2]
 name = "arch-2"
 role = "Implementation Engine (GLM-5.3)"
-default_kind = "opencode"
+kinds = ["opencode", "claude"]
 model = "zai/glm-5.3"
 brief = "briefs/arch.md"
 tab = "herd"
