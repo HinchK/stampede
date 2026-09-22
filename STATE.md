@@ -69,7 +69,7 @@
 
 ## 2. Active Status & Open Items
 
-- **Public Multi-Provider Milestone (Waves 8–10 + PUB-10 Promoted to `main` at `ec941fd`):**
+- **Public Multi-Provider Milestone (Wave 11 Integration at `3d0b3a0`):**
   - **Wave 8 Complete:** `PUB-1` (`19217bc`): `bin/stampede` unified entrypoint and `lib/cli/` subcommand convention with 15 hermetic assertions.
   - **Wave 9 Complete:**
     - `PUB-2` (`9ffdbe8`): Provider registry (`lib/providers.sh`) and `stampede doctor` with 27 hermetic assertions.
@@ -77,21 +77,27 @@
     - `PUB-4` (`a9b6e51`): `examples/demo-repo` with real test suite and one-verdict walkthrough.
     - `PUB-5` (`fb63928`): `VERSION`, `CHANGELOG.md`, `stampede version`, and `make version-check`.
   - **Wave 10 Complete:** `PUB-6` (`c752a8a`): Per-seat provider fallback chains (`kinds = ["opencode", "claude"]`) with 25 config assertions.
-  - **Wave 11 In-Flight:**
+  - **Wave 11 CAS Integration (`swarm/stampede/integration` @ `3d0b3a0`):**
     - `PUB-10` (`e8a7450`): Trust-tax telemetry schema and string-safe envelope in `lib/telemetry.py` (promoted).
-    - `PUB-9` (Dispatched to `arch-2-hinchk-stampede`): `stampede quota` read-only provider headroom probing across CLI kinds.
-    - `PUB-7` (Dispatched to `arch-1-hinchk-stampede`): `stampede init` provider-interviewed config generator.
+    - `PUB-7` (`3a534c0`): `stampede init` provider-interviewed config generator with 24 hermetic assertions (integrated).
+    - Gate fix `6e1521e`: Load-calibrated non-blocking scan assertion in `tests/test_async_gate.sh` (integrated).
+    - `PUB-9` (`fa78bd4`): `stampede quota` read-only provider headroom probing with 28 hermetic assertions (integrated).
+    - Combined tree (`3d0b3a0`) independently verified: **14/14 suites green (327 assertions, 0 failed, 0 shellcheck warnings)**.
 - **Standing Guardrails:**
   - Arch briefs enforce Single-Ticket Scope Guardrail: workers halt and await looper dispatch after reporting completion.
   - Base branch promotion remains human-only (DOG-12).
-- **Total Test Suite Health:** **271 passed, 0 failed** across 12 suites (42 worktree, 39 partition, 38 arbiter, 27 gh_sync, 25 config, 18 profile, 17 async gate, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 7 telemetry); `make check` green (lint 0 warnings).
+- **Total Test Suite Health:** **327 passed, 0 failed** across 14 suites (42 worktree, 39 partition, 38 arbiter, 28 quota, 27 gh_sync, 25 config, 24 cli_init, 21 async gate, 18 profile, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 7 telemetry); `make check` green (lint 0 warnings across 21 shell files).
 
 ---
 
 ## 3. Immediate Next Step
 
-- Monitor parallel Wave 11 dispatches: `arch-2` on `PUB-9` and `arch-1` on `PUB-7`.
-- On completion: independent suite gating, arbiter CAS integration, and dispatch of `PUB-8` (cross-provider reviewer lane) and `PUB-11` (rich status).
+- PM independent audit in throwaway clone of `3d0b3a0`.
+- Human driver promotion of `3d0b3a0` to `main` via `bash lib/arbiter.sh promote --confirm`.
+- Fast-forward worker worktrees to new `main`.
+- Release `pub-08-cross-provider-reviewer.md` from `maps/tickets-staged/` to `maps/tickets/` and dispatch to `arch-1`.
+- Prepare `pub-11-rich-status.md` (Wave 12) for release.
+
 
 
 
