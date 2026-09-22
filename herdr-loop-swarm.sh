@@ -292,10 +292,12 @@ else
 fi
 
 # Optional routing proxy ([proxy] in swarm.config.toml) — off by default so a
-# universal target repo never inherits this machine's local LLM setup.
+# universal target repo never inherits this machine's local LLM setup. The
+# endpoint/health URLs come from the config; there is no localhost fallback
+# (DOG-7).
 if [[ "${PROXY_ENABLED:-false}" == "true" ]]; then
-  if curl -sf --max-time 2 "${PROXY_HEALTH_URL:-http://localhost:4114/openapi.json}" >/dev/null 2>&1; then
-    good "Routing proxy: active (${PROXY_ENDPOINT:-http://localhost:4114/v1})"
+  if [[ -n "${PROXY_HEALTH_URL:-}" ]] && curl -sf --max-time 2 "$PROXY_HEALTH_URL" >/dev/null 2>&1; then
+    good "Routing proxy: active (${PROXY_ENDPOINT:-unconfigured})"
   else
     note "Routing proxy not healthy (will try to launch in Ops tab)"
   fi
@@ -574,16 +576,17 @@ _ready_payload=$(jq -cn \
 good "Telemetry session: ${SESSION_ID} → ${TRACE_DIR_PATH}"
 
 # Optional routing proxy in the Ops pane — ONLY when [proxy] enabled = true in
-# swarm.config.toml. Health URL and serve command come from the config; a
-# universal target repo never gets a kultivait serve by default.
+# swarm.config.toml. Health URL, serve command, and endpoint come from the
+# config; a universal target repo never gets a proxy launch by default (no
+# hardcoded localhost fallbacks — DOG-7).
 if [[ "${PROXY_ENABLED:-false}" == "true" ]]; then
-  if ! curl -sf --max-time 2 "${PROXY_HEALTH_URL:-http://localhost:4114/openapi.json}" >/dev/null 2>&1; then
-    if [[ -n "${PROXY_SERVE_CMD:-}" ]]; then
-      step "Starting routing proxy (${PROXY_ENDPOINT:-http://localhost:4114/v1})..."
-      herdr pane run "$SRV_PANE" "$PROXY_SERVE_CMD" >/dev/null 2>&1 || true
-    else
-      warn "[proxy] enabled but no serve_cmd configured — skipping proxy launch"
-    fi
+  if [[ -n "${PROXY_HEALTH_URL:-}" ]] && curl -sf --max-time 2 "$PROXY_HEALTH_URL" >/dev/null 2>&1; then
+    good "Routing proxy already healthy"
+  elif [[ -n "${PROXY_SERVE_CMD:-}" ]]; then
+    step "Starting routing proxy (${PROXY_ENDPOINT:-unconfigured})..."
+    herdr pane run "$SRV_PANE" "$PROXY_SERVE_CMD" >/dev/null 2>&1 || true
+  else
+    warn "[proxy] enabled but no serve_cmd configured — skipping proxy launch"
   fi
 fi
 

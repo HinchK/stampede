@@ -447,11 +447,16 @@ unpushed_watch() {
 
 # ---- 4. credit / quota probes ---------------------------------------------
 # Only meaningful when the optional routing proxy is enabled in
-# swarm.config.toml — a universal target repo has no kultivait credentials.
+# swarm.config.toml — a universal target repo has no proxy credentials. The
+# credentials path comes from [proxy] credentials (bound as PROXY_CREDENTIALS
+# by config_dump_env; ~/ prefixes are expanded); no path is hardcoded (DOG-7).
 credits_watch() {
-  local key out
+  local key out creds_path
   [[ "$(config_get "proxy.enabled" "false" "${SWARM_CONFIG:-$SCRIPT_DIR/swarm.config.toml}")" == "true" ]] || return 0
-  key=$("$PYTHON_BIN" - "${KULTIVAIT_CREDENTIALS:-$HOME/.kultivait/credentials.toml}" << 'EOF' 2>/dev/null || true
+  creds_path="${PROXY_CREDENTIALS:-}"
+  [[ -n "$creds_path" ]] || return 0
+  creds_path="${creds_path/#\~/$HOME}"
+  key=$("$PYTHON_BIN" - "$creds_path" << 'EOF' 2>/dev/null || true
 import sys, tomllib
 from pathlib import Path
 p = Path(sys.argv[1])

@@ -1,6 +1,26 @@
-# Herdr Loop Swarm (`loop-bot-herd-agy`)
+# Stampede
 
-> Autonomous Multi-Agent Orchestration Swarm powered by **Herdr**, **AGY (Gemini)**, **Claude Code**, **OpenCode (GLM-5.3)**, and fail-closed quality gates.
+**Zero Trust for LLM compute nodes.**
+
+A coding agent is an untrusted worker that will optimize for the laziest path to
+a green build. Stampede seats a herd of them against your repository and refuses
+to take their word for anything.
+
+Every claim of "done" is an unverified assertion until an independent supervisor
+re-runs your real test suite against the exact commit — in the exact tree that
+produced it. Implementation agents work in isolated worktrees and never merge.
+Green verdicts are queued for an arbiter, which re-tests the *combined* result
+before advancing an integration ref by compare-and-swap. Only a human moves
+`main`.
+
+The result is a system that systematically neutralizes the AI equivalent of
+gaming the CI pipeline. It costs more compute than trusting the agent. That is
+the trade.
+
+> **Scope note:** The worktree gate and arbiter pipeline cover implementation
+> seats (`arch-*`, `pi`). Documentation and coordination seats (`looper`,
+> `pm`, `agy-docs`, `agy-gh`) commit directly to the base branch; their work
+> is reviewed by a human before `main` advances.
 
 ---
 

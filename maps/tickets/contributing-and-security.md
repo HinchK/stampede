@@ -2,8 +2,8 @@
 id: DOG-6
 title: "Add CONTRIBUTING and SECURITY for public consumption"
 type: wayfinder:task
-status: backlog
-assignee: agy-docs
+status: in_progress
+assignee: arch-2
 owns: CONTRIBUTING.md,SECURITY.md
 parent: maps/public-readiness.md
 github_issue: 8
