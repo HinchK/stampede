@@ -39,6 +39,7 @@ Usage: stampede <command> [args]
 Lifecycle (delegated to herdr-loop-swarm.sh):
   up [dir] [OPTIONS]      Launch or re-attach the swarm for a repo
   status [dir]            Show workspace, seats, profile, recent activity
+  status --rich [--json]  Session trust dashboard from traces (PUB-11)
   verify [dir] [ms]       Check every seat is alive and brief-ready
   down [dir] [FLAGS]      Tear down the swarm tied to a directory
 
@@ -59,7 +60,25 @@ if [[ -z "$cmd" || "$cmd" == -* ]]; then
 fi
 
 case "$cmd" in
-  up|down|status|verify)
+  up|down|verify)
+    exec "$LAUNCHER" "$@"
+    ;;
+  status)
+    # PUB-11: --rich/--json belong to lib/cli/stampede-status.sh (the session
+    # trust dashboard); when that module is present and one of those flags is
+    # given, route by the same convention dispatch as every other extra
+    # command. The plain `status [dir]` form still delegates to the launcher
+    # verbatim (PUB-1 pass-through, unchanged).
+    local_seam_route=0
+    for _seam_arg in "${@:2}"; do
+      case "$_seam_arg" in --rich|--json|-h|--help) local_seam_route=1 ;; esac
+    done
+    if (( local_seam_route )) && [[ -f "$ROOT/lib/cli/stampede-status.sh" ]]; then
+      # shellcheck source=/dev/null  # convention-dispatched command module
+      source "$ROOT/lib/cli/stampede-status.sh"
+      stampede_cmd_status "${@:2}"
+      exit $?
+    fi
     exec "$LAUNCHER" "$@"
     ;;
   -h|--help|help)
