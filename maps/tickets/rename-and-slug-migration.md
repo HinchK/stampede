@@ -7,6 +7,9 @@ assignee: human
 resolution_commit: a552d34
 owns: .herdr-swarm/,swarm.config.toml,herdr-loop-swarm.sh,loop-bot-herd.sh
 parent: maps/public-readiness.md
+github_issue: 64
+github_url: "https://github.com/HinchK/stampede/issues/64"
+synced_at: "2026-09-22T06:30:55Z"
 ---
 
 # DOG-10 — Rename + slug migration (WAVE 6 — HUMAN ONLY)

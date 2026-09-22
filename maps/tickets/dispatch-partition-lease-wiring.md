@@ -7,6 +7,9 @@ commit: 280ae5f
 assignee: arch-2
 owns: loop-bot-herd.sh,lib/partition.sh,tests/test_partition.sh
 parent: maps/public-readiness.md
+github_issue: 63
+github_url: "https://github.com/HinchK/stampede/issues/63"
+synced_at: "2026-09-22T06:30:47Z"
 ---
 
 # DOG-16 — Wire partition checking and path lease acquisition into supervisor dispatch
