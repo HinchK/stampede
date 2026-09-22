@@ -35,7 +35,7 @@ trap cleanup EXIT
 # call — redefining those two-arg versions broke set -u inside gate_reap.
 assert_ok()  { printf '  ✓ [%s] %s\n' "$1" "${2:-}"; PASS=$((PASS + 1)); }
 assert_bad() { printf '  ✗ [%s] %s\n' "$1" "${2:-}"; FAIL=$((FAIL + 1)); }
-last_suite_of() { jq -r -s --argjson t "$1" '[.[] | select(.ticket == $t)] | .[-1].suite // "none"' "$LOG" 2>/dev/null || printf 'err'; }
+last_suite_of() { jq -r -s --arg t "$1" '[.[] | select((.ticket | tostring) == $t)] | .[-1].suite // "none"' "$LOG" 2>/dev/null || printf 'err'; }
 expect() { # LABEL WANT GOT
   if [[ "$3" == "$2" ]]; then assert_ok "$1" "$4"; else assert_bad "$1" "$4 (wanted $2, got $3)"; fi
 }
@@ -136,12 +136,12 @@ gate_reap >/dev/null 2>&1
 expect 1e "$(last_suite_of 301)" green "slow seat A recorded after completion"
 
 # ── 6: one job per (ticket, sha) across passes ─────────────────────────────
-n301=$(jq -r -s '[.[] | select(.ticket == 301)] | length' "$LOG")
+n301=$(jq -r -s '[.[] | select((.ticket | tostring) == "301")] | length' "$LOG")
 harvest_verdicts >/dev/null 2>&1   # verdict lines still visible in panes
 harvest_verdicts >/dev/null 2>&1
 sleep 0.5; gate_reap >/dev/null 2>&1
-n301b=$(jq -r -s '[.[] | select(.ticket == 301)] | length' "$LOG")
-[[ "$n301" == 1 && "$n301b" == 1 ]] && assert_ok 6 "same verdict across passes: one job, one record" || assert_bad 6 "dedupe (records $n301→$n301b)"
+n301b=$(jq -r -s '[.[] | select((.ticket | tostring) == "301")] | length' "$LOG")
+[[ "$n301" == 1 && "$n301b" == 1 ]] && assert_ok 6 "same verdict across passes: one job, one record" || assert_bad 6 "dedupe (records ${n301} to ${n301b})"
 
 # ── 2: concurrency cap (gc=1) queues the excess verdict ────────────────────
 GATE_CONCURRENCY=1
@@ -179,7 +179,7 @@ VERDICT_B="ARCH DONE #306 $SHA_T"
 SUITE_TIMEOUT_S=1
 harvest_verdicts >/dev/null 2>&1
 sleep 2.5; gate_reap >/dev/null 2>&1
-rec=$(jq -r -s '[.[] | select(.ticket == 306)] | .[-1]' "$LOG")
+rec=$(jq -r -s '[.[] | select((.ticket | tostring) == "306")] | .[-1]' "$LOG")
 [[ "$(jq -r .suite <<<"$rec")" == "RED" && "$(jq -r .exit_code <<<"$rec")" == 124 ]] \
   && assert_ok 7 "timeout → RED with rc=124, slot released (running=$(gate_running_count))" \
   || assert_bad 7 "timeout handling ($rec)"
@@ -232,6 +232,102 @@ njobs_inline=$(find "$STATE/gates" -name '*.job' 2>/dev/null | wc -l | tr -d ' '
 [[ "$inline_state" == "green" ]] && assert_ok 3a "gc=0: verdict recorded synchronously (inline)" || assert_bad 3a "inline gate ($inline_state)"
 [[ "$njobs_inline" == 0 ]] && assert_ok 3b "gc=0: no job files created" || assert_bad 3b "stray jobs ($njobs_inline)"
 GATE_CONCURRENCY=2
+
+# ── 13: review loop wiring (REV-5) ─────────────────────────────────────────
+# The machine directives executed by the supervisor: loop off = ENQUEUE (the
+# pre-REV-5 behavior, now with string ticket ids end-to-end); loop on =
+# reviewer dispatch on green, verdict harvesting drives PASS→enqueue and
+# BLOCK→critique. herdr stub extended to RECORD prompts (the observable side
+# of DISPATCH directives) and serve the reviewer seat's pane.
+PROMPTS="$TEST_DIR/prompts.log"; : > "$PROMPTS"
+herdr() {
+  if [[ "${1:-}" == "agent" && "${2:-}" == "read" ]]; then
+    [[ "${3:-}" == "seat-a" && -n "$VERDICT_A" ]] && printf '%s\n' "$VERDICT_A"
+    [[ "${3:-}" == "seat-b" && -n "$VERDICT_B" ]] && printf '%s\n' "$VERDICT_B"
+    [[ "${3:-}" == "seat-r" && -n "$VERDICT_R" ]] && printf '%s\n' "$VERDICT_R"
+  fi
+  if [[ "${1:-}" == "agent" && "${2:-}" == "prompt" ]]; then
+    printf '%s :: %s\n' "$3" "$4" >> "$PROMPTS"
+  fi
+  return 0
+}
+export SEAT_NAME_reviewer="seat-r"
+EXPECTED_SEATS+=(seat-r)
+qcount() { jq -s --arg t "$1" --arg s "$2" '[.[] | select(.ticket == $t and .sha == $s and .status == "queued")] | length' "$Q" 2>/dev/null || printf '0'; }
+rstate() { jq -r --arg t "$1" '.reviews[$t].state // "none"' "$STATE/reviews.json" 2>/dev/null || printf 'none'; }
+
+# [13a] loop OFF + string ticket: green → direct enqueue, no review state
+export CONFIG_REVIEW_LOOP=0 CONFIG_REVIEW_MAX_ROUNDS=2
+rm -f "$WTB/gate.sh"; printf '#!/bin/sh\n# rev5 compat\nexit 0\n' > "$WTB/gate.sh"
+git -C "$WTB" add -A; git -C "$WTB" -c user.email=t@t -c user.name=t commit -q -m rev5compat
+SHA_RC=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_A=""; VERDICT_B="ARCH DONE #REV-9 $SHA_RC"; VERDICT_R=""
+harvest_verdicts >/dev/null 2>&1
+sleep 0.6; gate_reap >/dev/null 2>&1
+[[ "$(qcount REV-9 "$SHA_RC")" == 1 ]] \
+  && assert_ok 13a "loop off: string ticket REV-9 green → enqueued (backward compat)" \
+  || assert_bad 13a "loop off enqueue (n=$(qcount REV-9 "$SHA_RC"))"
+[[ ! -f "$STATE/reviews.json" ]] && assert_ok 13a2 "loop off: no review state written" || assert_bad 13a2 "state leaked with loop off"
+
+# [13b] loop ON: green → awaiting_review + reviewer dispatch, NO enqueue
+export CONFIG_REVIEW_LOOP=1
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m rev5b
+SHA_RD=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #REV-10 $SHA_RD"
+: > "$PROMPTS"
+harvest_verdicts >/dev/null 2>&1
+sleep 0.6; gate_reap >/dev/null 2>&1
+[[ "$(rstate REV-10)" == "awaiting_review" ]] \
+  && assert_ok 13b "loop on: green → awaiting_review" || assert_bad 13b "state $(rstate REV-10)"
+[[ "$(qcount REV-10 "$SHA_RD")" == 0 ]] \
+  && assert_ok 13b2 "loop on: gated sha NOT enqueued pending review" || assert_bad 13b2 "enqueued before review"
+grep -q "seat-r :: DISPATCH: Review #REV-10 @ ${SHA_RD} (round 1/2)" "$PROMPTS" \
+  && assert_ok 13b3 "reviewer seat prompted with round/max" || assert_bad 13b3 "no reviewer prompt: $(cat "$PROMPTS")"
+grep -q '"event_type": "review.dispatched"' "$STATE"/traces/*.jsonl 2>/dev/null \
+  && assert_ok 13b4 "review.dispatched telemetry emitted" || assert_bad 13b4 "no dispatched telemetry"
+
+# [13c] reviewer PASS → review_passed + enqueue (exactly once across passes)
+VERDICT_R="REVIEW VERDICT #REV-10 $SHA_RD PASS"
+harvest_verdicts >/dev/null 2>&1
+[[ "$(rstate REV-10)" == "review_passed" ]] \
+  && assert_ok 13c "PASS → review_passed" || assert_bad 13c "state $(rstate REV-10)"
+[[ "$(qcount REV-10 "$SHA_RD")" == 1 ]] \
+  && assert_ok 13c2 "PASS → arbiter enqueued" || assert_bad 13c2 "enqueue on pass (n=$(qcount REV-10 "$SHA_RD"))"
+grep -q '"event_type": "review.verdict"' "$STATE"/traces/*.jsonl 2>/dev/null \
+  && assert_ok 13c3 "review.verdict telemetry emitted" || assert_bad 13c3 "no verdict telemetry"
+harvest_verdicts >/dev/null 2>&1   # scrollback still shows the anchor...
+[[ "$(qcount REV-10 "$SHA_RD")" == 1 ]] \
+  && assert_ok 13c4 "seen-file dedup: re-harvest does not double-enqueue" || assert_bad 13c4 "double enqueue"
+
+# [13d] reviewer BLOCK → critique dispatch to implementer, no enqueue
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m rev5d
+SHA_RE=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #REV-11 $SHA_RE"; VERDICT_R=""
+harvest_verdicts >/dev/null 2>&1
+sleep 0.6; gate_reap >/dev/null 2>&1
+mkdir -p "$STATE/reviews"
+printf '[BLOCK] lib/x.sh:42 — unvalidated input → validate before use\n[CONCERNS] tests/x.sh:7 — weak assertion\n' \
+  > "$STATE/reviews/REV-11-$SHA_RE.md"
+VERDICT_R="REVIEW VERDICT #REV-11 $SHA_RE BLOCK"
+: > "$PROMPTS"
+harvest_verdicts >/dev/null 2>&1
+[[ "$(rstate REV-11)" == "critique_dispatched" ]] \
+  && assert_ok 13d "BLOCK → critique_dispatched" || assert_bad 13d "state $(rstate REV-11)"
+grep -q "seat-b :: DISPATCH CRITIQUE: #REV-11 round 2/2 — see ${STATE}/reviews/REV-11-${SHA_RE}.md" "$PROMPTS" \
+  && assert_ok 13d2 "implementer prompted with critique + findings path" || assert_bad 13d2 "no critique prompt: $(cat "$PROMPTS")"
+[[ "$(qcount REV-11 "$SHA_RE")" == 0 ]] \
+  && assert_ok 13d3 "blocked-under-budget sha NOT enqueued" || assert_bad 13d3 "enqueued on block"
+grep -q '"recipient": "seat-b"' "$STATE"/traces/*.jsonl 2>/dev/null \
+  && assert_ok 13d4 "review.critique telemetry names recipient" || assert_bad 13d4 "no critique telemetry"
+grep -q '"findings_count": 2' "$STATE"/traces/*.jsonl 2>/dev/null \
+  && assert_ok 13d5 "verdict telemetry counts findings from the evidence file" || assert_bad 13d5 "findings_count wrong"
+
+# [13e] supervisor sources cleanly under TERM=dumb (tput hardening receipt)
+RROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+dumb_rc=0
+( cd "$RROOT" && TERM=dumb bash -c 'set -euo pipefail; REPO_DIR="$REPO_DIR" STATE_DIR="$STATE_DIR" source ./loop-bot-herd.sh status' ) >/dev/null 2>&1 || dumb_rc=$?
+[[ "$dumb_rc" == 0 ]] && assert_ok 13e "supervisor sources cleanly under TERM=dumb" || assert_bad 13e "TERM=dumb source rc=$dumb_rc"
+unset CONFIG_REVIEW_LOOP SEAT_NAME_reviewer
 
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"

@@ -68,6 +68,16 @@ fi
 # shellcheck disable=SC1091  # dynamically resolved sibling lib (dispatch guard + release pass)
 source "$SCRIPT_DIR/lib/partition.sh"
 
+# Review loop state machine (REV-5): the supervisor executes the machine
+# directives that lib/lifecycle.sh emits. Same orchestrator-root rule as
+# the arbiter and partition libs.
+if [[ ! -f "$SCRIPT_DIR/lib/lifecycle.sh" ]]; then
+  printf 'loop-bot-herd: FATAL — lifecycle lib missing from orchestrator: %s/lib/lifecycle.sh\n' "$SCRIPT_DIR" >&2
+  exit 1
+fi
+# shellcheck disable=SC1091  # dynamically resolved sibling lib (review loop)
+source "$SCRIPT_DIR/lib/lifecycle.sh"
+
 # Project profile (rendered by the launcher's ensure_profile pass)
 PROFILE_ENV="${REPO_DIR}/.herdr-swarm/profile.env"
 REPO=$(read_profile_var "REPO" "$PROFILE_ENV")
@@ -101,9 +111,14 @@ if (( GATE_CONCURRENCY > 8 )); then GATE_CONCURRENCY=8; fi
 # Telemetry session (stable per project; shared with the launcher's Ops stream)
 SESSION_ID=$(telemetry_session_id "$STATE_DIR")
 
-if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
-  DIM=$(tput dim); RESET=$(tput sgr0)
-  GREEN=$(tput setaf 2); YELLOW=$(tput setaf 3); RED=$(tput setaf 1); BLUE=$(tput setaf 4)
+# Color setup (REV-5 hardening): a tty with a dumb/unknown TERM makes tput
+# exit non-zero — an unguarded assignment is a set -e kill in exactly the
+# interactive sessions that need the daemon most. Guard the color count,
+# and every capture is failure-tolerant.
+if [[ -t 1 ]] && command -v tput >/dev/null 2>&1 && [[ "$(tput colors 2>/dev/null || printf '0')" -ge 8 ]]; then
+  DIM=$(tput dim 2>/dev/null || true); RESET=$(tput sgr0 2>/dev/null || true)
+  GREEN=$(tput setaf 2 2>/dev/null || true); YELLOW=$(tput setaf 3 2>/dev/null || true)
+  RED=$(tput setaf 1 2>/dev/null || true); BLUE=$(tput setaf 4 2>/dev/null || true)
 else
   DIM=""; RESET=""; GREEN=""; YELLOW=""; RED=""; BLUE=""
 fi
@@ -228,9 +243,9 @@ gate_spawn() { # SEAT TICKET SHA GATE_DIR VERDICT_LINE ISOLATED
     printf '%s' "$rc" > "${jrc}.tmp" && mv "${jrc}.tmp" "$jrc"
   ) >/dev/null 2>&1 &
   local gpid=$!
-  jq -cn --arg s "$seat" --argjson t "$ticket" --arg sha "$sha" --arg d "$dir" \
+  jq -cn --arg s "$seat" --arg t "$ticket" --arg sha "$sha" --arg d "$dir" \
     --arg st "$(date -u +%FT%TZ)" --argjson pid "$gpid" --arg v "$vline" --arg iso "$isolated" \
-    '{version: 1, seat: $s, ticket: $t, sha: $sha, dir: $d, start_time: $st,
+    '{version: 1, seat: $s, ticket: ($t|tostring), sha: $sha, dir: $d, start_time: $st,
       pid: $pid, isolated: ($iso == "true"), verdict_line: $v}' \
     > "${jdir}/${jid}.job.tmp" && mv "${jdir}/${jid}.job.tmp" "${jdir}/${jid}.job"
   log "gate job spawned: ${jid} (pid ${gpid}, cap ${GATE_CONCURRENCY})"
@@ -251,7 +266,7 @@ gate_job_running() { # TICKET SHA
   local j
   for j in "$STATE_DIR"/gates/*.job; do
     [[ -e "$j" ]] || continue
-    jq -e --argjson t "$1" --arg s "$2" '.ticket == $t and .sha == $s' "$j" >/dev/null 2>&1 && return 0
+    jq -e --arg t "$1" --arg s "$2" '(.ticket | tostring) == $t and .sha == $s' "$j" >/dev/null 2>&1 && return 0
   done
   return 1
 }
@@ -287,15 +302,28 @@ gate_reap() {
       suite_ok="green"; ok "gate job ${jid}: GREEN (log: $gate_log)"
       herdr agent prompt looper "LOOP-BOT: filed verdict for #$ticket @ ${sha} from $seat's pane (green)." >/dev/null 2>&1 || true
       if [[ "$iso" == "true" ]]; then
-        arbiter_enqueue "$ticket" "$seat" "$sha" >/dev/null 2>&1 \
-          || warn "arbiter enqueue failed for #$ticket @ ${sha}"
+        # Review loop seam (REV-5): the state machine decides what a green
+        # gate means next — ENQUEUE when the loop is off (the pre-REV-5
+        # behavior, verbatim), DISPATCH_REVIEWER when it is on. The machine
+        # owns policy; the directive executor owns effects.
+        local rdirs rrc=0
+        rdirs=$(review_loop_on_gate_green "$ticket" "$seat" "$sha" "$STATE_DIR" 2>/dev/null) || rrc=$?
+        if (( rrc != 0 )); then
+          # Fail closed: never enqueue behind the machine's back. The green
+          # verdict is recorded; a machine failure means corrupt state (REV-3
+          # semantics: fail closed, human decides). We never silently fall
+          # back to the pre-REV-5 enqueue — that would bypass review.
+          warn "review loop state machine failed for #$ticket @ ${sha} — NOT enqueued; human evaluation required"
+        else
+          _review_directives "$rdirs" "$ticket" "$sha"
+        fi
       fi
     else
       suite_ok="RED"; bad "gate job ${jid}: RED (rc=${rc_val}) — NOT filed; worker must fix (log: $gate_log)"
       herdr agent prompt "$seat" "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate log: $gate_log)." >/dev/null 2>&1 || true
     fi
 
-    echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"exit_code\": $rc_val, \"log\": \"$gate_log\"}" >> "$SESSION_LOG"
+    echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"exit_code\": $rc_val, \"log\": \"$gate_log\"}" >> "$SESSION_LOG"
     "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" suite.verdict "$seat" "$ticket" \
       "$(jq -cn --arg s "$suite_ok" --arg sha "$sha" --arg seat "$seat" --arg t "$ticket" \
         '{suite:$s, sha:$sha, summary:("suite " + $s + " @ " + $sha), details:("seat=" + $seat + " ticket=#" + $t)}')" \
@@ -320,30 +348,127 @@ gate_recover() {
   done
 }
 
+# ── review loop directive execution (REV-5) ────────────────────────────────
+# lib/lifecycle.sh owns state + policy and prints machine directives; this
+# is where the supervisor gives them effects: arbiter enqueues, herdr seat
+# prompts, and the review telemetry stream. One directive line in, one
+# side effect out — nothing here ever decides policy.
+_review_directives() { # DIRECTIVES-LINES TICKET SHA
+  local dirs="$1" ticket="$2" sha="$3" line d0 d1 d2 d3 d4 d5
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    read -r d0 d1 d2 d3 d4 d5 <<<"$line"
+    case "$d0" in
+      ENQUEUE)
+        # d1=ticket d2=seat d3=sha
+        arbiter_enqueue "$d1" "$d2" "$d3" >/dev/null 2>&1 \
+          || warn "arbiter enqueue failed for #$d1 @ ${d3}"
+        ;;
+      DISPATCH_REVIEWER)
+        # d1=reviewer-seat d2=ticket d3=sha d4=round d5=max
+        local rseat="${SEAT_NAME_reviewer:-reviewer}"
+        note "review loop: dispatching reviewer for #$d2 @ ${d3} (round ${d4}/${d5})"
+        herdr agent prompt "$rseat" "DISPATCH: Review #${d2} @ ${d3} (round ${d4}/${d5}). Follow your seat brief." >/dev/null 2>&1 || true
+        "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" review.dispatched "$rseat" "$d2" \
+          "$(jq -cn --arg t "$d2" --arg h "$d3" --arg r "$d4" \
+            '{ticket:$t, sha:$h, round:($r|tonumber), summary:("review round " + $r + " dispatched for #" + $t)}')" \
+          --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
+        ;;
+      DISPATCH_CRITIQUE)
+        # d1=impl-seat d2=ticket d3=round d4=max d5=findings-path
+        note "review loop: critique round ${d3}/${d4} for #$d2 —> ${d1}"
+        herdr agent prompt "$d1" "DISPATCH CRITIQUE: #${d2} round ${d3}/${d4} — see ${d5}" >/dev/null 2>&1 || true
+        "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" review.critique "$d1" "$d2" \
+          "$(jq -cn --arg t "$d2" --arg h "$sha" --arg r "$d3" --arg rec "$d1" \
+            '{ticket:$t, sha:$h, round:($r|tonumber), recipient:$rec, summary:("critique round " + $r + " for #" + $t + " -> " + $rec)}')" \
+          --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
+        ;;
+      ALERT_BLOCKED)
+        # d1=ticket d2=sha d3=round d4=max — fail closed, never enqueued
+        bad "review loop: #$d1 @ ${d2} BLOCKED after ${d4} rounds — human review required"
+        herdr agent prompt looper "LOOP-BOT: review for #${d1} @ ${d2} BLOCKED after ${d4} rounds — human review required." >/dev/null 2>&1 || true
+        ;;
+      ALERT_INVALID)
+        # d1=ticket d2..=reason (reason may contain spaces)
+        local reason="${line#ALERT_INVALID "${d1}" }"
+        bad "review loop: invalid review verdict for #${d1}: ${reason}"
+        herdr agent prompt looper "LOOP-BOT: invalid review verdict for #${d1}: ${reason}" >/dev/null 2>&1 || true
+        ;;
+      *)
+        warn "review loop: unknown directive ignored: $line"
+        ;;
+    esac
+  done <<<"$dirs"
+}
+
+# Scan one seat's pane output for REVIEW VERDICT anchors and drive the
+# state machine. Scrollback persists across passes, so harvested anchor
+# lines are recorded in a seen-file (exact-line key) — one anchor line is
+# harvested exactly once; a genuinely new verdict is a new line.
+_review_scan_verdicts() { # SEAT PANE-OUTPUT
+  local seat="$1" out="$2" line ticket sha verdict round fc fp
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    ticket=$(sed -nE 's/^[[:space:]]*REVIEW VERDICT #([A-Za-z0-9_.-]+)[[:space:]]+[0-9a-fA-F]{7,40}[[:space:]]+(PASS|BLOCK)[[:space:]]*$/\1/p' <<<"$line")
+    [[ -n "$ticket" ]] || continue
+    sha=$(sed -nE 's/^[[:space:]]*REVIEW VERDICT #[A-Za-z0-9_.-]+[[:space:]]+([0-9a-fA-F]{7,40})[[:space:]]+(PASS|BLOCK)[[:space:]]*$/\1/p' <<<"$line")
+    verdict=$(sed -nE 's/^[[:space:]]*REVIEW VERDICT #[A-Za-z0-9_.-]+[[:space:]]+[0-9a-fA-F]{7,40}[[:space:]]+(PASS|BLOCK)[[:space:]]*$/\1/p' <<<"$line")
+    local seen_key seen_file
+    seen_file="${STATE_DIR}/review-verdicts.seen"
+    seen_key=$(printf '%s|%s' "$seat" "$line" | cksum | tr -d ' ')
+    if [[ -f "$seen_file" ]] && grep -qF "$seen_key" "$seen_file"; then
+      continue
+    fi
+    printf '%s\n' "$seen_key" >> "$seen_file"
+
+    # Round at verdict time (pre-transition) + findings count from the
+    # durable evidence file — measured values, never guesses.
+    round=$(jq -r --arg t "$ticket" '.reviews[$t].round // 0' "${STATE_DIR}/reviews.json" 2>/dev/null || printf '0')
+    fp="${STATE_DIR}/reviews/${ticket}-${sha}.md"
+    fc=0
+    if [[ -f "$fp" ]]; then
+      fc=$(grep -cE '^\[(BLOCK|CONCERNS)\]' "$fp" 2>/dev/null || printf '0')
+    fi
+
+    local dirs rc=0
+    dirs=$(review_loop_on_review_verdict "$ticket" "$sha" "$verdict" "$STATE_DIR" 2>/dev/null) || rc=$?
+    "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" review.verdict "$seat" "$ticket" \
+      "$(jq -cn --arg t "$ticket" --arg h "$sha" --arg v "$verdict" --arg r "$round" --argjson f "$fc" \
+        '{ticket:$t, sha:$h, verdict:$v, round:($r|tonumber), findings_count:$f, summary:("review " + $v + " for #" + $t + " (round " + $r + ", " + ($f|tostring) + " findings)")}')" \
+      --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
+    _review_directives "$dirs" "$ticket" "$sha"
+  done < <(grep -E '^[[:space:]]*REVIEW VERDICT #[A-Za-z0-9_.-]+[[:space:]]+[0-9a-fA-F]{7,40}[[:space:]]+(PASS|BLOCK)[[:space:]]*$' <<<"$out" | tail -n 5)
+}
+
 harvest_verdicts() {
   local seat out
   for seat in "${EXPECTED_SEATS[@]}"; do
     out=$(herdr agent read "$seat" 2>/dev/null || true)
     [[ -n "$out" ]] || continue
+    # Review lane (REV-5): reviewer seats emit REVIEW VERDICT anchors that
+    # drive the review state machine; scanned before ARCH DONE so a pane
+    # carrying both shapes is fully processed.
+    _review_scan_verdicts "$seat" "$out"
     while IFS= read -r line; do
       local ticket verdict_line ts sha
       verdict_line="$line"
-      ticket=$(sed -nE 's/.*ARCH DONE #([0-9]+).*/\1/p' <<<"$verdict_line" | tail -n1)
+      ticket=$(sed -nE 's/.*ARCH DONE #([A-Za-z0-9_.-]+).*/\1/p' <<<"$verdict_line" | tail -n1)
       [[ -n "$ticket" ]] || continue
-      # Commit sha: carried in the verdict line (ARCH DONE #N <sha>), else repo HEAD
-      sha=$(sed -nE 's/.*ARCH DONE #[0-9]+[[:space:]]+([0-9a-fA-F]{7,40}).*/\1/p' <<<"$verdict_line" | tail -n1)
+      # Commit sha: carried in the verdict line (ARCH DONE #<id> <sha>), else repo HEAD
+      sha=$(sed -nE 's/.*ARCH DONE #[A-Za-z0-9_.-]+[[:space:]]+([0-9a-fA-F]{7,40}).*/\1/p' <<<"$verdict_line" | tail -n1)
       [[ -n "$sha" ]] || sha=$(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
       ts=$(date +%s)
       if [[ -f "$SESSION_LOG" ]]; then
-        # Permanent retire: this ticket already gated GREEN (only green retires)
-        if jq -e -s --argjson t "$ticket" 'any(.[]; .ticket == $t and .suite == "green")' "$SESSION_LOG" >/dev/null 2>&1; then
+        # Permanent retire: this ticket already gated GREEN (only green retires).
+        # tostring both sides (ARB-STR / REV-5): records mix numeric and string ids.
+        if jq -e -s --arg t "$ticket" 'any(.[]; (.ticket | tostring) == $t and .suite == "green")' "$SESSION_LOG" >/dev/null 2>&1; then
           continue
         fi
         # (ticket, sha) dedup: this exact code state was already CONCLUSIVELY
         # evaluated. Drift records (stale/invalidated/unresolvable) are excluded
         # so a cleaned-up re-verdict at the same sha is properly gated.
-        if jq -e -s --argjson t "$ticket" --arg s "$sha" \
-          'any(.[]; .ticket == $t and .sha == $s and (.suite != "stale" and .suite != "invalidated" and .suite != "unresolvable"))' \
+        if jq -e -s --arg t "$ticket" --arg s "$sha" \
+          'any(.[]; (.ticket | tostring) == $t and .sha == $s and (.suite != "stale" and .suite != "invalidated" and .suite != "unresolvable"))' \
           "$SESSION_LOG" >/dev/null 2>&1; then
           continue
         fi
@@ -352,7 +477,7 @@ harvest_verdicts() {
       # object store. Fabricated/stale shas are never suite-gated.
       if ! git -C "$REPO_DIR" cat-file -e "${sha}^{commit}" 2>/dev/null; then
         warn "verdict for #$ticket @ ${sha}: commit not found in repo — skipped, human evaluation required"
-        echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"skipped\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"skipped\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
         herdr agent prompt looper "LOOP-BOT: verdict for #$ticket @ ${sha} names a commit absent from the repo — do NOT retire the ticket; human evaluation required." >/dev/null 2>&1 || true
         continue
       fi
@@ -360,7 +485,7 @@ harvest_verdicts() {
       # worktree; a missing/mismatched one is unresolvable, never root-gated.
       if ! resolve_seat_gate "$seat"; then
         warn "verdict for #$ticket @ ${sha}: seat '$seat' gate unresolvable (isolated worktree missing or wrong branch) — NOT gated"
-        echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"unresolvable\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"unresolvable\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
         herdr agent prompt looper "LOOP-BOT: verdict for #$ticket @ ${sha} from $seat could not be resolved to a gate directory (worktree missing or on the wrong branch). Do NOT retire the ticket — human evaluation required." >/dev/null 2>&1 || true
         continue
       fi
@@ -370,7 +495,7 @@ harvest_verdicts() {
       # Pre-condition drift: the tree must be exactly the verdict's commit.
       if ! gate_tree_matches "$GATE_DIR" "$sha"; then
         warn "verdict for #$ticket @ ${sha}: gate tree is STALE (HEAD moved or dirty/untracked files) — not gating"
-        echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"stale\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"stale\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
         herdr agent prompt "$seat" "LOOP-BOT: verdict for #$ticket @ ${sha} rejected as STALE — the gate tree does not match that commit (uncommitted or untracked files, or HEAD moved). Commit your changes or remove stray files (no git stash), then re-verdict 'ARCH DONE #$ticket <new sha>'." >/dev/null 2>&1 || true
         continue
       fi
@@ -405,22 +530,22 @@ harvest_verdicts() {
         # the run regardless of exit code.
         if ! gate_tree_matches "$GATE_DIR" "$sha"; then
           suite_ok="invalidated"; bad "suite run for #$ticket @ ${sha} INVALIDATED — tree changed during the gate"
-          echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+          echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
           herdr agent prompt "$seat" "LOOP-BOT: suite run for #$ticket @ ${sha} was INVALIDATED — the tree changed during the gate. Re-verdict 'ARCH DONE #$ticket <sha>' from a stable tree." >/dev/null 2>&1 || true
         elif [[ "$gate_rc" -eq 0 ]]; then
           suite_ok="green"; ok "suite gate GREEN for #$ticket @ ${sha} (log: $gate_log)"
-          echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+          echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
         else
           suite_ok="RED"; bad "suite gate RED for #$ticket @ ${sha} — NOT filed; arch must fix before done (log: $gate_log)"
-          echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+          echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
           herdr agent prompt "$seat" "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate log: $gate_log)." >/dev/null 2>&1 || true
         fi
       elif [[ "$(ctl_get suite_gate)" == "true" ]]; then
         # No runnable suite for this project — never fake-green, record as skipped
         warn "TEST_CMD not runnable (${TEST_CMD:-<empty>}) — recording verdict for #$ticket without suite gate"
-        echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
       else
-        echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
       fi
 
       # Telemetry: suite verdict event (streams live into the Ops pane)
@@ -437,7 +562,7 @@ harvest_verdicts() {
         bad "verdict for #$ticket @ ${sha} recorded WITHOUT suite verification — HUMAN EVALUATION REQUIRED"
         herdr agent prompt looper "LOOP-BOT: verdict for #$ticket @ ${sha} from $seat's pane could NOT be suite-verified (gate off or non-runnable TEST_CMD). Do NOT retire the ticket — human evaluation required." >/dev/null 2>&1 || true
       fi
-    done < <(grep -E '^[[:space:]]*ARCH DONE #[0-9]+[[:space:]]+[0-9a-fA-F]{7,40}[[:space:]]*$' <<<"$out" | tail -n 5)
+    done < <(grep -E '^[[:space:]]*ARCH DONE #[A-Za-z0-9_.-]+[[:space:]]+[0-9a-fA-F]{7,40}[[:space:]]*$' <<<"$out" | tail -n 5)
   done
 }
 
