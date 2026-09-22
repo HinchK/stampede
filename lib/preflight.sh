@@ -4,7 +4,8 @@
 #
 # Validates, before any workspace initialization or seating:
 #   - Herdr daemon responsiveness (herdr workspace list, with retry)
-#   - Core binaries: jq, git, python3 (with tomllib / >= 3.11)
+#   - Core binaries: jq, git, timeout(1) (lib/common.sh), tomllib-capable
+#     interpreter (lib/pyenv.sh)
 #   - GitHub CLI presence and authentication (fail-closed)
 #   - Agent CLIs: agy, claude, opencode (advisory report)
 #   - Git work-tree state (advisory)
@@ -25,6 +26,12 @@
 # Exit: 0 when all required checks pass; 1 with remediation hints otherwise.
 
 set -euo pipefail
+
+# shellcheck disable=SC1091  # shared interpreter resolver (DOG-1); sourced
+# for the probe only — a missing interpreter is recorded, never fatal here.
+source "$(dirname "${BASH_SOURCE[0]}")/pyenv.sh"
+# shellcheck disable=SC1091  # shared timeout(1) resolver (DOG-15); sourced
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 # Terminal colors
 if [[ -t 1 ]] && command -v tput >/dev/null 2>&1 && [[ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]]; then
@@ -85,20 +92,39 @@ pf_check_bin() { # LABEL CMD REMEDIATION
   fi
 }
 
-# python3 with tomllib (capability probe, not version parsing)
+# tomllib-capable interpreter via the shared resolver (lib/pyenv.sh).
+# NOTE: resolve_python runs in THIS shell (stderr to a temp file, not a
+# command substitution) so its PYTHON_BIN export survives the call.
 pf_check_python() {
-  if ! command -v python3 >/dev/null 2>&1; then
-    pf_record "python3-tomllib" "error" "python3 not on PATH" \
-      "install python >= 3.11 (brew install python@3.12) or use uv"
-    return 0
-  fi
-  local ver
-  if ver=$(python3 -c 'import tomllib, sys; print(sys.version.split()[0])' 2>/dev/null); then
-    pf_record "python3-tomllib" "ok" "python3 ${ver} with tomllib"
+  local errfile msg ver
+  errfile=$(mktemp)
+  if resolve_python 2>"$errfile"; then
+    ver=$("$PYTHON_BIN" -c 'import sys; print(sys.version.split()[0])' 2>/dev/null || true)
+    pf_record "python3-tomllib" "ok" "${PYTHON_BIN} (Python ${ver}) with tomllib"
   else
-    pf_record "python3-tomllib" "error" "python3 present but tomllib unavailable (needs >= 3.11)" \
-      "install python >= 3.11 (brew install python@3.12) or use uv"
+    msg=$(tr '\n' ' ' < "$errfile")
+    pf_record "python3-tomllib" "error" "no tomllib-capable interpreter: ${msg}" \
+      "install python >= 3.11 (brew install python@3.12) or export PYTHON_BIN=/path/to/python3.11+"
   fi
+  rm -f "$errfile"
+}
+
+# timeout(1) via the shared resolver (lib/common.sh). Declared because every
+# suite gate bounds its run with it, and macOS ships none: an undeclared
+# dependency is exactly how DOG-15 reached CI, where a missing binary made the
+# gate exit 127 and be recorded as a RED verdict it had never measured.
+# NOTE: resolve_timeout runs in THIS shell so its TIMEOUT_BIN export survives.
+pf_check_timeout() {
+  local errfile msg
+  errfile=$(mktemp)
+  if resolve_timeout 2>"$errfile"; then
+    pf_record "timeout" "ok" "found: ${TIMEOUT_BIN}"
+  else
+    msg=$(tr '\n' ' ' < "$errfile")
+    pf_record "timeout" "error" "no runnable timeout(1): ${msg}" \
+      "install: brew install coreutils, or export TIMEOUT_BIN=/path/to/timeout"
+  fi
+  rm -f "$errfile"
 }
 
 # GitHub CLI + auth — fail-closed: agy-gh seat and repo targeting depend on it.
@@ -154,6 +180,7 @@ preflight_run() {
   pf_check_bin "jq" jq "install: brew install jq"
   pf_check_bin "git" git "install: xcode-select --install"
   pf_check_python
+  pf_check_timeout
   pf_check_gh
   pf_check_agents
   pf_check_git_repo
@@ -164,6 +191,9 @@ preflight_exit_code() {
 }
 
 # ── Reporting ──────────────────────────────────────────────────────────────
+# shellcheck disable=SC2120  # fd is optional; every caller intentionally
+# takes the default of 1. Forwarding "$@" would pass the script's args
+# as a file descriptor, which is wrong.
 preflight_report_text() { # FD
   local fd="${1:-1}"
   local name st detail icon color
@@ -190,6 +220,9 @@ preflight_report_text() { # FD
     "$GREEN" "$PF_COUNT_OK" "$PF_COUNT_WARN" "$PF_COUNT_ERR" "$RESET" >&"$fd"
 }
 
+# shellcheck disable=SC2120  # fd is optional; every caller intentionally
+# takes the default of 1. Forwarding "$@" would pass the script's args
+# as a file descriptor, which is wrong.
 preflight_report_json() { # FD — requires jq
   local fd="${1:-1}"
   if ! command -v jq >/dev/null 2>&1; then
@@ -227,10 +260,13 @@ if [[ "${BASH_SOURCE[0]:-}" == "$0" ]]; then
   preflight_run
 
   if [[ "$PF_JSON" -eq 1 ]]; then
+    # shellcheck disable=SC2119  # default fd is intended
     if ! preflight_report_json; then
+      # shellcheck disable=SC2119  # default fd is intended
       preflight_report_text
     fi
   elif [[ "$PF_QUIET" -eq 0 ]]; then
+    # shellcheck disable=SC2119  # default fd is intended
     preflight_report_text
   fi
 

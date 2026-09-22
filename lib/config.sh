@@ -2,12 +2,16 @@
 # lib/config.sh — TOML Swarm Configuration & Shell Binding Registry
 # Prototype for Ticket: [TOML Configuration Schema and Shell Binding]
 #
-# Parses swarm.config.toml via python3 tomllib and binds values to shell.
+# Parses swarm.config.toml via a tomllib-capable interpreter (lib/pyenv.sh)
+# and binds values to shell.
 
 set -euo pipefail
 
 # shellcheck disable=SC1091  # dynamically resolved sibling lib
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+# shellcheck disable=SC1091  # tomllib-capable interpreter (DOG-1)
+source "$(dirname "${BASH_SOURCE[0]}")/pyenv.sh"
+resolve_python
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 DEFAULT_CONFIG="${SCRIPT_DIR}/swarm.config.toml"
@@ -19,7 +23,7 @@ _py_read() {
   local toml_path="$1"
   local py_code="$2"
   shift 2
-  python3 - "$toml_path" "$@" <<PYCODE 2>/dev/null || true
+  "$PYTHON_BIN" - "$toml_path" "$@" <<PYCODE 2>/dev/null || true
 import sys, tomllib
 try:
     with open(sys.argv[1], 'rb') as f:
@@ -102,7 +106,7 @@ config_dump_env() {
   fi
   [[ -n "$slug" ]] && slug=$(slugify "$slug")
 
-  python3 - "$slug" "$toml_path" <<'PYCODE'
+  "$PYTHON_BIN" - "$slug" "$toml_path" <<'PYCODE'
 import sys, tomllib, shlex
 
 slug = sys.argv[1]

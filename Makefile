@@ -22,11 +22,16 @@ test:
 	printf '\nAll suites green (%d)\n' "$(words $(TESTS))"
 
 # Lint gate: 0 shellcheck warnings is the bar (SC output goes to stderr).
+# The interpreter resolves FIRST: py_compile must go through the shared
+# tomllib-capable resolver (DOG-1), and the degraded-PATH failure has to be
+# its actionable message — not a bare `shellcheck: command not found`, which
+# would otherwise shadow it (shellcheck lives outside /usr/bin on macOS).
 lint:
 	@set -e; \
+	PYTHON_BIN=$$($(SHELL) lib/pyenv.sh); \
 	shellcheck $(LINT_SH); \
 	for f in $(LINT_SH); do bash -n "$$f"; done; \
-	python3 -m py_compile lib/telemetry.py; \
+	"$$PYTHON_BIN" -m py_compile lib/telemetry.py; \
 	printf 'Lint clean (%d shell files)\n' "$(words $(LINT_SH))"
 
 # Everything CI (or a worker's Suite Gate) should run before a verdict.

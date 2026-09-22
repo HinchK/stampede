@@ -19,6 +19,9 @@ set -euo pipefail
 SCRIPT_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_LIB_DIR}/common.sh"
+# shellcheck disable=SC1091  # tomllib-capable interpreter (DOG-1)
+source "${SCRIPT_LIB_DIR}/pyenv.sh"
+resolve_python
 # shellcheck disable=SC1091
 source "${SCRIPT_LIB_DIR}/profile.sh"
 
@@ -225,7 +228,7 @@ if ! REMOTE_ISSUES_JSON=$(gh issue list --repo "$REPO" --limit 300 --state all -
 fi
 
 # ── Python Reconciliation Engine ───────────────────────────────────────────
-RECONCILE_OUTPUT=$(python3 -c '
+RECONCILE_OUTPUT=$("$PYTHON_BIN" -c '
 import sys, os, glob, re, json
 
 target_dir = sys.argv[1]
@@ -430,7 +433,7 @@ if [[ "$OUTPUT_JSON" = true ]]; then
 fi
 
 # ── Render Plan ────────────────────────────────────────────────────────────
-python3 -c '
+"$PYTHON_BIN" -c '
 import sys, json
 
 data = json.loads(sys.argv[1])
@@ -504,7 +507,7 @@ if [[ "$APPLY" = true ]]; then
 
   # Python applier script handles atomic frontmatter edits and triggers gh CLI mutations
   # shellcheck disable=SC2016
-  python3 -c '
+  "$PYTHON_BIN" -c '
 import sys, os, re, json, subprocess, datetime
 
 data = json.loads(sys.argv[1])

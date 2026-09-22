@@ -39,10 +39,22 @@ SUITE_TIMEOUT_S="${SUITE_TIMEOUT_S:-300}"
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck disable=SC1091  # dynamically resolved sibling libs
 source "$SCRIPT_DIR/lib/common.sh"
+# shellcheck disable=SC1091  # tomllib-capable interpreter (DOG-1)
+source "$SCRIPT_DIR/lib/pyenv.sh"
+resolve_python
 # shellcheck disable=SC1091  # dynamically resolved sibling libs
 source "$SCRIPT_DIR/lib/profile.sh"
 # shellcheck disable=SC1091  # dynamically resolved sibling libs
 source "$SCRIPT_DIR/lib/config.sh"
+# The arbiter is governance: it loads from the orchestrator (SCRIPT_DIR),
+# never from the target tree under REPO_DIR. A supervisor install without
+# its arbiter is broken — fail loudly before anything runs, and never fall
+# back to a target-local copy (DOG-13).
+if [[ ! -f "$SCRIPT_DIR/lib/arbiter.sh" ]]; then
+  printf 'loop-bot-herd: FATAL — arbiter missing from orchestrator: %s/lib/arbiter.sh\n' "$SCRIPT_DIR" >&2
+  printf 'loop-bot-herd: refusing to run; the target tree is never a fallback arbiter source\n' >&2
+  exit 1
+fi
 # shellcheck disable=SC1091  # dynamically resolved sibling lib (arbiter enqueue at reap)
 source "$SCRIPT_DIR/lib/arbiter.sh"
 
@@ -188,13 +200,20 @@ gate_spawn() { # SEAT TICKET SHA GATE_DIR VERDICT_LINE ISOLATED
   local jlog="${STATE_DIR}/gate-logs/${jid}.log"
   local jrc="${jdir}/${jid}.rc"
   mkdir -p "$jdir" "${STATE_DIR}/gate-logs" "${STATE_DIR}/gate-tmp/${seat}"
+  # No timeout(1) means the bound cannot be applied; the job would exit 127
+  # and be reaped as RED, condemning a tree that was never measured (DOG-15).
+  # Spawn nothing: the verdict stays unharvested and is retried next pass.
+  if ! resolve_timeout; then
+    bad "gate NOT run for #${ticket} @ ${sha} — no runnable timeout(1); verdict deferred, not RED"
+    return 0
+  fi
   (
     set +e
     if ! cd "$dir" 2>/dev/null; then
       printf '127' > "${jrc}.tmp" && mv "${jrc}.tmp" "$jrc"
       exit 0
     fi
-    TMPDIR="${STATE_DIR}/gate-tmp/${seat}" timeout "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD" > "$jlog" 2>&1
+    TMPDIR="${STATE_DIR}/gate-tmp/${seat}" "$TIMEOUT_BIN" "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD" > "$jlog" 2>&1
     local rc=$?
     printf '%s' "$rc" > "${jrc}.tmp" && mv "${jrc}.tmp" "$jrc"
   ) >/dev/null 2>&1 &
@@ -267,7 +286,7 @@ gate_reap() {
     fi
 
     echo "{\"ts\": $ts, \"ticket\": $ticket, \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"exit_code\": $rc_val, \"log\": \"$gate_log\"}" >> "$SESSION_LOG"
-    python3 "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" suite.verdict "$seat" "$ticket" \
+    "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" suite.verdict "$seat" "$ticket" \
       "$(jq -cn --arg s "$suite_ok" --arg sha "$sha" --arg seat "$seat" --arg t "$ticket" \
         '{suite:$s, sha:$sha, summary:("suite " + $s + " @ " + $sha), details:("seat=" + $seat + " ticket=#" + $t)}')" \
       --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
@@ -361,8 +380,14 @@ harvest_verdicts() {
         fi
         # ── legacy inline path (gate_concurrency = 0): unchanged semantics ──
         log "verdict for #$ticket @ ${sha} — running suite gate in ${GATE_DIR}: ${TEST_CMD}"
+        # Same fail-closed bound as the async path (DOG-15): an unresolvable
+        # timeout(1) is an environment defect, never a RED verdict.
+        if ! resolve_timeout; then
+          bad "gate NOT run for #$ticket @ ${sha} — no runnable timeout(1); verdict deferred, not RED"
+          continue
+        fi
         local gate_rc=1
-        if (cd "$GATE_DIR" && TMPDIR="${STATE_DIR}/gate-tmp/${seat}" timeout "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD") >"$gate_log" 2>&1; then
+        if (cd "$GATE_DIR" && TMPDIR="${STATE_DIR}/gate-tmp/${seat}" "$TIMEOUT_BIN" "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD") >"$gate_log" 2>&1; then
           gate_rc=0
         fi
         # Post-condition drift (TOCTOU): the worker must not have touched
@@ -389,7 +414,7 @@ harvest_verdicts() {
       fi
 
       # Telemetry: suite verdict event (streams live into the Ops pane)
-      python3 "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" suite.verdict "$seat" "$ticket" \
+      "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" suite.verdict "$seat" "$ticket" \
         "$(jq -cn --arg s "$suite_ok" --arg sha "$sha" --arg seat "$seat" --arg t "$ticket" \
           '{suite:$s, sha:$sha, summary:("suite " + $s + " @ " + $sha), details:("seat=" + $seat + " ticket=#" + $t)}')" \
         --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
@@ -426,7 +451,7 @@ unpushed_watch() {
 credits_watch() {
   local key out
   [[ "$(config_get "proxy.enabled" "false" "${SWARM_CONFIG:-$SCRIPT_DIR/swarm.config.toml}")" == "true" ]] || return 0
-  key=$(python3 - "${KULTIVAIT_CREDENTIALS:-$HOME/.kultivait/credentials.toml}" << 'EOF' 2>/dev/null || true
+  key=$("$PYTHON_BIN" - "${KULTIVAIT_CREDENTIALS:-$HOME/.kultivait/credentials.toml}" << 'EOF' 2>/dev/null || true
 import sys, tomllib
 from pathlib import Path
 p = Path(sys.argv[1])
@@ -438,7 +463,7 @@ EOF
   [[ -n "$key" ]] || return 0
   out=$(curl -sf --max-time 5 -H "Authorization: Bearer $key" https://openrouter.ai/api/v1/credits 2>/dev/null || true)
   [[ -n "$out" ]] || { warn "OpenRouter /credits unreachable"; return 0; }
-  python3 - "$out" "$CREDIT_WARN_USD" << 'EOF'
+  "$PYTHON_BIN" - "$out" "$CREDIT_WARN_USD" << 'EOF'
 import json, sys
 d = json.loads(sys.argv[1])
 left = float(d["data"]["total_credits"]) - float(d["data"]["total_usage"])

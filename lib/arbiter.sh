@@ -32,6 +32,9 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck disable=SC1091  # dynamically resolved sibling lib
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+# shellcheck disable=SC1091  # tomllib-capable interpreter (DOG-1)
+source "$(dirname "${BASH_SOURCE[0]}")/pyenv.sh"
+resolve_python
 
 ARBITER_TMP_SLEEP=0.2
 
@@ -69,7 +72,7 @@ _arb_set_status() { # TICKET SHA STATUS [EXTRA_JQ]
 }
 
 _arb_telemetry() { # EVENT_TYPE TICKET SEAT SHA PAYLOAD_JSON
-  python3 "$SCRIPT_DIR/lib/telemetry.py" log \
+  "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log \
     "$(telemetry_session_id "$ARB_STATE")" "$1" "$2" - "$3" "$4" \
     --trace-dir "${ARB_STATE}/traces" >/dev/null 2>&1 || true
 }
@@ -173,7 +176,7 @@ arbiter_drain() {
     fi
 
     if ! _arb_integrate "$ticket" "$seat" "$sha" "$i0"; then
-      break   # record was resolved (conflict/red/retry); stop this pass
+      break   # record resolved (conflict/red/retry), or ungateable; stop the pass
     fi
   done
 
@@ -209,11 +212,22 @@ _arb_integrate() { # TICKET SEAT SHA I0
 
   # 2. pre-gate the combined tree (arbiter TMPDIR; log kept for diagnosis)
   if _arb_cmd_runnable; then
+    # The bound resolves BEFORE the gate runs. Without a timeout(1) the gate
+    # exits 127, which this function used to record as integration_red —
+    # condemning a combined tree it never actually measured (DOG-15). Leave
+    # the record queued instead: truthful (unprocessed), self-healing once the
+    # dependency is installed, and the ref stays where it is either way.
+    if ! resolve_timeout; then
+      _arb_telemetry arbiter.gate_unavailable "$ticket" "$seat" "$sha" \
+        "$(jq -cn '{summary:"gate harness unavailable: no runnable timeout(1)"}')"
+      printf 'arbiter: #%s NOT gated — no runnable timeout(1); left queued, ref unmoved\n' "$ticket" >&2
+      return 1
+    fi
     local gate_dir="${ARB_STATE}/gate-logs"
     local gate_log="${gate_dir}/arbiter-${ticket}-${sha:0:7}.log"
     mkdir -p "$gate_dir" "${ARB_STATE}/arbiter-tmp"
     if ! (cd "$ARB_WT" && TMPDIR="${ARB_STATE}/arbiter-tmp" \
-          timeout "${SUITE_TIMEOUT_S:-300}" sh -c "$TEST_CMD") >"$gate_log" 2>&1; then
+          "$TIMEOUT_BIN" "${SUITE_TIMEOUT_S:-300}" sh -c "$TEST_CMD") >"$gate_log" 2>&1; then
       _arb_set_status "$ticket" "$sha" "integration_red" \
         "{integration_before: \"${i0}\", gate: {log: \"${gate_log}\"}}"
       _arb_telemetry arbiter.red "$ticket" "$seat" "$sha" \
@@ -264,11 +278,29 @@ arbiter_pr_body() { # OUT_FILE
   } > "$1"
 }
 
-# arbiter_promote [--pr]
+# arbiter_promote [--pr] [--confirm]  (or env PROMOTE_CONFIRM=1)
 arbiter_promote() {
   _arb_cfg
-  local mode="local"
-  [[ "${1:-}" == "--pr" ]] && mode="pr"
+  local mode="local" confirmed=0 arg
+  for arg in "$@"; do
+    case "$arg" in
+      --pr)      mode="pr" ;;
+      --confirm) confirmed=1 ;;
+    esac
+  done
+
+  # Human gate (DOG-12): moving a base branch is a human-only act. A brief is
+  # a request, not enforcement — this refusal is the enforcement. It fires
+  # before every other check so the human-action message is always the one
+  # printed.
+  if [[ "$confirmed" -ne 1 && "${PROMOTE_CONFIRM:-0}" != "1" ]]; then
+    printf 'arbiter: promote REFUSED — promoting advances the base branch and is reserved for the human driver\n' >&2
+    printf 'arbiter: required human action: run it yourself, exactly one of:\n' >&2
+    printf 'arbiter:   bash lib/arbiter.sh promote --confirm\n' >&2
+    printf 'arbiter:   PROMOTE_CONFIRM=1 bash lib/arbiter.sh promote\n' >&2
+    printf 'arbiter: agents must never pass --confirm or set PROMOTE_CONFIRM — main moves only by human promote\n' >&2
+    return 1
+  fi
 
   git -C "$ARB_REPO" show-ref --verify --quiet "$ARB_REF" || {
     printf 'arbiter: no integration branch %s\n' "$ARB_REF" >&2
@@ -326,10 +358,10 @@ if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
   case "$cmd" in
     enqueue) arbiter_enqueue "$@" ;;
     drain)   arbiter_drain ;;
-    promote) arbiter_promote "${1:-}" ;;
+    promote) arbiter_promote "$@" ;;
     pr-body) arbiter_pr_body "${1:?out-file}" ;;
     *)
-      printf 'Usage: %s enqueue <ticket> <seat> <sha> | drain | promote [--pr] | pr-body <file>\n' "$0" >&2
+      printf 'Usage: %s enqueue <ticket> <seat> <sha> | drain | promote [--pr] [--confirm] | pr-body <file>\n' "$0" >&2
       exit 1 ;;
   esac
 fi

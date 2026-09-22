@@ -32,6 +32,14 @@ cks()  { # STRING-TICKET WANT_STATUS LABEL — repo ticket ids are strings (P3-4
 # shellcheck disable=SC1091  # sibling lib under test
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/arbiter.sh"
 
+# The gate under test bounds every run with timeout(1), and macOS ships none.
+# Fail once, with the remedy, instead of cascading into a dozen downstream
+# assertion failures that all blame the arbiter for a missing binary (DOG-15).
+if ! resolve_timeout; then
+  printf 'test_arbiter: cannot run — no runnable timeout(1) (remedy above)\n' >&2
+  exit 1
+fi
+
 commit_at() { # DIR MSG — commit all in DIR, print sha
   git -C "$1" add -A >/dev/null
   git -C "$1" -c user.email=t@t -c user.name=t commit -q -m "$2"
@@ -126,6 +134,32 @@ ck 204 integration_red "RED combined tree recorded as integration_red"
 check "integration ref NOT advanced on RED" \
   '[[ $(git -C "$REPO" rev-parse '"$IREF"') == "$REF_BEFORE" ]]'
 
+# ── 4b. an ungateable gate is NOT a RED verdict (DOG-15) ───────────────────
+# macOS ships no timeout(1), so `timeout N sh -c "$TEST_CMD"` exits 127 where
+# coreutils is absent. That used to be recorded as integration_red —
+# condemning a combined tree the gate had never actually measured, which is
+# the one failure mode the gate exists to prevent. A gate that cannot run must
+# leave the record queued, must not move the ref, and must still integrate
+# normally once the binary is available.
+git -C "$REPO" branch "swarm/ptest/seat-e" main
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/we" "swarm/ptest/seat-e"
+printf 'echo\n' > "$TEST_DIR/we/echo.txt"
+SHA_E=$(commit_at "$TEST_DIR/we" "seat-e work")
+REF_PRE_UNGATED=$(git -C "$REPO" rev-parse "$IREF")
+arbiter_enqueue 208 seat-e "$SHA_E"
+
+export TIMEOUT_BIN="$TEST_DIR/no-such-timeout"   # resolver rejects it strictly
+arbiter_drain 2>/dev/null
+ck 208 queued "ungateable gate leaves the record queued (not integration_red)"
+check "no integration_red recorded when the gate could not run" \
+  '[[ $(jq -r -s --arg t 208 "[.[] | select((.ticket|tostring) == \$t and .status == \"integration_red\")] | length" "$Q") == 0 ]]'
+check "integration ref unmoved when the gate could not run" \
+  '[[ $(git -C "$REPO" rev-parse '"$IREF"') == "$REF_PRE_UNGATED" ]]'
+unset TIMEOUT_BIN                                 # resolver re-probes PATH
+
+arbiter_drain 2>/dev/null
+ck 208 integrated "queued record integrates once a timeout(1) is available"
+
 # ── 5. CAS: tip moved during the gate → retry ──────────────────────────────
 # The gate command races the CAS: it advances the integration ref to a NEW
 # commit (not I0), so the compare-and-swap must reject.
@@ -158,12 +192,30 @@ ck 206 integrated "gated sha integrated despite newer branch tip"
 check "integration contains GATED content, not tip" \
   'git -C "$REPO" cat-file -p "${SHA_D1}:feature.txt" | grep -q "v1"'
 
-# ── 7. promotion (local mode) ──────────────────────────────────────────────
+# ── 7. promotion (local mode) — human-gated (DOG-12) ───────────────────────
+# 7a. unconfirmed promote refuses with the human-action message and moves nothing
+MAIN_BEFORE=$(git -C "$REPO" rev-parse main)
+if arbiter_promote >/dev/null 2>"$TEST_DIR/promote-refusal.txt"; then bad "unconfirmed promote refused"; else ok "unconfirmed promote refused"; fi
+if grep -qi "human" "$TEST_DIR/promote-refusal.txt" \
+   && grep -q -- "--confirm" "$TEST_DIR/promote-refusal.txt" \
+   && grep -q "PROMOTE_CONFIRM=1" "$TEST_DIR/promote-refusal.txt"; then
+  ok "refusal names the required human action"
+else
+  bad "refusal names the required human action"
+fi
+check "main unmoved after unconfirmed promote" \
+  '[[ $(git -C "$REPO" rev-parse main) == "$MAIN_BEFORE" ]]'
+check "refusal flips no records to promoted" \
+  '[[ $(jq -s "[.[] | select(.status == \"promoted\")] | length" "$Q") == 0 ]]'
+
+# 7b. dirty-root guard still applies WITH explicit confirmation
 printf 'dirty\n' > "$REPO/stray.txt"
-if arbiter_promote >/dev/null 2>&1; then bad "dirty root promote refused"; else ok "dirty root promote refused"; fi
+if arbiter_promote --confirm >/dev/null 2>&1; then bad "dirty root promote refused"; else ok "dirty root promote refused"; fi
 rm "$REPO/stray.txt"
-arbiter_promote >/dev/null 2>&1
-check "promote ff-advances main to integration" \
+
+# 7c. confirmed promote (env form) behaves exactly as the pre-guardrail promote
+( export PROMOTE_CONFIRM=1; arbiter_promote >/dev/null 2>&1 )
+check "confirmed promote ff-advances main to integration" \
   '[[ $(git -C "$REPO" rev-parse main) == $(git -C "$REPO" rev-parse '"$IREF"') ]]'
 check "root tree clean after promote" \
   '[[ -z "$(git -C "$REPO" status --porcelain)" ]]'
