@@ -2,10 +2,13 @@
 id: DOG-7
 title: "Make the kultivait/pi local engine completely optional"
 type: wayfinder:defect
-status: backlog
-assignee: arch
+status: in_progress
+assignee: arch-1
 owns: swarm.config.toml,briefs/pi.md,briefs/pi.in.md,lib/gh_sync.sh,loop-bot-herd.sh,herdr-loop-swarm.sh,lib/config.sh,lib/briefs.sh
 parent: maps/public-readiness.md
+github_issue: 13
+github_url: "https://github.com/HinchK/stampede/issues/13"
+synced_at: "2026-09-21T18:40:00Z"
 ---
 
 # DOG-7 — kultivait fully optional (WAVE 3, RUNS ALONE)
