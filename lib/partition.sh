@@ -180,17 +180,23 @@ owns_overlaps() { # SET_A SET_B [REPO_DIR]
 }
 
 # ── active set (tickets that may have a worker touching files now) ─────────
-# _partition_ticket_active ID STATUS OWNS_PRESENT REPO -> 0 = active
+# Resolved tickets fail OPEN when the gitignored integration evidence file is
+# absent (a fresh clone has none — missing evidence is not activity, DOG-11);
+# evidence that EXISTS and does not name the ticket keeps it active.
+# _partition_ticket_active ID STATUS INTEG_FILE -> 0 = active
 _partition_ticket_active() {
-  local id="$1" status="$2" owns_present="$3" repo="$4"
-  local integ="${repo}/.herdr-swarm/integration.jsonl"
+  local id="$1" status="$2" integ="$3"
   case "$status" in
     in_progress) return 0 ;;
     backlog|ready) return 1 ;;
     resolved|done|closed)
-      # inactive only when the work has actually integrated
-      if [[ "$owns_present" == 0 || -f "$integ" ]] \
-         && jq -e -s --arg t "$id" 'any(.[]; (.ticket|tostring) == $t and (.status == "integrated" or .status == "promoted"))' "$integ" >/dev/null 2>&1; then
+      # No evidence file → it cannot testify against the ticket → inactive.
+      if [[ ! -f "$integ" ]]; then
+        return 1
+      fi
+      # Evidence present: inactive only when it records this ticket
+      # integrated (or since promoted).
+      if jq -e -s --arg t "$id" 'any(.[]; (.ticket|tostring) == $t and (.status == "integrated" or .status == "promoted"))' "$integ" >/dev/null 2>&1; then
         return 1
       fi
       return 0
@@ -206,6 +212,12 @@ _partition_ticket_active() {
 partition_check() { # CANDIDATE_TICKET_FILE [REPO_DIR]
   local cand="$1" repo="${2:-$PWD}"
   local state="${repo}/.herdr-swarm"
+  local integ="${state}/integration.jsonl"
+  # DOG-11: warn once when the gitignored evidence file is absent, so a
+  # genuinely wiped state dir stays visible rather than silently forgiven.
+  if [[ ! -f "$integ" ]]; then
+    printf 'partition: WARNING integration evidence absent (%s) — resolved tickets assumed inactive\n' "$integ" >&2
+  fi
   local owns="" owns_rc=0
   owns=$(owns_parse_ticket "$cand") || owns_rc=$?
   if [[ "$owns_rc" == 1 ]]; then
@@ -242,7 +254,7 @@ partition_check() { # CANDIDATE_TICKET_FILE [REPO_DIR]
     tstatus=$(sed -nE 's/^status:[[:space:]]*(.+)$/\1/p' "$tf" | head -n1 | tr -d '"')
     [[ -n "$tid" && -n "$tstatus" ]] || continue
     thas_owns=$(grep -c '^owns:' "$tf" 2>/dev/null || true)
-    _partition_ticket_active "$tid" "$tstatus" "$thas_owns" "$repo" || continue
+    _partition_ticket_active "$tid" "$tstatus" "$integ" || continue
     towns=""
     [[ "$thas_owns" -gt 0 ]] && towns=$(owns_parse_ticket "$tf" 2>/dev/null || true)
     if (( exclusive )) || { [[ -n "$owns" && -n "$towns" ]] && owns_overlaps "$owns" "$towns" "$repo" >/dev/null; }; then

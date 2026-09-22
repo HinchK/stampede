@@ -118,24 +118,35 @@ fi
 # ticket stays ready: status file untouched
 grep -q 'status: ready' "$CAND" && ok 10b "blocked ticket stays ready" || bad 10b "blocked ticket stays ready"
 
-# ── case 11: resolved-but-not-integrated stays active ──────────────────────
+# ── case 11: resolved tickets vs integration evidence (DOG-11) ─────────────
 RES="$REPO/maps/tickets/t-res.md"
 printf -- '---\nid: T-RES\nstatus: resolved\nowns: docs/adr/\n---\n' > "$RES"
 CAND2="$REPO/maps/tickets/cand2.md"
 printf -- '---\nid: T-C2\nstatus: ready\nowns: docs/adr/0009.md\n---\n' > "$CAND2"
 # ensure no lease interference for this case
 printf '{"version":1,"leases":[]}' > "$STATE/leases.json"
+# evidence PRESENT but silent about T-RES → contrary evidence → still active
+printf '{"ts":1,"ticket":"T-OTHER","seat":"x","sha":"abc","status":"integrated"}\n' > "$STATE/integration.jsonl"
 partition_check "$CAND2" "$REPO" >/dev/null 2>&1 && bad 11 "resolved-not-integrated blocks overlapping candidate" \
-  || ok 11 "resolved-not-integrated still holds (candidate blocked)"
+  || ok 11 "resolved, absent from present evidence, still holds (candidate blocked)"
+# evidence file itself absent (fresh clone / wiped state) → missing evidence
+# is not activity → dispatchable, with exactly one warning line
+rm -f "$STATE/integration.jsonl"
+rc=0; WARN11=$(partition_check "$CAND2" "$REPO" 2>&1 >/dev/null) || rc=$?
+warn_n=$(printf '%s' "$WARN11" | grep -c 'integration evidence absent' || true)
+if [[ "$rc" == 0 && "$warn_n" == 1 ]]; then
+  ok 11a "no evidence file: resolved ticket inactive, exactly one warning"
+else
+  bad 11a "no evidence file: rc=$rc warnings=$warn_n (want rc=0, 1)"
+fi
 # once integrated → inactive → dispatchable
 printf '{"ts":1,"ticket":"T-RES","seat":"x","sha":"abc","status":"integrated"}\n' > "$STATE/integration.jsonl"
 partition_check "$CAND2" "$REPO" >/dev/null 2>&1 && ok 11b "integrated ticket releases the block" \
   || bad 11b "integrated ticket releases the block"
-rm -f "$STATE/integration.jsonl"
 
 # ── case 12: no-owns fallback = exclusive serialized ───────────────────────
-# (T-RES must be integrated or it stays active and would block the exclusive
-# candidate — re-establish its integration record first)
+# (11b left T-RES integrated on record; keep it that way — present evidence
+# naming the ticket is what keeps it inactive here)
 printf '{"ts":1,"ticket":"T-RES","seat":"x","sha":"abc","status":"integrated"}\n' > "$STATE/integration.jsonl"
 jq -cn '{version:1,leases:[{ticket:"T-X",seat:"arch-2-x",branch:"",owns:["lib/zzz.c"],exclusive:false,acquired_at:"now"}]}' > "$STATE/leases.json"
 rc=0; partition_check "$TF3" "$REPO" >/dev/null 2>&1 || rc=$?
@@ -204,6 +215,29 @@ if printf '%s' "$SUG" | grep -q 'lib/declared.c' && printf '%s' "$SUG" | grep -q
 else
   bad S "suggest (got: $SUG)"
 fi
+
+# ── case 16 (DOG-11): fresh clone — no .herdr-swarm at all ─────────────────
+# The full deadlock repro: many resolved tickets (with and without owns) and
+# zero gitignored state must not phantom-block any dispatch.
+rm -f "$REPO/maps/tickets/t-ser.md"   # in_progress fixture would be a REAL active ticket
+printf -- '---\nid: R-1\nstatus: resolved\nowns: lib/a.sh\n---\n' > "$REPO/maps/tickets/r1.md"
+printf -- '---\nid: R-2\nstatus: resolved\nowns: tests/\n---\n' > "$REPO/maps/tickets/r2.md"
+printf -- '---\nid: R-3\nstatus: resolved\n---\n' > "$REPO/maps/tickets/r3.md"
+CAND16="$REPO/maps/tickets/cand16.md"
+printf -- '---\nid: T-C16\nstatus: ready\nowns: docs/audits/a.md\n---\n' > "$CAND16"
+CAND16B="$REPO/maps/tickets/cand16b.md"
+printf -- '---\nid: T-C16B\nstatus: ready\n---\n' > "$CAND16B"
+rm -rf "$STATE"
+rc=0; WARN16=$(partition_check "$CAND16" "$REPO" 2>&1 >/dev/null) || rc=$?
+warn_n=$(printf '%s' "$WARN16" | grep -c 'integration evidence absent' || true)
+if [[ "$rc" == 0 && "$warn_n" == 1 ]]; then
+  ok 16a "fresh clone: disjoint-owns candidate dispatches, exactly one warning"
+else
+  bad 16a "fresh clone disjoint candidate (rc=$rc warnings=$warn_n, want rc=0, 1)"
+fi
+rc=0; partition_check "$CAND16B" "$REPO" >/dev/null 2>&1 || rc=$?
+[[ "$rc" == 2 ]] && ok 16b "fresh clone: no-owns candidate exclusive (rc=2), not buried by phantom leases" \
+  || bad 16b "fresh clone exclusive candidate (rc=$rc, want 2)"
 
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
