@@ -200,13 +200,20 @@ gate_spawn() { # SEAT TICKET SHA GATE_DIR VERDICT_LINE ISOLATED
   local jlog="${STATE_DIR}/gate-logs/${jid}.log"
   local jrc="${jdir}/${jid}.rc"
   mkdir -p "$jdir" "${STATE_DIR}/gate-logs" "${STATE_DIR}/gate-tmp/${seat}"
+  # No timeout(1) means the bound cannot be applied; the job would exit 127
+  # and be reaped as RED, condemning a tree that was never measured (DOG-15).
+  # Spawn nothing: the verdict stays unharvested and is retried next pass.
+  if ! resolve_timeout; then
+    bad "gate NOT run for #${ticket} @ ${sha} — no runnable timeout(1); verdict deferred, not RED"
+    return 0
+  fi
   (
     set +e
     if ! cd "$dir" 2>/dev/null; then
       printf '127' > "${jrc}.tmp" && mv "${jrc}.tmp" "$jrc"
       exit 0
     fi
-    TMPDIR="${STATE_DIR}/gate-tmp/${seat}" timeout "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD" > "$jlog" 2>&1
+    TMPDIR="${STATE_DIR}/gate-tmp/${seat}" "$TIMEOUT_BIN" "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD" > "$jlog" 2>&1
     local rc=$?
     printf '%s' "$rc" > "${jrc}.tmp" && mv "${jrc}.tmp" "$jrc"
   ) >/dev/null 2>&1 &
@@ -373,8 +380,14 @@ harvest_verdicts() {
         fi
         # ── legacy inline path (gate_concurrency = 0): unchanged semantics ──
         log "verdict for #$ticket @ ${sha} — running suite gate in ${GATE_DIR}: ${TEST_CMD}"
+        # Same fail-closed bound as the async path (DOG-15): an unresolvable
+        # timeout(1) is an environment defect, never a RED verdict.
+        if ! resolve_timeout; then
+          bad "gate NOT run for #$ticket @ ${sha} — no runnable timeout(1); verdict deferred, not RED"
+          continue
+        fi
         local gate_rc=1
-        if (cd "$GATE_DIR" && TMPDIR="${STATE_DIR}/gate-tmp/${seat}" timeout "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD") >"$gate_log" 2>&1; then
+        if (cd "$GATE_DIR" && TMPDIR="${STATE_DIR}/gate-tmp/${seat}" "$TIMEOUT_BIN" "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD") >"$gate_log" 2>&1; then
           gate_rc=0
         fi
         # Post-condition drift (TOCTOU): the worker must not have touched
