@@ -95,6 +95,8 @@ while [[ $# -gt 0 ]]; do
       CLI_TOPIC="${2:-}"; shift 2 ;;
     -s|--seat-only)
       CLI_MODE="s"; shift ;;
+    --no-review-loop)
+      CLI_NO_REVIEW_LOOP=1; shift ;;
     -h|--help)
       cat <<EOF
 Usage: $(basename "$0") [up [dir]] [OPTIONS] | [dir] [OPTIONS] | status [dir] | verify [dir] [ms] | down [dir] [FLAGS]
@@ -120,6 +122,9 @@ Options (launch):
   -n, --map <NUM>         Map issue number to resume (for mode 'r')
   -t, --topic <DESC>      Milestone description / topic (for modes 'w' or 'b')
   -s, --seat-only         Shorthand for --mode s
+  --no-review-loop        Disable the reviewer loop for this session
+                          (overrides [reviewer] loop = true; the flag's
+                          effect persists until the next up without it)
   -h, --help              Show this help message
 EOF
       exit 0 ;;
@@ -239,6 +244,18 @@ if ! config_env=$(config_dump_env "$PROJECT_SLUG" "$CONFIG_FILE"); then
 fi
 eval "$config_env"
 good "Config bound: ${SWARM_CONFIG_NAME} — seats: ${SEAT_KEYS}"
+
+# Review loop session override (REV-3): --no-review-loop writes a durable
+# runtime marker that outranks the config binding, so the supervisor daemon
+# (which reads config on its own) sees the same override. An up WITHOUT the
+# flag restores the config as the standing source of truth.
+mkdir -p "${PWD}/.herdr-swarm"
+if [[ "${CLI_NO_REVIEW_LOOP:-0}" -eq 1 ]]; then
+  printf '0\n' > "${PWD}/.herdr-swarm/review-loop.override"
+  note "Review loop disabled for this session (--no-review-loop; config said: ${CONFIG_REVIEW_LOOP:-0})"
+else
+  rm -f "${PWD}/.herdr-swarm/review-loop.override"
+fi
 
 # Namespaced agent handles for kickoff dispatches (first implementation seat
 # carries the architect role; roster is config-driven, seats may be many)

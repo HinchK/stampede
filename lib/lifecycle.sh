@@ -8,6 +8,24 @@
 #   swarm_down:           Gracefully retires recorded seat panes / agents, closes
 #                         workspace (unless --keep-workspace), preserving audit logs
 #   find_workspace_by_cwd: Strict cwd-identity workspace resolution (D1 fix)
+#   review_loop_*:        Autonomous reviewer-loop state machine (REV-3)
+#
+# Review loop contract (REV-3):
+#   State lives in <state_dir>/reviews.json; the functions below own the
+#   policy and the durable state, and emit MACHINE DIRECTIVES on stdout for
+#   the caller (supervisor / launcher) to execute:
+#     ENQUEUE <ticket> <seat> <sha>            — arbiter-enqueue the gated sha
+#     DISPATCH_REVIEWER <seat> <ticket> <sha> <round> <max>
+#                                              — prompt the reviewer seat
+#     DISPATCH_CRITIQUE <seat> <ticket> <round> <max> <findings-path>
+#                                              — prompt the implementer seat
+#     ALERT_BLOCKED <ticket> <sha> <round> <max>
+#                                              — fail closed: human alert, no enqueue
+#     ALERT_INVALID <ticket> <reason>          — corrupt/unknown input, fail closed
+#   Effects (herdr prompts, arbiter runs, human escalation) belong to the
+#   caller; this file never shells out. Enabling precedence: override file
+#   (<state_dir>/review-loop.override, written by the launcher's
+#   --no-review-loop) > $CONFIG_REVIEW_LOOP (config binding, REV-1) > 0.
 #
 # D1 fix invariants:
 #   - find_workspace_by_cwd ONLY resolves workspaces whose pane cwd is exactly
@@ -81,6 +99,176 @@ find_workspace_by_cwd() {
 }
 
 # Display detailed status of swarm for current directory
+# ── Autonomous review loop state machine (REV-3) ───────────────────────────
+# Pure state + policy: never prompts, never runs the arbiter, never touches
+# git. Callers execute the directives these functions print on stdout.
+
+_review_state_file() { # STATE_DIR
+  printf '%s/reviews.json\n' "$1"
+}
+
+review_loop_init() { # [STATE_DIR=$PWD/.herdr-swarm] — idempotent
+  local sd="${1:-$PWD/.herdr-swarm}"
+  local f; f=$(_review_state_file "$sd")
+  [[ -f "$f" ]] && return 0
+  mkdir -p "$sd"
+  printf '{"version":1,"reviews":{}}\n' > "$f"
+}
+
+# Effective loop enablement: override file > CONFIG_REVIEW_LOOP env > 0.
+review_loop_enabled() { # [STATE_DIR]
+  local sd="${1:-$PWD/.herdr-swarm}"
+  if [[ -f "$sd/review-loop.override" ]]; then
+    printf '%s\n' "$(head -n1 "$sd/review-loop.override" | tr -d '[:space:]')"
+    return 0
+  fi
+  printf '%s\n' "${CONFIG_REVIEW_LOOP:-0}"
+}
+
+review_loop_max_rounds() { # [STATE_DIR]
+  printf '%s\n' "${CONFIG_REVIEW_MAX_ROUNDS:-2}"
+}
+
+review_loop_findings_path() { # TICKET SHA [STATE_DIR] — absolute evidence path
+  local sd="${3:-$PWD/.herdr-swarm}"
+  printf '%s/reviews/%s-%s.md\n' "$sd" "$1" "$2"
+}
+
+_review_write() { # STATE_DIR JQ_FILTER [JQARGS...] — atomic temp+mv write
+  local sd="$1" filt="$2"; shift 2
+  local f tmp
+  f=$(_review_state_file "$sd")
+  tmp="${f}.tmp$$"
+  # shellcheck disable=SC2016  # jq program, not shell
+  if ! jq "$@" "$filt" "$f" > "$tmp" 2>/dev/null; then
+    rm -f "$tmp"
+    printf 'review_loop: refusing to write corrupt state (%s)\n' "$f" >&2
+    return 1
+  fi
+  mv "$tmp" "$f"
+}
+
+# Entry point after a supervisor Suite Gate went green on (ticket, seat, sha).
+review_loop_on_gate_green() { # TICKET SEAT SHA [STATE_DIR]
+  local ticket="$1" seat="$2" sha="$3" sd="${4:-$PWD/.herdr-swarm}"
+  local f; f=$(_review_state_file "$sd")
+
+  if [[ "$(review_loop_enabled "$sd")" != "1" ]]; then
+    printf 'ENQUEUE %s %s %s\n' "$ticket" "$seat" "$sha"
+    return 0
+  fi
+
+  review_loop_init "$sd"
+  local round max state
+  max=$(review_loop_max_rounds "$sd")
+  state=$(jq -r --arg t "$ticket" '.reviews[$t].state // "none"' "$f")
+  if [[ "$state" == "critique_dispatched" ]]; then
+    round=$(jq -r --arg t "$ticket" '.reviews[$t].round' "$f")   # carry the incremented round
+  else
+    round=1                                                       # fresh (or terminal-state redo at a new sha)
+  fi
+  # shellcheck disable=SC2016  # jq program, not shell
+  _review_write "$sd" \
+    '.reviews[$t] = {seat:$s, sha:$h, round:($r|tonumber), state:"awaiting_review", max_rounds:($m|tonumber), updated:$now, history:((.reviews[$t].history // []) + [{event:"gate_green", sha:$h, round:($r|tonumber), at:$now}])}' \
+    --arg t "$ticket" --arg s "$seat" --arg h "$sha" --arg r "$round" --arg m "$max" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  local reviewer_seat="${SEAT_NAME_reviewer:-reviewer}"
+  printf 'DISPATCH_REVIEWER %s %s %s %s %s\n' "$reviewer_seat" "$ticket" "$sha" "$round" "$max"
+}
+
+# Fail-closed helper: transition an existing review to review_blocked (when
+# state exists) and emit the invalid-input alert. Always returns 1.
+_review_fail_closed() { # TICKET STATE_DIR REASON
+  local ticket="$1" sd="$2" reason="$3"
+  local f; f=$(_review_state_file "$sd")
+  if [[ -f "$f" ]] && jq -e --arg t "$ticket" '.reviews[$t] != null' "$f" >/dev/null 2>&1; then
+    # shellcheck disable=SC2016  # jq program, not shell
+    _review_write "$sd" \
+      '.reviews[$t].state = "review_blocked" | .reviews[$t].updated = $now | .reviews[$t].history = ((.reviews[$t].history // []) + [{event:"fail_closed", reason:$reason, at:$now}])' \
+      --arg t "$ticket" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg reason "$reason" || true
+  fi
+  printf 'ALERT_INVALID %s %s\n' "$ticket" "$reason"
+  return 1
+}
+
+# Entry point for a reviewer verdict anchor: REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>.
+review_loop_on_review_verdict() { # TICKET SHA VERDICT [STATE_DIR]
+  local ticket="$1" sha="$2" verdict="$3" sd="${4:-$PWD/.herdr-swarm}"
+  local f; f=$(_review_state_file "$sd")
+
+  [[ -f "$f" ]] || { printf 'ALERT_INVALID %s no-review-state\n' "$ticket" >&2; return 1; }
+
+  local state cur_sha seat round max
+  state=$(jq -r --arg t "$ticket" '.reviews[$t].state // "none"' "$f")
+  cur_sha=$(jq -r --arg t "$ticket" '.reviews[$t].sha // ""' "$f")
+  seat=$(jq -r --arg t "$ticket" '.reviews[$t].seat // ""' "$f")
+  round=$(jq -r --arg t "$ticket" '.reviews[$t].round // 0' "$f")
+  max=$(jq -r --arg t "$ticket" '.reviews[$t].max_rounds // 0' "$f")
+
+  case "$verdict" in
+    PASS|BLOCK) ;;
+    *) _review_fail_closed "$ticket" "$sd" "unknown-verdict:${verdict:-empty}"; return 1 ;;
+  esac
+  [[ "$state" != "none" ]] || { _review_fail_closed "$ticket" "$sd" "no-active-review"; return 1; }
+  [[ "$sha" == "$cur_sha" ]] || { _review_fail_closed "$ticket" "$sd" "sha-mismatch:expected:${cur_sha:-none}"; return 1; }
+
+  if [[ "$verdict" == "PASS" ]]; then
+    # shellcheck disable=SC2016  # jq program, not shell
+    _review_write "$sd" \
+      '.reviews[$t].state = "review_passed" | .reviews[$t].updated = $now | .reviews[$t].history += [{event:"verdict", verdict:"PASS", sha:$h, at:$now}]' \
+      --arg t "$ticket" --arg h "$sha" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'ENQUEUE %s %s %s\n' "$ticket" "$seat" "$sha"
+    return 0
+  fi
+
+  # BLOCK — idempotent re-delivery while critique_dispatched (no double increment)
+  if [[ "$state" == "critique_dispatched" ]]; then
+    printf 'DISPATCH_CRITIQUE %s %s %s %s %s\n' "$seat" "$ticket" "$round" "$max" "$(review_loop_findings_path "$ticket" "$sha" "$sd")"
+    return 0
+  fi
+
+  if (( round < max )); then
+    local next=$(( round + 1 ))
+    # shellcheck disable=SC2016  # jq program, not shell
+    _review_write "$sd" \
+      '.reviews[$t].round = ($r|tonumber) | .reviews[$t].state = "critique_dispatched" | .reviews[$t].updated = $now | .reviews[$t].history += [{event:"verdict", verdict:"BLOCK", sha:$h, round:($r|tonumber), at:$now}]' \
+      --arg t "$ticket" --arg h "$sha" --arg r "$next" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'DISPATCH_CRITIQUE %s %s %s %s %s\n' "$seat" "$ticket" "$next" "$max" "$(review_loop_findings_path "$ticket" "$sha" "$sd")"
+  else
+    # shellcheck disable=SC2016  # jq program, not shell
+    _review_write "$sd" \
+      '.reviews[$t].state = "review_blocked" | .reviews[$t].updated = $now | .reviews[$t].history += [{event:"verdict", verdict:"BLOCK", sha:$h, round:($r|tonumber), budget_exhausted:true, at:$now}]' \
+      --arg t "$ticket" --arg h "$sha" --arg r "$round" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'ALERT_BLOCKED %s %s %s %s\n' "$ticket" "$sha" "$round" "$max"
+    return 0   # the loop worked as designed; the BLOCK is the answer, not an error
+  fi
+}
+
+# Human-readable + greppable status. Safe on absent state.
+review_loop_status() { # [STATE_DIR] [INDENT]
+  local sd="${1:-$PWD/.herdr-swarm}" ind="${2:-}"
+  local f; f=$(_review_state_file "$sd")
+  local en max ovr=""
+  en=$(review_loop_enabled "$sd")
+  max=$(review_loop_max_rounds "$sd")
+  if [[ -f "$sd/review-loop.override" ]]; then
+    ovr=" [override: $(head -n1 "$sd/review-loop.override" | tr -d '[:space:]')]"
+  fi
+  if [[ "$en" == "1" ]]; then
+    printf '%s%sReview Loop:%s enabled (max_rounds %s)%s\n' "$ind" "${BOLD:-}" "${RESET:-}" "$max" "$ovr"
+  else
+    printf '%s%sReview Loop:%s disabled%s\n' "$ind" "${BOLD:-}" "${RESET:-}" "$ovr"
+  fi
+  if [[ -f "$f" ]] && jq -e '.reviews | length > 0' "$f" >/dev/null 2>&1; then
+    printf '%s  %-16s %-9s %-18s %s\n' "$ind" "TICKET" "ROUND" "STATE" "SHA"
+    jq -r '.reviews | to_entries[] | "\(.key) \(.value.round)/\(.value.max_rounds) \(.value.state) \(.value.sha[0:10])"' "$f" \
+      | while IFS= read -r line; do
+          [[ -n "$line" ]] && printf '%s  %s\n' "$ind" "$line"
+        done
+  fi
+  return 0
+}
+
 swarm_status() {
   local target_dir="${1:-$PWD}"
   local abs_target
@@ -153,6 +341,9 @@ swarm_status() {
       done
     fi
   fi
+  # 6. Review Loop (REV-3): enabled/disabled, budget, active reviews
+  review_loop_status "${abs_target}/.herdr-swarm" "  "
+
   printf '\n'
 }
 
