@@ -209,7 +209,7 @@ To prevent **kickoff race conditions** (where task prompts arrive while an agent
 ## Repository Structure
 
 ```
-loop-bot-herd-agy/
+stampede/
 ├── herdr-loop-swarm.sh     # Master universal executable launcher & CLI
 ├── loop-bot-herd.sh        # Background supervisor daemon & exact-SHA suite gate
 ├── swarm.config.toml       # Declarative agent seats & swarm configuration

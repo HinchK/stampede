@@ -2,7 +2,7 @@
 #
 # herdr-loop-swarm: Next-Generation Multi-Agent Swarm Orchestrator
 # Coordinates AGY (Gemini), Claude Code, OpenCode (GLM-5.3), and Kultivait Local Proxy
-# Location: ~/fun/loop-bot-herd-agy/herdr-loop-swarm.sh
+# Location: ~/Fun/stampede/herdr-loop-swarm.sh
 
 set -euo pipefail
 

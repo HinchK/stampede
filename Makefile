@@ -1,4 +1,4 @@
-# loop-bot-herd-agy — aggregate entry points
+# stampede — aggregate entry points
 #
 # The Suite Gate (lib/profile.sh TEST_CMD) resolves to `make test` for this
 # repo (detect_ecosystem "make" branch). One command, all suites, failures

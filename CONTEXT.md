@@ -24,7 +24,7 @@ The durable, machine-readable JSON record stored at `.herdr-swarm/seats.json` ca
 - **_Avoid_**: _Avoid_ relying on ambient environment variables (`$HERDR_WORKSPACE_ID`), terminal focus, or fuzzy workspace searches during teardown; _Avoid_ closing panes indiscriminately, which kills active human shells, dev servers, and unrecorded operator tabs.
 
 ### 4. Slug Namespacing
-The deterministic identifier transformation (`seat-<slug>`, e.g. `arch-kultivait`, `looper-loop-bot-herd-agy`) ensuring that all seated agents are unique in Herdr's server-global agent registry while strictly satisfying the name grammar `^[a-z][a-z0-9_-]*$`.
+The deterministic identifier transformation (`seat-<slug>`, e.g. `arch-kultivait`, `looper-hinchk-stampede`) ensuring that all seated agents are unique in Herdr's server-global agent registry while strictly satisfying the name grammar `^[a-z][a-z0-9_-]*$`.
 - **Implementation**: `slugify()` in [`lib/common.sh`](lib/common.sh), [`lib/config.sh`](lib/config.sh), [ADR 0003](docs/adr/0003-dynamic-seating-and-nonce-brief-delivery.md).
 - **_Avoid_**: _Avoid_ bare seat names (`arch`, `pm`, `looper`) which collide across projects in Herdr; _Avoid_ illegal separator characters such as unicode middle dots (`·`), spaces, dots, colons, or uppercase characters that trigger Herdr agent registration errors.
 

@@ -1,8 +1,8 @@
 # Swarm Configuration: Herdr + AGY + Claude + OpenCode (GLM-5.3) + Kultivait
-# Location: ~/fun/loop-bot-herd-agy/swarm.config.toml
+# Location: ~/Fun/stampede/swarm.config.toml
 
 [swarm]
-name = "loop-bot-herd-agy"
+name = "stampede"
 version = "1.0.0"
 workspace_label = "swarm-dev"
 log_path = "/tmp/herdr-process.log"
