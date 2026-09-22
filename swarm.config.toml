@@ -58,9 +58,9 @@ worktree = true
 
 [seats.arch_2]
 name = "arch-2"
-role = "Implementation Engine (Claude Sonnet)"
-default_kind = "claude"
-model = "claude-sonnet-4-5"
+role = "Implementation Engine (GLM-5.3)"
+default_kind = "opencode"
+model = "zai/glm-5.3"
 brief = "briefs/arch.md"
 tab = "herd"
 position = "bottom-right"
