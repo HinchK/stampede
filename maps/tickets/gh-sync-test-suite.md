@@ -2,7 +2,8 @@
 id: DOG-8
 title: "gh_sync has no test suite"
 type: wayfinder:task
-status: in_progress
+status: resolved
+commit: 30be2ac
 assignee: arch-1
 owns: tests/test_gh_sync.sh,lib/gh_sync.sh,Makefile
 parent: maps/public-readiness.md

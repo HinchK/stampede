@@ -2,7 +2,8 @@
 id: DOG-11
 title: "Fresh-clone partition deadlock: gitignored integration evidence marks every resolved ticket an active lease-holder"
 type: wayfinder:defect
-status: in_progress
+status: resolved
+commit: bd0b90c
 assignee: arch-2
 owns: lib/partition.sh,tests/test_partition.sh
 parent: maps/public-readiness.md
