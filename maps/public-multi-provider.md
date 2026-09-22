@@ -120,8 +120,8 @@ map). Waves continue numbering after that map's Wave 7.
 - [x] **Wave 8 — runs alone.** PUB-1 `bin/stampede` entrypoint + CLI convention (`19217bc`).
 - [x] **Wave 9 — parallel, file-disjoint.** PUB-2 doctor + provider registry (`9ffdbe8`) · PUB-3 user guide (`d3a03dd`) · PUB-4 demo repo (`a9b6e51`) · PUB-5 version + changelog (`fb63928`).
 - [x] **Wave 10 — runs alone.** PUB-6 fallback chains (`c752a8a`).
-- [ ] **Wave 11 — parallel, file-disjoint.** [x] PUB-7 init (`3a534c0`) · PUB-8 cross-provider reviewer lane (dispatched) · [x] PUB-9 quota probing (`d5083eb`) · [x] PUB-10 trust-tax telemetry (`e8a7450`).
-- [ ] **Wave 12 — runs alone.** PUB-11 rich status (blocked_by PUB-10 schema).
+- [x] **Wave 11 — parallel, file-disjoint.** [x] PUB-7 init (`3a534c0`) · [x] PUB-8 cross-provider reviewer lane (`eda9042`) · [x] PUB-9 quota probing (`d5083eb`) · [x] PUB-10 trust-tax telemetry (`e8a7450`).
+- [ ] **Wave 12 — runs alone.** PUB-11 rich status (dispatched).
 
 Dependency edges (advisory prose; waves enforce them for real):
 PUB-2..5 ← PUB-1 · PUB-7 ← PUB-2,PUB-6 · PUB-9 ← PUB-2 · PUB-8 ← PUB-3 ·

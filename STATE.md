@@ -77,12 +77,14 @@
     - `PUB-4` (`a9b6e51`): `examples/demo-repo` with real test suite and one-verdict walkthrough.
     - `PUB-5` (`fb63928`): `VERSION`, `CHANGELOG.md`, `stampede version`, and `make version-check`.
   - **Wave 10 Complete:** `PUB-6` (`c752a8a`): Per-seat provider fallback chains (`kinds = ["opencode", "claude"]`) with 25 config assertions.
-  - **Wave 11 Progress:**
+  - **Wave 11 Complete:**
     - `PUB-10` (`e8a7450`): Trust-tax telemetry schema and string-safe envelope in `lib/telemetry.py` (promoted).
-    - `PUB-7` (`3a534c0`): `stampede init` provider-interviewed config generator with 24 hermetic assertions (promoted at `d7f875f`).
-    - Gate fix `6e1521e`: Load-calibrated non-blocking scan assertion in `tests/test_async_gate.sh` (promoted at `d7f875f`).
-    - `PUB-9` (`fa78bd4`): `stampede quota` read-only provider headroom probing with 28 hermetic assertions (promoted at `d7f875f`).
-    - `PUB-8` (Dispatched to `arch-1-hinchk-stampede`): Cross-provider review lane (`briefs/reviewer.in.md`, `docs/user-guide.md`).
+    - `PUB-7` (`3a534c0`): `stampede init` provider-interviewed config generator with 24 hermetic assertions (promoted).
+    - Gate fix `6e1521e`: Load-calibrated non-blocking scan assertion in `tests/test_async_gate.sh` (promoted).
+    - `PUB-9` (`fa78bd4`): `stampede quota` read-only provider headroom probing with 28 hermetic assertions (promoted).
+    - `PUB-8` (`eda9042`): Cross-provider review lane and user guide section (promoted).
+  - **Wave 12 In-Flight (runs alone):**
+    - `PUB-11`: `stampede status --rich` session trust dashboard from traces (`lib/cli/stampede-status.sh`, `tests/test_cli_status.sh`). Released from `maps/tickets-staged/`.
 - **Standing Guardrails:**
   - Arch briefs enforce Single-Ticket Scope Guardrail: workers halt and await looper dispatch after reporting completion.
   - Base branch promotion remains human-only (DOG-12).
@@ -92,9 +94,9 @@
 
 ## 3. Immediate Next Step
 
-- Monitor `arch-1-hinchk-stampede` on `PUB-8` (cross-provider review lane).
-- On `PUB-8` completion: independent zero-trust suite gating, CAS arbiter integration, and promotion.
-- Close Wave 11 upon `PUB-8` promote; release `pub-11-rich-status.md` (Wave 12) from `maps/tickets-staged/`.
+- Dispatch `PUB-11` (Wave 12, final ticket of Public Multi-Provider milestone) to an implementer seat (`arch-1` or `arch-2`).
+- Execute independent suite verification on `PUB-11`.
+- CAS-integrate and promote `PUB-11`, closing the milestone.
 
 
 

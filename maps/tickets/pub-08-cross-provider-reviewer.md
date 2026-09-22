@@ -2,7 +2,7 @@
 id: PUB-8
 title: "Cross-provider review lane: implementer and reviewer never share a kind"
 type: wayfinder:task
-status: ready
+status: resolved
 assignee: arch
 owns: briefs/reviewer.in.md,docs/user-guide.md
 parent: maps/public-multi-provider.md
@@ -55,3 +55,11 @@ review is advisory — the Suite Gate stays the only gate.
 bash lib/briefs.sh render reviewer <scratch-slug> && test -s <rendered-path>
 make check
 ```
+
+## 6. Resolution (2026-09-22, `eda9042`)
+
+- `briefs/reviewer.in.md`: Rewritten standing brief to the house contract — reviews gated commit sha only via read-only git plumbing (`git show <sha>`, `git diff <base>..<sha>`); never checks out or mutates refs in shared root; tests-first review methodology; structured cited findings (`file:line`); advisory anchor `REVIEW DONE #<ticket> <sha>`; two nevers: never merge, never self-verify.
+- `briefs/reviewer.md`: Tracked generic render regenerated from template matching other tracked briefs.
+- `docs/user-guide.md`: Added Section 9 "Cross-provider review (optional lane)" with one-flip activation instructions, cross-model diverse bias rationale, and clear advisory contract (Suite Gate remains only gate, human promote remains only merge).
+- Verification: Real template engine render verified in scratch demo repo with 0 leftover placeholders; 0 shellcheck warnings; `make check` 14/14 suites green (323 assertions, 0 failed).
+
