@@ -176,7 +176,7 @@ arbiter_drain() {
     fi
 
     if ! _arb_integrate "$ticket" "$seat" "$sha" "$i0"; then
-      break   # record was resolved (conflict/red/retry); stop this pass
+      break   # record resolved (conflict/red/retry), or ungateable; stop the pass
     fi
   done
 
@@ -212,11 +212,22 @@ _arb_integrate() { # TICKET SEAT SHA I0
 
   # 2. pre-gate the combined tree (arbiter TMPDIR; log kept for diagnosis)
   if _arb_cmd_runnable; then
+    # The bound resolves BEFORE the gate runs. Without a timeout(1) the gate
+    # exits 127, which this function used to record as integration_red —
+    # condemning a combined tree it never actually measured (DOG-15). Leave
+    # the record queued instead: truthful (unprocessed), self-healing once the
+    # dependency is installed, and the ref stays where it is either way.
+    if ! resolve_timeout; then
+      _arb_telemetry arbiter.gate_unavailable "$ticket" "$seat" "$sha" \
+        "$(jq -cn '{summary:"gate harness unavailable: no runnable timeout(1)"}')"
+      printf 'arbiter: #%s NOT gated — no runnable timeout(1); left queued, ref unmoved\n' "$ticket" >&2
+      return 1
+    fi
     local gate_dir="${ARB_STATE}/gate-logs"
     local gate_log="${gate_dir}/arbiter-${ticket}-${sha:0:7}.log"
     mkdir -p "$gate_dir" "${ARB_STATE}/arbiter-tmp"
     if ! (cd "$ARB_WT" && TMPDIR="${ARB_STATE}/arbiter-tmp" \
-          timeout "${SUITE_TIMEOUT_S:-300}" sh -c "$TEST_CMD") >"$gate_log" 2>&1; then
+          "$TIMEOUT_BIN" "${SUITE_TIMEOUT_S:-300}" sh -c "$TEST_CMD") >"$gate_log" 2>&1; then
       _arb_set_status "$ticket" "$sha" "integration_red" \
         "{integration_before: \"${i0}\", gate: {log: \"${gate_log}\"}}"
       _arb_telemetry arbiter.red "$ticket" "$seat" "$sha" \

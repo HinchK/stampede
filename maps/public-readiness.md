@@ -67,6 +67,7 @@ every claim in the docs backed by something the repo can show.
 - **DOG-4 resolved (`4cb5f28`):** Relabeled the 80% token reduction claim in `docs/findings/swarm-orchestration-retrospective.md` as modelled per-turn context compaction rather than empirical measurement, added "The Trust Tax" subsection acknowledging total spend increase, and documented the PTY CLI usage reporting limitation.
 - **DOG-5 resolved (`113a42f`):** Led README above the fold with the Zero Trust thesis, removed "Autonomous" from tagline, added explicit scope clause distinguishing ungated root seats from gated isolated seats, and enforced verb discipline.
 - **DOG-14 resolved (`c0dbadd`):** Pinned shellcheck to v0.11.0 across both macOS and Ubuntu CI runners; addressed SC2119/SC2120 in `lib/preflight.sh` with scoped directives. Also fixed hardcoded home directory paths in `tests/test_partition.sh` (credit to arch-2 on #11).
+- **DOG-15 resolved (`a2cbd9f`, PR #12):** Diagnosed and resolved both CI suite failures: macOS failure was due to missing `timeout(1)` (GNU coreutils absent on runner image) causing suite gate to exit 127 and halt drain, resolved via `resolve_timeout()` and `brew install coreutils`; Ubuntu failure was due to case-sensitive file resolution (`t-ser.md` vs `T-SER.md`) in `lib/partition.sh:292`, resolved via ticket frontmatter ID search. PR #9 CI green on both legs.
 
 ## Active Frontier
 
@@ -81,7 +82,7 @@ that is the gate. Do not use `status:` for this (see hazard 3).
 - [x] **Wave 1.6 — runs alone.** DOG-13 arbiter orchestrator resolution. Anchors governing arbiter to orchestrator root (`$SCRIPT_DIR`), preventing unmerged/decoy target-local arbiters from bypassing promote guardrails.
 - [ ] **Wave 2 — parallel, file-disjoint.** [x] DOG-2 LICENSE · DOG-3 CI (PR #9, awaiting promote) ·
       [x] DOG-4 token-claim relabel · [x] DOG-5 README lede · DOG-6 CONTRIBUTING+SECURITY ·
-      [x] DOG-14 lint-toolchain pinning (`c0dbadd`) · 🔴 DOG-15 arbiter suite CI failure (CI-blocker, arch-2).
+      [x] DOG-14 lint-toolchain pinning (`c0dbadd`) · [x] DOG-15 arbiter suite CI failure (`a2cbd9f`, PR #12).
       Verified disjoint by inspection of their `owns:` lines.
 - [ ] **Wave 3 — runs alone.** DOG-7 kultivait optional (shares
       `loop-bot-herd.sh` and `lib/config.sh` with DOG-1).

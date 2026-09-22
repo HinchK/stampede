@@ -2,7 +2,8 @@
 id: DOG-15
 title: "tests/test_arbiter.sh fails on macos-latest in CI but passes everywhere locally"
 type: wayfinder:defect
-status: in_progress
+status: resolved
+commit: a2cbd9f
 assignee: arch-2
 owns: tests/test_arbiter.sh,lib/arbiter.sh
 parent: maps/public-readiness.md

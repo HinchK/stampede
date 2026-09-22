@@ -280,6 +280,29 @@ _lease_write() { # STATE_DIR JQ_FILTER_TEXT (already evaluated JSON on stdin)
   cat > "$1/leases.json.tmp" && mv "$1/leases.json.tmp" "$1/leases.json"
 }
 
+# Resolve a ticket id to its file. The id is NOT the filename in this repo —
+# maps/tickets/ci-workflow.md carries `id: DOG-3` — so a path built from the id
+# works only where the two happen to coincide, and on a case-sensitive
+# filesystem it stops working even then: `lease_acquire T-SER` looked up
+# T-SER.md for a file written as t-ser.md, which ext4 refuses and APFS resolves.
+# Exact filename first (cheap, preserves the previous behaviour), then a
+# frontmatter `id:` scan using the same idiom as partition_check above.
+_partition_ticket_file() { # TICKET REPO — prints the path; rc 1 when unresolved
+  local ticket="$1" repo="$2" tf tid
+  if [[ -f "$repo/maps/tickets/${ticket}.md" ]]; then
+    printf '%s\n' "$repo/maps/tickets/${ticket}.md"
+    return 0
+  fi
+  for tf in "$repo"/maps/tickets/*.md; do
+    [[ -f "$tf" ]] || continue
+    tid=$(sed -nE 's/^id:[[:space:]]*(.+)$/\1/p' "$tf" | head -n1 | tr -d '"')
+    [[ "$tid" == "$ticket" ]] || continue
+    printf '%s\n' "$tf"
+    return 0
+  done
+  return 1
+}
+
 # lease_acquire TICKET [SEAT] [BRANCH] [OWNS_LINE|'-' to read ticket file]
 # The conflict check and the acquire happen in the SAME locked section.
 # rc 0 acquired; 1 blocked/malformed
@@ -289,7 +312,13 @@ lease_acquire() {
   local state="${STATE_DIR:-$repo/.herdr-swarm}"
   local owns="" owns_rc=0 exclusive=0
   if [[ "$owns_arg" == "-" ]]; then
-    owns=$(owns_parse_ticket "$repo/maps/tickets/${ticket}.md" 2>/dev/null) || owns_rc=$?
+    local tfile
+    if ! tfile=$(_partition_ticket_file "$ticket" "$repo"); then
+      printf 'partition: no ticket file for %s under %s/maps/tickets (tried %s.md and an id: scan)\n' \
+        "$ticket" "$repo" "$ticket" >&2
+      return 1
+    fi
+    owns=$(owns_parse_ticket "$tfile" 2>/dev/null) || owns_rc=$?
     [[ "$owns_rc" == 1 ]] && return 1
   else
     owns=$(owns_parse_line "$owns_arg") || return 1

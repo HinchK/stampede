@@ -60,8 +60,16 @@ check "4d" "incapable preset names a capable PATH candidate when one exists" \
 
 # ── 5. degraded PATH: only an incapable interpreter exists ─────────────────
 mkdir -p "$TEST_DIR/degraded/bin"
-printf '#!/bin/sh\nexit 1\n' > "$TEST_DIR/degraded/bin/python3"
-chmod +x "$TEST_DIR/degraded/bin/python3"
+# Shadow EVERY name resolve_python probes, not just `python3`. A stub for
+# `python3` alone leaves the PATH undegraded on any runner whose /usr/bin
+# carries a capable versioned interpreter — ubuntu-latest ships
+# /usr/bin/python3.12, so the newest-first probe found the real 3.12 and
+# succeeded while these cases asserted failure. macOS ships only
+# /usr/bin/python3, which is the sole reason this ever passed.
+for _pyname in python3.14 python3.13 python3.12 python3.11 python3; do
+  printf '#!/bin/sh\nexit 1\n' > "$TEST_DIR/degraded/bin/$_pyname"
+  chmod +x "$TEST_DIR/degraded/bin/$_pyname"
+done
 
 check "5a" "degraded PATH (incapable python3 only) fails non-zero" \
   'if ( PATH="$TEST_DIR/degraded/bin:/usr/bin:/bin"; unset PYTHON_BIN; resolve_python ); then false; fi'
