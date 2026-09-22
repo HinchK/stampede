@@ -99,8 +99,11 @@ GitHub issues for anything released.
       `loop-bot-herd.sh` and `lib/config.sh` with DOG-1).
 - [x] **Wave 4 — parallel.** [x] DOG-8 gh_sync tests (PR #58) · [x] DOG-11 fresh-clone partition deadlock (PR #59).
 - [x] **Wave 5 — runs alone.** DOG-9 relative links (PR #62).
-- [ ] **Wave 6 — HUMAN.** DOG-10 rename + slug migration. Floor down, ref moved
-      by hand. Never dispatched unattended.
+- [x] **Wave 6 — HUMAN.** DOG-10 rename + slug migration. Floor down, ref moved
+      by hand. Never dispatched unattended. *(complete 2026-09-21, `a552d34`:
+      repo at `~/Fun/stampede`, slug `hinchk-stampede`, old-slug branches
+      deleted, swarm re-seated, living stragglers fixed — receipts in
+      [`maps/tickets/rename-and-slug-migration.md`](tickets/rename-and-slug-migration.md))*
 - [ ] **Wave 7 — Dispatch Safety.** DOG-16 wire partition checking and lease acquisition into supervisor dispatch (graduated from fog; staged).
 
 ## Not yet specified

@@ -68,14 +68,15 @@
 
 ## 2. Active Status & Open Items
 
-- **Public Readiness Dogfood Run (Waves 1–5 Complete; Wave 6 Staged):**
+- **Public Readiness Dogfood Run (Waves 1–6 Complete):**
   - **Waves 1–3 Complete:** All 11 tickets resolved (`DOG-1`, `DOG-12`, `DOG-13`, `DOG-2`, `DOG-3`, `DOG-4`, `DOG-5`, `DOG-14`, `DOG-15`, `DOG-6`, `DOG-7`).
   - **Wave 4 Complete (PR #58, PR #59, PR #60):**
     - `DOG-8` (`30be2ac`): Hermetic `gh_sync` test suite with 27 assertions wired into aggregate test gate.
     - `DOG-11` (`bd0b90c`): Fresh-clone partition deadlock fix; inactive tickets no longer block when gitignored `.herdr-swarm/integration.jsonl` is absent.
   - **Wave 5 Complete (PR #62):**
     - `DOG-9` (`bb8fda9`): Swept 48 tracked markdown files converting machine-local paths and `file://` URLs into clean repo-relative links.
-  - **Wave 6 Staged:** `maps/tickets-staged/rename-and-slug-migration.md` (`DOG-10`: rename + slug migration, reserved for HUMAN execution).
+  - **Wave 6 Complete (2026-09-21, `a552d34`):**
+    - `DOG-10`: rename + slug migration executed human-attended. Repo at `~/Fun/stampede`; slug derives from `REPO=HinchK/stampede` → `hinchk-stampede`; both merged old-slug branches deleted locally (GitHub already clean); stale worktree registrations and dangling `local-source` remote removed; swarm re-seated (6 seats verified in `wT`); living-file stragglers fixed. Historical receipts retain the old name by decision — verification grep scoped to living files.
 - **Standing Reporting Protocol:** Arch brief updated to mandate direct looper notification (`herdr agent prompt {{LOOPER_NAME}} "ARCH UPDATE: #<ticket> <sha> — <summary>"`) upon completion so the orchestrator is immediately notified without waiting for poll turns.
 - **Total Test Suite Health:** **184 passed, 0 failed** across 8 suites (42 worktree, 29 partition, 27 gh_sync, 20 arbiter, 18 config, 18 profile, 16 pyenv, 14 briefs); `make check` green (lint 0 warnings). Run under `/bin/bash` (3.2 floor).
 
@@ -83,8 +84,7 @@
 
 ## 3. Immediate Next Step
 
-- **Wave 6 (HUMAN):** DOG-10 rename + slug migration (`maps/tickets-staged/rename-and-slug-migration.md`). Handled by human operator.
-- **Supervisor Dispatch Wiring:** Wire `partition_check` / `lease_acquire` into the supervisor/launcher dispatch path (unblocked by DOG-11 fix).
+- **Wave 7 (DOG-16):** wire `partition_check` / `lease_acquire` into the supervisor/launcher dispatch path (`maps/tickets-staged/dispatch-partition-lease-wiring.md`).
 - **Post-Readiness Backlog:** Trust-tax instrumentation, headless execution mode, and P3-4 batched non-blocking arbiter drain.
 
 
