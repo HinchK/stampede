@@ -2,7 +2,8 @@
 id: DOG-6
 title: "Add CONTRIBUTING and SECURITY for public consumption"
 type: wayfinder:task
-status: in_progress
+status: resolved
+commit: 0290750
 assignee: arch-2
 owns: CONTRIBUTING.md,SECURITY.md
 parent: maps/public-readiness.md

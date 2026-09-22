@@ -2,7 +2,8 @@
 id: DOG-7
 title: "Make the kultivait/pi local engine completely optional"
 type: wayfinder:defect
-status: in_progress
+status: resolved
+commit: a00fafa
 assignee: arch-1
 owns: swarm.config.toml,briefs/pi.md,briefs/pi.in.md,lib/gh_sync.sh,loop-bot-herd.sh,herdr-loop-swarm.sh,lib/config.sh,lib/briefs.sh
 parent: maps/public-readiness.md
