@@ -69,9 +69,10 @@
 
 ## 2. Active Status & Open Items
 
-- **Autonomous Reviewer Loop Milestone (IN FLIGHT — Wave 1 Complete):**
+- **Autonomous Reviewer Loop Milestone (IN FLIGHT — Waves 1–2 Complete):**
   - **Wave 1 Complete:** `REV-1` (`e22697c`): Reviewer config flag (`loop`, `max_rounds`) in `swarm.config.toml` bound in `lib/config.sh`, dual-mode brief with `REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>` anchor and `.herdr-swarm/reviews/<ticket>-<sha>.md` report schema, +8 config assertions (promoted).
-  - **Wave 2 In-Flight (runs alone):** `REV-2`: Critique delivery protocol: implementer refinement on existing worktree branch (`briefs/arch.in.md`, `briefs/arch.md`, `docs/user-guide.md`). Released to `maps/tickets/`.
+  - **Wave 2 Complete:** `REV-2` (`efc857e`): Critique delivery protocol: implementer refinement on existing worktree branch (`briefs/arch.in.md`, `briefs/arch.md`, `docs/user-guide.md`) (promoted).
+  - **Wave 3 In-Flight (runs alone):** `REV-3`: Looper autonomous review loop state machine and fail-closed gate (`lib/lifecycle.sh`, `herdr-loop-swarm.sh`, `tests/test_review_loop.sh`). Released to `maps/tickets/`.
 - **Public Multi-Provider Milestone (COMPLETE — Waves 8–12 Shipped):**
   - Shipped `PUB-1` through `PUB-11` (all promoted).
 - **Standing Guardrails:**
@@ -83,9 +84,9 @@
 
 ## 3. Immediate Next Step
 
-- Dispatch `REV-2` (Wave 2, critique delivery and implementer refinement protocol) to an implementer seat (`arch-1` or `arch-2`).
-- Execute independent suite verification on `REV-2`.
-- CAS-integrate and audit `REV-2`.
+- Dispatch `REV-3` (Wave 3, looper review loop state machine and fail-closed gate) to an implementer seat (`arch-1` or `arch-2`).
+- Execute independent suite verification on `REV-3`.
+- CAS-integrate and audit `REV-3`.
 
 
 

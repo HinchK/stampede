@@ -2,8 +2,8 @@
 id: REV-2
 title: "Critique delivery protocol: implementer refinement on existing worktree branch"
 type: wayfinder:task
-status: ready
-assignee: arch
+status: resolved
+assignee: arch-1
 owns: briefs/arch.in.md,briefs/arch.md,docs/user-guide.md
 parent: maps/autonomous-reviewer-loop.md
 blocked_by: [REV-1]
@@ -43,3 +43,10 @@ Currently, `arch` assumes every dispatch is a brand new ticket starting from a c
 bash lib/briefs.sh render arch <scratch-slug> && test -s <rendered-path>
 make check
 ```
+
+## 6. Resolution (2026-09-22, `efc857e`)
+
+- **`briefs/arch.in.md`**: Added Section 4 "Critique and Refinement Dispatches" detailing exact protocol for handling `DISPATCH CRITIQUE: #<ticket> round <N>/<MAX> — see <path>`. Instructs implementers to read cited findings from `.herdr-swarm/reviews/<ticket>-<sha>.md`, refine on their in-flight branch without resetting or reverting unrelated code, verify locally with `{{TEST_CMD}}`, commit as `fix: address reviewer critique for #<ticket> (round <N>)`, re-emit `ARCH DONE #<ticket> <sha2>`, and respect `MAX` round budgets.
+- **`briefs/arch.md`**: Re-rendered tracked brief through real engine with zero leftover template placeholders.
+- **`docs/user-guide.md`**: Updated Section 9 with "The multi-turn critique loop" subsection covering round lifecycle, durable per-round findings audit trail, bounded escalation via `max_rounds`, and preservation of the two core invariants (Suite Gate remains prerequisite; promote remains human-only).
+- **Verification**: `bash lib/briefs.sh render arch <scratch-slug>` verified with 0 unexpanded `{{ }}` tokens; `make check` 15/15 suites green, 358 assertions, 0 failed; 0 shellcheck warnings.

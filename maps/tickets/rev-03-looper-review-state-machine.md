@@ -2,7 +2,7 @@
 id: REV-3
 title: "Looper autonomous review loop state machine and fail-closed gate"
 type: wayfinder:task
-status: staged
+status: ready
 assignee: arch
 owns: lib/lifecycle.sh,herdr-loop-swarm.sh,tests/test_review_loop.sh
 parent: maps/autonomous-reviewer-loop.md
