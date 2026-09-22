@@ -57,6 +57,16 @@ if [[ ! -f "$SCRIPT_DIR/lib/arbiter.sh" ]]; then
 fi
 # shellcheck disable=SC1091  # dynamically resolved sibling lib (arbiter enqueue at reap)
 source "$SCRIPT_DIR/lib/arbiter.sh"
+# Partition + leases are governance too (DOG-16): dispatch gates on them.
+# Same rule as the arbiter — loaded from the orchestrator, never from the
+# target tree; a supervisor without its partition lib is broken.
+if [[ ! -f "$SCRIPT_DIR/lib/partition.sh" ]]; then
+  printf 'loop-bot-herd: FATAL — partition missing from orchestrator: %s/lib/partition.sh\n' "$SCRIPT_DIR" >&2
+  printf 'loop-bot-herd: refusing to run; the target tree is never a fallback partition source\n' >&2
+  exit 1
+fi
+# shellcheck disable=SC1091  # dynamically resolved sibling lib (dispatch guard + release pass)
+source "$SCRIPT_DIR/lib/partition.sh"
 
 # Project profile (rendered by the launcher's ensure_profile pass)
 PROFILE_ENV="${REPO_DIR}/.herdr-swarm/profile.env"
@@ -496,9 +506,106 @@ frontier_drain() {
 }
 
 # ---- dispatch: nonce channel, file-based briefs ----------------------------
-cmd_dispatch() { # dispatch WORKER BRIEF_FILE
-  local worker="$1" brief="$2" nonce out
+# DOG-16: dispatch is partition-guarded and lease-carrying. The dispatcher
+# ACQUIRES here — before any prompt is sent, with the conflict check and the
+# acquire in lease_acquire's one locked section (no TOCTOU between two
+# dispatchers). The supervisor RELEASES in a later pass, only when the
+# arbiter records the ticket integrated/promoted — a green verdict is NOT a
+# release (ADR 0012 §5: the next worker would fork from a base missing the
+# first worker's merged work). Re-dispatch of a leased ticket is blocked like
+# any other overlap; re-brief deliberately: release the lease first
+# (bash lib/partition.sh lease release <ticket>).
+
+_sup_telemetry() { # EVENT AGENT TICKET SUMMARY — best-effort Ops stream event
+  "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" "$1" "$2" "$3" \
+    "$(jq -cn --arg s "$4" '{summary:$s}')" \
+    --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
+}
+
+# _dispatch_resolve_ticket BRIEF_FILE [TICKET] → ticket file on stdout
+# rc 0 = resolved; rc 1 = no ticket identity. An explicitly named ticket that
+# resolves to no file is reported and failed (fail-closed at the caller).
+_dispatch_resolve_ticket() {
+  local brief="$1" ticket="${2:-}"
+  if [[ -n "$ticket" ]]; then
+    if _partition_ticket_file "$ticket" "$REPO_DIR"; then
+      return 0
+    fi
+    printf 'partition: ticket %s named but no maps/tickets file resolves it\n' "$ticket" >&2
+    return 1
+  fi
+  # A brief carrying ticket frontmatter (id:/owns:) IS the ticket file.
+  if grep -q -e '^owns:' -e '^id:' "$brief" 2>/dev/null; then
+    printf '%s\n' "$brief"
+    return 0
+  fi
+  return 1
+}
+
+# dispatch_partition_guard WORKER BRIEF_FILE [TICKET] → 0 = may dispatch.
+#   partition_check rc 0 (disjoint owns) → lease_acquire, dispatch proceeds
+#   partition_check rc 2 (no owns)       → EXCLUSIVE lease or nothing: it
+#                                          dispatches alone or not at all
+#   partition_check rc 1 (collision)     → blocked fail-closed, holders named
+# Either way nothing is prompted until the lease is actually held.
+dispatch_partition_guard() {
+  local worker="$1" brief="$2" ticket="${3:-}" tf prc=0 tname
+  if ! tf=$(_dispatch_resolve_ticket "$brief" "$ticket"); then
+    if [[ -n "$ticket" ]]; then
+      return 1   # named ticket, unresolvable file — ambiguity never dispatches
+    fi
+    note "no ticket frontmatter in $(basename "$brief") — dispatched without a partition lease"
+    return 0
+  fi
+  tname=$(sed -nE 's/^id:[[:space:]]*(.+)$/\1/p' "$tf" | head -n1 | tr -d '"')
+  [[ -n "$tname" ]] || tname=$(basename "$tf" .md)
+  partition_check "$tf" "$REPO_DIR" || prc=$?
+  if [[ "$prc" == 1 ]]; then
+    bad "dispatch BLOCKED (partition): #$tname overlaps active work — nothing was sent; live leases:"
+    lease_list >&2
+    _sup_telemetry dispatch.blocked "$worker" "$tname" "dispatch blocked: #$tname overlaps active leases/tickets"
+    return 1
+  fi
+  if ! lease_acquire "$tname" "$worker" "" "-"; then
+    bad "dispatch BLOCKED (lease): #$tname lost the acquire race or its owns are malformed — nothing was sent"
+    _sup_telemetry dispatch.blocked "$worker" "$tname" "dispatch blocked: lease acquire failed for #$tname"
+    return 1
+  fi
+  if [[ "$prc" == 2 ]]; then
+    ok "partition clear: #$tname leased EXCLUSIVE to $worker (no owns declared — runs alone)"
+    _sup_telemetry lease.acquired "$worker" "$tname" "exclusive whole-repo lease acquired by $worker"
+  else
+    ok "partition clear: #$tname disjoint — leased to $worker"
+    _sup_telemetry lease.acquired "$worker" "$tname" "path lease acquired by $worker"
+  fi
+  return 0
+}
+
+# lease_release_integrated — the supervisor's release pass (P3-3 spec §releaser:
+# "lease release ... belongs in the same pass that observes integration").
+# Only integration.jsonl evidence with status integrated|promoted frees a
+# lease; queued/green records never do.
+lease_release_integrated() {
+  local lp="${STATE_DIR}/leases.json" ip="${STATE_DIR}/integration.jsonl" t
+  [[ -f "$lp" && -f "$ip" ]] || return 0
+  while IFS= read -r t; do
+    [[ -n "$t" ]] || continue
+    if jq -e -s --arg t "$t" \
+      'any(.[]; (.ticket|tostring) == $t and (.status == "integrated" or .status == "promoted"))' \
+      "$ip" >/dev/null 2>&1; then
+      lease_release "$t"
+      ok "lease released: #$t integrated — paths re-open for dispatch"
+      _sup_telemetry lease.released looper "$t" "lease released: #$t integrated"
+    fi
+  done < <(jq -r '.leases[]? | .ticket // empty' "$lp" 2>/dev/null || true)
+}
+
+cmd_dispatch() { # dispatch WORKER BRIEF_FILE [TICKET]
+  local worker="$1" brief="$2" ticket="${3:-}" nonce out
   [[ -f "$brief" ]] || { bad "brief file not found: $brief"; exit 1; }
+  if ! dispatch_partition_guard "$worker" "$brief" "$ticket"; then
+    exit 1   # fail-closed: blocked before anything reached the worker
+  fi
   nonce=$(date +%s)-$RANDOM
   out="$CHANNEL_DIR/${worker}-${nonce}.md"
   herdr agent prompt "$worker" "BRIEF (file): $brief — read it with your file tools and execute. REPLY CHANNEL: write your complete response to $out and reply with only the path." >/dev/null
@@ -511,6 +618,7 @@ cmd_once() {
   health_pass
   harvest_verdicts
   gate_reap
+  lease_release_integrated   # DOG-16: freed by integration evidence, never by green
   unpushed_watch
   credits_watch
   frontier_drain
@@ -531,6 +639,7 @@ cmd_watch() {
 cmd_status() {
   echo "control: $(cat "$CONTROL" 2>/dev/null || echo '(defaults)')"
   echo "verdicts filed: $(grep -c . "$SESSION_LOG" 2>/dev/null || echo 0)"
+  echo "leases held: $(jq -r '(.leases // []) | length' "${STATE_DIR}/leases.json" 2>/dev/null || echo 0)"
   echo "unpushed: $(cd "$REPO_DIR" && git rev-list --count origin/main..HEAD 2>/dev/null || echo '?') commit(s)"
   echo "channel dir: $CHANNEL_DIR ($(find "$CHANNEL_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ') file(s))"
 }
@@ -552,7 +661,8 @@ usage: loop-bot-herd.sh [command]
                credits, unpushed watch, optional frontier drain
   once         single pass (cron-able)
   status       readout
-  dispatch W B file-based delegation via the nonce channel
+  dispatch W B [TICKET]   file-based delegation via the nonce channel,
+                          partition-guarded + leased (DOG-16)
   pause|resume toggle actions without killing the loop
   drain-on|drain-off   frontier drain toggle (default off)
   gate-on|gate-off     suite gate toggle (default on)
