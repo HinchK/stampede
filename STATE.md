@@ -63,12 +63,14 @@
 - **Proxy Config Gating (#PROXY-GATE):** Resolved in commit `14f8016`. `[proxy] enabled` defaults false; launcher preflight/launch and the supervisor's credits probe are config-gated; serve command and health URL are config data (`serve_cmd`, `health_check_url`), not launcher hardcode. Recovery pointer now names this repo's launcher.
 - **PM Branch Reconciliation (#PM-BRANCH-RECON):** Resolved via the first real arbiter run: `P3-4` spec and `PM-PLAN-EVIDENCE` enqueued → gated (`make test`) → integrated (`97d31e2`, `d50c128`) → promoted ff-only to `main` (`d50c128`). Eleven superseded/equivalent pm branches deleted with per-branch evidence (`merge-tree` / `git cherry`); `.claude/worktrees/pm-audit` unlocked and removed; `git branch --no-merged main` is now empty.
 - **Python Interpreter Resolver (#DOG-1 / Wave 1):** Resolved in commit `3a9a70d` (ticket marked resolved in `4993d58`). Centralized Python interpreter resolution in `lib/pyenv.sh` (`resolve_python()`), replacing bare `python3` invocations across `Makefile`, supervisor, library scripts, and test suites with a capability probe for `tomllib` ($PYTHON_BIN, python3.14 down to python3) and actionable remediation guidance. Added `tests/test_pyenv.sh` (16 passing assertions).
+- **Dogfood Plan Deviation & Public Readiness Records:** Documented in `docs/audits/2026-09-21-public-readiness-review.md` and `docs/dogfood/`; the planned two-clone dogfooding run was superseded by direct in-repo execution.
 
 ---
 
 ## 2. Active Status & Open Items
 
 - **Public Readiness Dogfood Run (Waves 1–7 Complete):**
+  - *Plan Deviation Note:* The planned two-clone dogfooding run (`docs/dogfood/`) was superseded by direct execution on the repo.
   - **Waves 1–3 Complete:** All 11 tickets resolved (`DOG-1`, `DOG-12`, `DOG-13`, `DOG-2`, `DOG-3`, `DOG-4`, `DOG-5`, `DOG-14`, `DOG-15`, `DOG-6`, `DOG-7`).
   - **Wave 4 Complete (PR #58, PR #59, PR #60):**
     - `DOG-8` (`30be2ac`): Hermetic `gh_sync` test suite with 27 assertions wired into aggregate test gate.
