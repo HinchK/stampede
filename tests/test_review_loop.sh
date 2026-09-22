@@ -103,6 +103,14 @@ directive "$out" "sha mismatch alerts with expected sha" "ALERT_INVALID $T sha-m
 out=$(review_loop_on_review_verdict "GHOST-1" "$A1" PASS "$SD" 2>/dev/null) && rc=0 || rc=$?
 [[ "$rc" == 1 ]] && ok "verdict for unknown ticket rc 1" || bad "ghost rc=$rc"
 
+# ── 6b. missing state file: directive on STDOUT per the line-15 contract ──
+rm -rf "$SCRATCH/fresh"
+out=$(review_loop_on_review_verdict "$T" "$A1" PASS "$SCRATCH/fresh/.herdr-swarm" 2>/dev/null) && rc=0 || rc=$?
+[[ "$rc" == 1 ]] && ok "no state file: rc 1" || bad "no-state rc=$rc"
+directive "$out" "no-review-state alert flows through stdout" "ALERT_INVALID $T no-review-state"
+[[ ! -f "$SCRATCH/fresh/.herdr-swarm/reviews.json" ]] \
+  && ok "no-review-state does not create state" || bad "state created on invalid input"
+
 # corrupt state file: reads fail, writes refuse, nothing enqueues
 cp "$SD/reviews.json" "$SD/reviews.json.good"
 printf '{"version":1,"reviews":{"BROKEN"' > "$SD/reviews.json"

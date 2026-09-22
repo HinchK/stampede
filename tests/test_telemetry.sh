@@ -52,5 +52,26 @@ out=$("$PY" "$T" stream s1 "$SCRATCH" --once | grep -c 'DEMO-1')
 line=$(tail -n1 "$SCRATCH/s1.jsonl")
 [[ "$line" == *'dispatch ✓'* ]] && ok "unicode summary verbatim" || bad "unicode: $line"
 
+# [6] review domain events (REV-4): verbatim payloads, string tickets, badges
+"$PY" "$T" log s1 review.dispatched reviewer REV-4a '{"ticket":"REV-4a","sha":"aa11","round":1}' --trace-dir "$SCRATCH"
+line=$(tail -n1 "$SCRATCH/s1.jsonl")
+[[ "$line" == *'"event_type": "review.dispatched"'* && "$line" == *'"ticket_num": "REV-4a"'* && "$line" == *'"round": 1'* ]] \
+  && ok "review.dispatched verbatim with string ticket" || bad "dispatched: $line"
+"$PY" "$T" log s1 review.verdict reviewer REV-4a '{"ticket":"REV-4a","sha":"aa11","verdict":"PASS","round":1,"findings_count":2}' --trace-dir "$SCRATCH"
+line=$(tail -n1 "$SCRATCH/s1.jsonl")
+[[ "$line" == *'"verdict": "PASS"'* && "$line" == *'"findings_count": 2'* ]] \
+  && ok "review.verdict verbatim" || bad "verdict: $line"
+"$PY" "$T" log s1 review.critique looper REV-4a '{"ticket":"REV-4a","sha":"aa11","round":2,"recipient":"arch-1"}' --trace-dir "$SCRATCH"
+line=$(tail -n1 "$SCRATCH/s1.jsonl")
+[[ "$line" == *'"event_type": "review.critique"'* && "$line" == *'"recipient": "arch-1"'* ]] \
+  && ok "review.critique verbatim" || bad "critique: $line"
+
+"$PY" "$T" log s1 review.verdict reviewer REV-4b '{"ticket":"REV-4b","sha":"bb22","verdict":"BLOCK","round":2,"findings_count":1}' --trace-dir "$SCRATCH"
+stream_out=$("$PY" "$T" stream s1 "$SCRATCH" --once)
+[[ "$stream_out" == *"REVIEW:✓"* ]] && ok "stream badges review PASS green" || bad "no REVIEW:✓ badge"
+[[ "$stream_out" == *"REVIEW:✗"* ]] && ok "stream badges review BLOCK red" || bad "no REVIEW:✗ badge"
+n=$("$PY" "$T" stream s1 "$SCRATCH" --once | grep -c 'REVIEW]')
+[[ "$n" -eq 2 ]] && ok "neutral review events badge as plain REVIEW" || bad "plain REVIEW count: $n"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

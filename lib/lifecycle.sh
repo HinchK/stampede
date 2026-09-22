@@ -196,7 +196,7 @@ review_loop_on_review_verdict() { # TICKET SHA VERDICT [STATE_DIR]
   local ticket="$1" sha="$2" verdict="$3" sd="${4:-$PWD/.herdr-swarm}"
   local f; f=$(_review_state_file "$sd")
 
-  [[ -f "$f" ]] || { printf 'ALERT_INVALID %s no-review-state\n' "$ticket" >&2; return 1; }
+  [[ -f "$f" ]] || { printf 'ALERT_INVALID %s no-review-state\n' "$ticket"; return 1; }
 
   local state cur_sha seat round max
   state=$(jq -r --arg t "$ticket" '.reviews[$t].state // "none"' "$f")

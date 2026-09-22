@@ -185,6 +185,32 @@ EOF
         ratio: (if length > 0 then (((((length - ($t | length)) / length) * 1000) | round) / 1000) else 0 end)
       }' <<<"$vjson" 2>/dev/null) || reverdicts_json='{"records":0,"distinct_tickets":0,"extra":0,"ratio":0}'
 
+  # Review loop rollup (REV-4), from trace events only — every count names
+  # its event source: dispatched = review.dispatched events; passes/blocks =
+  # review.verdict by explicit verdict field; rerounds = review.critique
+  # events (each critique initiates one re-review round); per-ticket detail
+  # groups by the ticket carried in the payload.
+  reviews_json=$(jq -c '
+    [ .[] | select(.event_type == "review.dispatched" or .event_type == "review.verdict" or .event_type == "review.critique") ] as $rv
+    | {
+        total:        ([$rv[] | select(.event_type == "review.dispatched")] | length),
+        passes:       ([$rv[] | select(.event_type == "review.verdict" and .payload.verdict == "PASS")] | length),
+        blocks:       ([$rv[] | select(.event_type == "review.verdict" and .payload.verdict == "BLOCK")] | length),
+        rerounds:     ([$rv[] | select(.event_type == "review.critique")] | length),
+        findings_total: ([$rv[] | select(.event_type == "review.verdict") | .payload.findings_count? | select(type == "number")] | add // 0),
+        tickets: (
+          [ $rv[] | (.payload.ticket // .ticket_num // "?") as $t | {t: ($t | tostring), e: .event_type, r: (.payload.round // 0)} ]
+          | group_by(.t)
+          | map({
+              ticket: .[0].t,
+              rounds: (map(.r) | max),
+              verdicts: ([.[] | select(.e == "review.verdict")] | length),
+              critiques: ([.[] | select(.e == "review.critique")] | length)
+            })
+          | sort_by(.ticket)
+        )
+      }' <<<"$tjson" 2>/dev/null) || reviews_json='{"total":0,"passes":0,"blocks":0,"rerounds":0,"findings_total":0,"tickets":[]}'
+
   # Per-provider rollup: seats rolled to their primary kind (first of the
   # configured chain). Only when the registry join above succeeded.
   if [[ "$pyok" == "1" && "$kinds_map" != "{}" ]]; then
@@ -213,6 +239,7 @@ EOF
     --argjson seats "$seats_json" \
     --argjson providers "$providers_json" \
     --argjson reverdicts "$reverdicts_json" \
+    --argjson reviews "$reviews_json" \
     '{
       command: "stampede status --rich",
       read_only: true,
@@ -230,7 +257,8 @@ EOF
       integration: $integration,
       seats: $seats,
       providers: $providers,
-      reverdicts: $reverdicts
+      reverdicts: $reverdicts,
+      reviews: $reviews
     }')
 
   if (( json )); then
@@ -285,6 +313,22 @@ EOF
   cf=$(jq -r '.integration.conflict' <<<"$final"); rd=$(jq -r '.integration.integration_red' <<<"$final")
   printf '  %barbiter%s   enqueued %s · queued %s · %sintegrated%s %s · promoted %s · %sconflict%s %s · red %s\n' \
     "$BOLD" "$RESET" "$en" "$qn" "$GREEN" "$RESET" "$in_" "$pr" "$YELLOW" "$RESET" "$cf" "$rd"
+
+  # Review loop line (REV-4): rendered only when review events exist —
+  # a herd without the reviewer seat must not print a wall of zeros that
+  # reads as "reviews happened and all were empty".
+  local rt rp rb rr
+  rt=$(jq -r '.reviews.total' <<<"$final"); rp=$(jq -r '.reviews.passes' <<<"$final")
+  rb=$(jq -r '.reviews.blocks' <<<"$final"); rr=$(jq -r '.reviews.rerounds' <<<"$final")
+  if [[ "$rt" -gt 0 || "$rp" -gt 0 || "$rb" -gt 0 || "$rr" -gt 0 ]]; then
+    printf '  %breviews%s    dispatched %s · %spass%s %s · %sblock%s %s · re-rounds %s\n' \
+      "$BOLD" "$RESET" "$rt" "$GREEN" "$RESET" "$rp" "$RED" "$RESET" "$rb" "$rr"
+    local rv_ticket rv_rounds rv_verdicts rv_crit
+    while IFS=$'\t' read -r rv_ticket rv_rounds rv_verdicts rv_crit; do
+      printf '    %-16s rounds %s · verdicts %s · critiques %s\n' \
+        "$rv_ticket" "$rv_rounds" "$rv_verdicts" "$rv_crit"
+    done < <(jq -r '.reviews.tickets[] | [.ticket, (.rounds|tostring), (.verdicts|tostring), (.critiques|tostring)] | @tsv' <<<"$final")
+  fi
 
   local seat kind kgates kg kr ks klast
   if [[ "$(jq '.seats | length' <<<"$final")" -gt 0 ]]; then

@@ -41,6 +41,13 @@ cat > "$REPO/.herdr-swarm/traces/swarm-fixture-1.jsonl" <<'EOF'
 {"timestamp": 1000000010, "iso": "2001-09-09T01:46:50Z", "session_id": "swarm-fixture-1", "event_type": "suite.verdict", "agent": "s2", "ticket_num": "T2", "payload": {"ticket": "T2", "sha": "b2", "suite": "red", "gate.duration_ms": 3000, "verdict.attempt": 2}}
 {"timestamp": 1000000020, "iso": "2001-09-09T01:47:00Z", "session_id": "swarm-fixture-1", "event_type": "suite.verdict", "agent": "s3", "ticket_num": "T3", "payload": {"ticket": "T3", "sha": "c1", "suite": "green", "gate.duration_ms": 2000, "verdict.attempt": 1}}
 {"timestamp": 1000000030, "iso": "2001-09-09T01:47:10Z", "session_id": "swarm-fixture-1", "event_type": "swarm.lifecycle", "agent": "looper", "ticket_num": null, "payload": {"action": "swarm_ready"}}
+{"timestamp": 1000000040, "iso": "2001-09-09T01:47:20Z", "session_id": "swarm-fixture-1", "event_type": "review.dispatched", "agent": "reviewer", "ticket_num": "REV-A", "payload": {"ticket": "REV-A", "sha": "ra1", "round": 1}}
+{"timestamp": 1000000050, "iso": "2001-09-09T01:47:30Z", "session_id": "swarm-fixture-1", "event_type": "review.verdict", "agent": "reviewer", "ticket_num": "REV-A", "payload": {"ticket": "REV-A", "sha": "ra1", "verdict": "BLOCK", "round": 1, "findings_count": 1}}
+{"timestamp": 1000000060, "iso": "2001-09-09T01:47:40Z", "session_id": "swarm-fixture-1", "event_type": "review.critique", "agent": "looper", "ticket_num": "REV-A", "payload": {"ticket": "REV-A", "sha": "ra1", "round": 2, "recipient": "s1"}}
+{"timestamp": 1000000070, "iso": "2001-09-09T01:47:50Z", "session_id": "swarm-fixture-1", "event_type": "review.dispatched", "agent": "reviewer", "ticket_num": "REV-A", "payload": {"ticket": "REV-A", "sha": "ra2", "round": 2}}
+{"timestamp": 1000000080, "iso": "2001-09-09T01:48:00Z", "session_id": "swarm-fixture-1", "event_type": "review.verdict", "agent": "reviewer", "ticket_num": "REV-A", "payload": {"ticket": "REV-A", "sha": "ra2", "verdict": "PASS", "round": 2, "findings_count": 0}}
+{"timestamp": 1000000090, "iso": "2001-09-09T01:48:10Z", "session_id": "swarm-fixture-1", "event_type": "review.dispatched", "agent": "reviewer", "ticket_num": "REV-B", "payload": {"ticket": "REV-B", "sha": "rb1", "round": 1}}
+{"timestamp": 1000000100, "iso": "2001-09-09T01:48:20Z", "session_id": "swarm-fixture-1", "event_type": "review.verdict", "agent": "reviewer", "ticket_num": "REV-B", "payload": {"ticket": "REV-B", "sha": "rb1", "verdict": "BLOCK", "round": 1, "findings_count": 2}}
 EOF
 
 # arbiter queue: 5 records across the status vocabulary.
@@ -105,6 +112,13 @@ J '.gates.runs == 5 and .gates.timed_runs == 3 and .gates.avg_ms == 2000 and .ga
 J '.integration.enqueued == 5 and .integration.queued == 2 and .integration.integrated == 1 and .integration.promoted == 1 and .integration.conflict == 1 and .integration.integration_red == 0' <<<"$out" \
   && ok "integration counts match the queue" || bad "integration: $(jq -c .integration <<<"$out")"
 
+# ── review loop rollup (REV-4), every count from named trace events ───────
+printf '%s' "$out" | jq -e '.reviews' >/dev/null && ok "verification contract: | jq -e '.reviews' passes" || bad ".reviews falsy"
+J '.reviews.total == 3 and .reviews.passes == 1 and .reviews.blocks == 2 and .reviews.rerounds == 1 and .reviews.findings_total == 3' <<<"$out" \
+  && ok "reviews: dispatched 3, pass 1, block 2, re-rounds 1, findings 3" || bad "reviews: $(jq -c .reviews <<<"$out")"
+J '[.reviews.tickets[] | select(.ticket == "REV-A") | .rounds == 2 and .verdicts == 2 and .critiques == 1] | length == 1' <<<"$out" \
+  && ok "per-ticket review detail: REV-A 2 rounds, 2 verdicts, 1 critique" || bad "REV-A: $(jq -c '.reviews.tickets[] | select(.ticket == "REV-A")' <<<"$out")"
+
 # ── per-seat and per-provider activity ─────────────────────────────────────
 J '[.seats[] | select(.seat == "s2") | .gates == 2 and .red == 2 and .kinds == "opencode,claude"] | length == 1' <<<"$out" \
   && ok "seat row s2 carries gates/red and its kind chain from config" || bad "s2 row: $(jq -c '.seats[] | select(.seat == "s2")' <<<"$out")"
@@ -126,6 +140,10 @@ printf '%s' "$human" | grep -q '2 extra / 5 records (3 distinct tickets) = 40.0%
   && ok "human re-verdict line rendered" || bad "human re-verdict line: $human"
 printf '%s' "$human" | grep -q 'enqueued 5 · queued 2' \
   && ok "human arbiter line rendered" || bad "human arbiter line missing"
+printf '%s' "$human" | grep -q 'dispatched 3 · pass 1 · block 2 · re-rounds 1' \
+  && ok "human review line rendered" || bad "human review line missing"
+printf '%s' "$human" | grep -q 'REV-A .*rounds 2 · verdicts 2 · critiques 1' \
+  && ok "human per-ticket review detail rendered" || bad "human REV-A line missing"
 if printf '%s' "$human" | grep -q $'\033'; then
   bad "no ANSI escapes when piped"
 else

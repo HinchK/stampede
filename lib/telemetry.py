@@ -83,6 +83,18 @@ def _is_ok(payload: dict) -> bool:
 
 def badge_for(event_type: str, payload: dict) -> Tuple[str, str]:
     et = (event_type or "").lower()
+    if "review" in et:
+        # Review domain (REV-4): review.dispatched / review.critique are
+        # neutral (REVIEW); review.verdict carries an explicit PASS|BLOCK —
+        # never inferred from generic ok/success keys. Checked before the
+        # dispatch/verdict branches: "review.dispatched" contains "dispatch"
+        # and "review.verdict" contains "verdict".
+        v = str(payload.get("verdict", "")).upper()
+        if v == "PASS":
+            return ("REVIEW:✓", GREEN)
+        if v == "BLOCK":
+            return ("REVIEW:✗", RED)
+        return ("REVIEW", CYAN)
     if "dispatch" in et:
         return ("DISPATCH", CYAN)
     if "verdict" in et:
