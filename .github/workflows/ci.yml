@@ -41,19 +41,38 @@ jobs:
       # 3.9, and tomllib is 3.11+), so lib/pyenv.sh must be exercised against
       # the unpinned image. Pinning would hide the regression this job catches.
 
-      - name: Install shellcheck and jq (Ubuntu)
-        if: runner.os == 'Linux'
+      - name: Install jq
         run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck jq
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update && sudo apt-get install -y jq
+          else
+            brew list jq >/dev/null 2>&1 || brew install jq
+          fi
 
-      - name: Install shellcheck and jq (macOS)
-        if: runner.os == 'macOS'
+      # shellcheck is PINNED (DOG-14). Taking apt's or Homebrew's current build
+      # made the "0 warnings" bar mean "0 on whatever you happen to have":
+      # apt's older build flagged SC2119/SC2120 in lib/preflight.sh that 0.11.0
+      # does not, so ubuntu failed lint while macOS reported it clean.
+      - name: Install pinned shellcheck
+        env:
+          SC_VERSION: v0.11.0
         run: |
-          # Both are preinstalled on the hosted image; only install what is
-          # genuinely absent so an unnecessary upgrade cannot fail the job.
-          brew list shellcheck >/dev/null 2>&1 || brew install shellcheck
-          brew list jq >/dev/null 2>&1 || brew install jq
+          set -euo pipefail
+          case "$RUNNER_OS-$(uname -m)" in
+            Linux-x86_64)        asset="linux.x86_64" ;;
+            macOS-arm64)         asset="darwin.aarch64" ;;
+            macOS-x86_64)        asset="darwin.x86_64" ;;
+            *) echo "unsupported runner: $RUNNER_OS-$(uname -m)" >&2; exit 1 ;;
+          esac
+          url="https://github.com/koalaman/shellcheck/releases/download/${SC_VERSION}/shellcheck-${SC_VERSION}.${asset}.tar.xz"
+          curl -fsSL "$url" -o /tmp/shellcheck.tar.xz
+          tar -xJf /tmp/shellcheck.tar.xz -C /tmp
+          sudo install "/tmp/shellcheck-${SC_VERSION}/shellcheck" /usr/local/bin/shellcheck
+          # Fail loudly if the pin did not take, rather than silently linting
+          # with the platform build this step exists to replace.
+          have=$(shellcheck --version | awk '/^version:/{print "v"$2}')
+          [ "$have" = "$SC_VERSION" ] || { echo "pin failed: wanted $SC_VERSION, got $have" >&2; exit 1; }
+          echo "shellcheck pinned to $have at $(command -v shellcheck)"
 
       - name: Configure git identity
         run: |

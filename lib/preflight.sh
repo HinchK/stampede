@@ -169,6 +169,9 @@ preflight_exit_code() {
 }
 
 # ── Reporting ──────────────────────────────────────────────────────────────
+# shellcheck disable=SC2120  # fd is optional; every caller intentionally
+# takes the default of 1. Forwarding "$@" would pass the script's args
+# as a file descriptor, which is wrong.
 preflight_report_text() { # FD
   local fd="${1:-1}"
   local name st detail icon color
@@ -195,6 +198,9 @@ preflight_report_text() { # FD
     "$GREEN" "$PF_COUNT_OK" "$PF_COUNT_WARN" "$PF_COUNT_ERR" "$RESET" >&"$fd"
 }
 
+# shellcheck disable=SC2120  # fd is optional; every caller intentionally
+# takes the default of 1. Forwarding "$@" would pass the script's args
+# as a file descriptor, which is wrong.
 preflight_report_json() { # FD — requires jq
   local fd="${1:-1}"
   if ! command -v jq >/dev/null 2>&1; then
@@ -232,10 +238,13 @@ if [[ "${BASH_SOURCE[0]:-}" == "$0" ]]; then
   preflight_run
 
   if [[ "$PF_JSON" -eq 1 ]]; then
+    # shellcheck disable=SC2119  # default fd is intended
     if ! preflight_report_json; then
+      # shellcheck disable=SC2119  # default fd is intended
       preflight_report_text
     fi
   elif [[ "$PF_QUIET" -eq 0 ]]; then
+    # shellcheck disable=SC2119  # default fd is intended
     preflight_report_text
   fi
 
