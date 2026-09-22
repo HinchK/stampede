@@ -17,14 +17,16 @@ not this one.
 ```bash
 # Aggregate entry points (the Suite Gate resolves to `make test` here — #PROFILE-MAKE)
 make check                              # lint + every suite, failure-propagating
-make test                              # all six suites under /bin/bash (bash 3.2 is the platform floor)
+make test                              # all eight suites under /bin/bash (bash 3.2 is the platform floor)
 make lint                              # shellcheck 0-warning bar + bash -n + py_compile
 # Suites (each builds an ephemeral scratch git repo under /tmp and cleans up after itself)
 /bin/bash tests/test_worktree.sh        # 42 assertions — provisioning, salvage, teardown
-/bin/bash tests/test_arbiter.sh         # 30 — CAS integration, conflict, promote, string ticket ids
-/bin/bash tests/test_partition.sh       # 26 — owns parsing, overlap, leases
+/bin/bash tests/test_arbiter.sh         # 38 — CAS integration, conflict, promote, string ticket ids
+/bin/bash tests/test_gh_sync.sh         # 27 — hermetic lib/gh_sync.sh suite, stubbed gh, zero network
+/bin/bash tests/test_partition.sh       # 29 — owns parsing, overlap, leases
+/bin/bash tests/test_config.sh          # 18 — swarm.config.toml binding, enabled=false suppression, PROXY_* emission
+/bin/bash tests/test_profile.sh         # 18 — ecosystem/test-cmd detection incl. make/run_all
 /bin/bash tests/test_async_gate.sh      # 17 — background gate jobs, reaping, invalidation
-/bin/bash tests/test_profile.sh         # 17 — ecosystem/test-cmd detection incl. make/run_all
 /bin/bash tests/test_pyenv.sh           # 16 — tomllib interpreter resolver, PYTHON_BIN honouring
 
 # Lint gate — tickets treat 0 warnings as the bar
