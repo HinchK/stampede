@@ -70,12 +70,18 @@ every claim in the docs backed by something the repo can show.
 - **DOG-15 resolved (`a2cbd9f`, PR #12):** Diagnosed and resolved both CI suite failures: macOS failure was due to missing `timeout(1)` (GNU coreutils absent on runner image) causing suite gate to exit 127 and halt drain, resolved via `resolve_timeout()` and `brew install coreutils`; Ubuntu failure was due to case-sensitive file resolution (`t-ser.md` vs `T-SER.md`) in `lib/partition.sh:292`, resolved via ticket frontmatter ID search. PR #9 CI green on both legs.
 - **DOG-6 resolved (`0290750`, PR #15):** Added `CONTRIBUTING.md` (prerequisites including Python >= 3.11 for tomllib, `make check`, bash 3.2 platform floor, conventional commits, and the 4 git safety rules) and `SECURITY.md` (reporting route, response window, and the not-a-sandbox caveat).
 - **DOG-7 resolved (`a00fafa`, PR #14):** Made kultivait/pi local engine completely optional: `enabled = false` in `[seats.pi]`, generalized `PROXY_CREDENTIALS` and emptied `serve_cmd`, removed `localhost:4114` literals, removed `briefs/pi.md`, and added 18-assertion `tests/test_config.sh`.
+- **DOG-3 resolved (via PR #9, `16bf8a3`; closed late as bookkeeping debt):** CI live — `.github/workflows/ci.yml` runs `make check` on `macos-latest` and `ubuntu-latest` for every push and PR. Done-criteria re-verified at close: valid YAML, both legs run the aggregate gate, zero `setup-python` (the stock-interpreter configuration DOG-1 exists to survive stays exercised), no secrets. First run was red on both legs for environment reasons fixed by DOG-15 (`timeout(1)`) and DOG-14 (pinned shellcheck); latest run on `main` is green on both legs.
 
 ## Active Frontier
 
 Release **one wave at a time** by moving files from `maps/tickets-staged/` into
 `maps/tickets/`. A ticket the looper cannot see is a ticket it cannot pull —
 that is the gate. Do not use `status:` for this (see hazard 3).
+
+Waves 4–6 are now **charted**: their ticket files live in
+`maps/tickets-staged/` with `owns:` lines verified disjoint within each
+parallel wave. Release is the human's `mv`; `gh_sync --apply` then files the
+GitHub issues for anything released.
 
 - [x] **Wave 1 — runs alone.** DOG-1 interpreter resolver. Unblocks everything;
       the swarm cannot reliably run until it lands.
