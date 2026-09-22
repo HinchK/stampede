@@ -30,7 +30,7 @@ no_conflict() {
 
 # shellcheck disable=SC1091  # sibling lib under test
 LIB_PARTITION="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/partition.sh"
-# shellcheck disable=SC1090  # resolved above; the racing subshells re-source it
+# shellcheck disable=SC1090  # path resolved above; racing subshells re-source it
 source "$LIB_PARTITION"
 
 export REPO_DIR="$REPO" STATE_DIR="$STATE"
@@ -153,13 +153,13 @@ owns0=$(jq -r '.leases[0].owns | length' "$STATE/leases.json")
 printf '{"version":1,"leases":[]}' > "$STATE/leases.json"
 A_OUT="$TEST_DIR/a.out"; B_OUT="$TEST_DIR/b.out"
 (
-  # shellcheck disable=SC1090  # path resolved once at the top of this file
+  # shellcheck disable=SC1090  # resolved once at the top of this file
   source "$LIB_PARTITION"
   export REPO_DIR="$REPO" STATE_DIR="$STATE"
   lease_acquire T-RACE seat-a br-a "lib/a.sh" >/dev/null 2>&1 && echo WON > "$A_OUT" || echo LOST > "$A_OUT"
 ) &
 (
-  # shellcheck disable=SC1090  # path resolved once at the top of this file
+  # shellcheck disable=SC1090  # resolved once at the top of this file
   source "$LIB_PARTITION"
   export REPO_DIR="$REPO" STATE_DIR="$STATE"
   lease_acquire T-RACE2 seat-b br-b "lib/" >/dev/null 2>&1 && echo WON > "$B_OUT" || echo LOST > "$B_OUT"

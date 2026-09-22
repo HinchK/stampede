@@ -6,6 +6,9 @@ status: backlog
 assignee: agy-docs
 owns: CONTRIBUTING.md,SECURITY.md
 parent: maps/public-readiness.md
+github_issue: 8
+github_url: "https://github.com/HinchK/stampede/issues/8"
+synced_at: "2026-09-21T22:08:00Z"
 ---
 
 # DOG-6 — CONTRIBUTING + SECURITY (WAVE 2)

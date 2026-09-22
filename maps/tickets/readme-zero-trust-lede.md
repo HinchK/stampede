@@ -6,6 +6,9 @@ status: backlog
 assignee: agy-docs
 owns: README.md
 parent: maps/public-readiness.md
+github_issue: 7
+github_url: "https://github.com/HinchK/stampede/issues/7"
+synced_at: "2026-09-21T21:57:13Z"
 ---
 
 # DOG-5 — README lede (WAVE 2)

@@ -2,10 +2,14 @@
 id: DOG-4
 title: "Relabel the 80% token-reduction claim as design rationale, not measurement"
 type: wayfinder:doc
-status: backlog
+status: resolved
+commit: 4cb5f28
 assignee: agy-docs
 owns: docs/findings/swarm-orchestration-retrospective.md
 parent: maps/public-readiness.md
+github_issue: 6
+github_url: "https://github.com/HinchK/stampede/issues/6"
+synced_at: "2026-09-21T21:54:12Z"
 ---
 
 # DOG-4 — Token claim honesty pass (WAVE 2)

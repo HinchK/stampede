@@ -64,6 +64,7 @@ every claim in the docs backed by something the repo can show.
   - Increment 2: Established direct-to-base write boundaries and ungated blast radius warnings in `briefs/worker-docs.in.md`, `briefs/worker-gh.in.md`, and `briefs/overseer-pm.in.md`.
 - **DOG-13 resolved (`81958f1`):** Resolved governance loading gap where `lib/arbiter.sh` was invoked relative to target cwd rather than orchestrator root. Anchored arbiter resolution to absolute `SCRIPT_DIR` across `lib/briefs.sh` (`ARBITER_BIN`), `briefs/looper.in.md`, and added loud pre-execution checks in `loop-bot-herd.sh` and `herdr-loop-swarm.sh`. (6 suites green, 152 passed; decoy target arbiter with stripped guard confirmed ignored).
 - **DOG-2 resolved (`f1c12d9`):** Added verbatim Apache-2.0 `LICENSE` file at repo root with `Copyright 2026 HinchK` (zero placeholders), establishing open-source licensing terms.
+- **DOG-4 resolved (`4cb5f28`):** Relabeled the 80% token reduction claim in `docs/findings/swarm-orchestration-retrospective.md` as modelled per-turn context compaction rather than empirical measurement, added "The Trust Tax" subsection acknowledging total spend increase, and documented the PTY CLI usage reporting limitation.
 
 ## Active Frontier
 
@@ -77,7 +78,7 @@ that is the gate. Do not use `status:` for this (see hazard 3).
       `--confirm` gate in `lib/arbiter.sh` ensure human-only base merges.
 - [x] **Wave 1.6 — runs alone.** DOG-13 arbiter orchestrator resolution. Anchors governing arbiter to orchestrator root (`$SCRIPT_DIR`), preventing unmerged/decoy target-local arbiters from bypassing promote guardrails.
 - [ ] **Wave 2 — parallel, file-disjoint.** [x] DOG-2 LICENSE · DOG-3 CI ·
-      DOG-4 token-claim relabel · DOG-5 README lede · DOG-6 CONTRIBUTING+SECURITY.
+      [x] DOG-4 token-claim relabel · DOG-5 README lede · DOG-6 CONTRIBUTING+SECURITY.
       Verified disjoint by inspection of their `owns:` lines.
 - [ ] **Wave 3 — runs alone.** DOG-7 kultivait optional (shares
       `loop-bot-herd.sh` and `lib/config.sh` with DOG-1).
