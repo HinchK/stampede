@@ -71,6 +71,8 @@ every claim in the docs backed by something the repo can show.
 - **DOG-6 resolved (`0290750`, PR #15):** Added `CONTRIBUTING.md` (prerequisites including Python >= 3.11 for tomllib, `make check`, bash 3.2 platform floor, conventional commits, and the 4 git safety rules) and `SECURITY.md` (reporting route, response window, and the not-a-sandbox caveat).
 - **DOG-7 resolved (`a00fafa`, PR #14):** Made kultivait/pi local engine completely optional: `enabled = false` in `[seats.pi]`, generalized `PROXY_CREDENTIALS` and emptied `serve_cmd`, removed `localhost:4114` literals, removed `briefs/pi.md`, and added 18-assertion `tests/test_config.sh`.
 - **DOG-3 resolved (via PR #9, `16bf8a3`; closed late as bookkeeping debt):** CI live — `.github/workflows/ci.yml` runs `make check` on `macos-latest` and `ubuntu-latest` for every push and PR. Done-criteria re-verified at close: valid YAML, both legs run the aggregate gate, zero `setup-python` (the stock-interpreter configuration DOG-1 exists to survive stays exercised), no secrets. First run was red on both legs for environment reasons fixed by DOG-15 (`timeout(1)`) and DOG-14 (pinned shellcheck); latest run on `main` is green on both legs.
+- **DOG-8 resolved (`30be2ac`, PR #58):** Hermetic test suite for `lib/gh_sync.sh` added in `tests/test_gh_sync.sh` (27 assertions) with stubbed `gh` on PATH testing zero-write dry-run default, drift detection, CREATE proposal label contracts, auth error handling, and directory requirements. Wired into aggregate gate (all 8 suites green).
+- **DOG-11 resolved (`bd0b90c`, PR #59):** Fixed fresh-clone partition deadlock where gitignored `.herdr-swarm/integration.jsonl` caused all resolved tickets to be treated as active leaseholders. Inactive determination no longer treats missing gitignored evidence as active; warns once on absent state file. 29 partition suite assertions pass cleanly.
 
 ## Active Frontier
 
@@ -94,8 +96,7 @@ GitHub issues for anything released.
       Verified disjoint by inspection of their `owns:` lines.
 - [x] **Wave 3 — runs alone.** DOG-7 kultivait optional (shares
       `loop-bot-herd.sh` and `lib/config.sh` with DOG-1).
-- [ ] **Wave 4 — parallel.** DOG-8 gh_sync tests (shares `lib/gh_sync.sh` with
-      DOG-7) · DOG-11 fresh-clone partition deadlock. Disjoint from each other.
+- [x] **Wave 4 — parallel.** [x] DOG-8 gh_sync tests (PR #58) · [x] DOG-11 fresh-clone partition deadlock (PR #59).
 - [ ] **Wave 5 — runs alone.** DOG-9 relative links (touches nearly every
       markdown file; must follow DOG-5).
 - [ ] **Wave 6 — HUMAN.** DOG-10 rename + slug migration. Floor down, ref moved
