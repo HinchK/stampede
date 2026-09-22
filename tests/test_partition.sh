@@ -239,6 +239,127 @@ rc=0; partition_check "$CAND16B" "$REPO" >/dev/null 2>&1 || rc=$?
 [[ "$rc" == 2 ]] && ok 16b "fresh clone: no-owns candidate exclusive (rc=2), not buried by phantom leases" \
   || bad 16b "fresh clone exclusive candidate (rc=$rc, want 2)"
 
+# ── DOG-16: supervisor dispatch wiring — guard + lease lifecycle ───────────
+# Sources the REAL supervisor (its `status` command runs harmlessly at source
+# time) and drives its dispatch path against this scratch repo: dispatch
+# ACQUIRES, overlap blocks fail-closed before any prompt is sent, and the
+# release pass fires only on integrated/promoted evidence — queued (green,
+# not yet merged) never releases (ADR 0012 §5, premature-release anti-pattern).
+# Supervisor loggers (ok/bad, one-arg) clobber the suite's two-arg versions
+# at source, so this section asserts through sup_ok/sup_bad.
+SUITE_REPO="$REPO"   # supervisor source overwrites REPO from profile.env
+mkdir -p "$STATE"
+printf 'REPO="foo/bar"\nTEST_CMD="sh ./gate.sh"\nECOSYSTEM="generic"\nDOCS_DIR="docs"\n' > "$STATE/profile.env"
+SUPERVISOR_SH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/loop-bot-herd.sh"
+# shellcheck disable=SC1090  # path resolved above
+source "$SUPERVISOR_SH" status >/dev/null 2>&1
+REPO="$SUITE_REPO"
+
+sup_ok()  { printf '  ✓ [%s] %s\n' "$1" "$2"; PASS=$((PASS + 1)); }
+sup_bad() { printf '  ✗ [%s] %s\n' "$1" "$2"; FAIL=$((FAIL + 1)); }
+prompts_n() { wc -l < "$PROMPTS" | tr -d ' '; }
+
+PROMPTS="$TEST_DIR/prompts.log"; : > "$PROMPTS"
+herdr() { printf '%s\n' "$*" >> "$PROMPTS"; return 0; }
+
+mkdir -p "$REPO/maps/tickets"
+printf '{"version":1,"leases":[]}' > "$STATE/leases.json"
+rm -f "$STATE/integration.jsonl"
+D16_A="$REPO/maps/tickets/dog16-a.md"    # id ≠ filename: exercises the id: scan
+printf -- '---\nid: DOG16-A\nstatus: ready\nowns: lib/dog16/a.sh\n---\nbody\n' > "$D16_A"
+D16_B="$REPO/maps/tickets/dog16-b.md"    # overlaps A on lib/dog16/a.sh
+printf -- '---\nid: DOG16-B\nstatus: ready\nowns: lib/dog16/a.sh, lib/dog16/b.sh\n---\nbody\n' > "$D16_B"
+D16_C="$REPO/maps/tickets/dog16-c.md"    # no owns → exclusive fallback
+printf -- '---\nid: DOG16-C\nstatus: ready\n---\nbody\n' > "$D16_C"
+
+# 17a: end-to-end dispatch of a disjoint ticket prompts AND holds a lease
+if ( cmd_dispatch arch-1-x "$D16_A" ) >/dev/null 2>&1; then
+  held=$(jq -r '[.leases[] | select(.ticket == "DOG16-A" and .seat == "arch-1-x")] | length' "$STATE/leases.json")
+  if [[ "$(prompts_n)" -ge 1 ]] && grep -q "BRIEF (file): $D16_A" "$PROMPTS" && [[ "$held" == 1 ]]; then
+    sup_ok 17a "dispatch prompted the worker and acquired its path lease (id-scan resolved)"
+  else
+    sup_bad 17a "dispatch incomplete (prompts=$(prompts_n), lease=$held)"
+  fi
+else
+  sup_bad 17a "dispatch of disjoint ticket blocked"
+fi
+
+# 17b: overlapping ticket blocked fail-closed — holder named, nothing sent
+grc=0; BLK=$(dispatch_partition_guard arch-2-x "$D16_B" 2>&1) || grc=$?
+n0=$(prompts_n)
+b_lease=$(jq -r '[.leases[] | select(.ticket == "DOG16-B")] | length' "$STATE/leases.json")
+if [[ "$grc" == 1 ]] && printf '%s' "$BLK" | grep -q 'BLOCKED' \
+   && printf '%s' "$BLK" | grep -q 'DOG16-A' && [[ "$n0" == 1 && "$b_lease" == 0 ]]; then
+  sup_ok 17b "overlap blocked with holder named, no prompt, no lease"
+else
+  sup_bad 17b "overlap guard (rc=$grc, prompts=$n0, lease=$b_lease)"
+fi
+
+# 17b2: the blocked dispatch exits non-zero from cmd_dispatch itself
+if ( cmd_dispatch arch-2-x "$D16_B" ) >/dev/null 2>&1; then
+  sup_bad 17b2 "blocked dispatch exited 0"
+else
+  [[ "$(prompts_n)" == 1 ]] && sup_ok 17b2 "cmd_dispatch exits 1 on collision, prompt count unchanged" \
+    || sup_bad 17b2 "blocked dispatch leaked a prompt ($(prompts_n))"
+fi
+
+# 17c: re-dispatch of a leased ticket is blocked too — re-brief is a deliberate
+# lease release, never a silent double-dispatch (fail-closed)
+grc=0; dispatch_partition_guard arch-1-x "$D16_A" >/dev/null 2>&1 || grc=$?
+[[ "$grc" == 1 ]] && sup_ok 17c "re-dispatch of the leased ticket blocked" \
+  || sup_bad 17c "re-dispatch guard (rc=$grc)"
+
+# 17d: no-owns candidate runs alone or not at all
+grc=0; dispatch_partition_guard arch-3-x "$D16_C" >/dev/null 2>&1 || grc=$?
+[[ "$grc" == 1 ]] && sup_ok 17d "no-owns candidate blocked while any lease is live" \
+  || sup_bad 17d "no-owns guard under live lease (rc=$grc)"
+lease_release DOG16-A
+grc=0; dispatch_partition_guard arch-3-x "$D16_C" >/dev/null 2>&1 || grc=$?
+c_n=$(jq -r '[.leases[] | select(.ticket == "DOG16-C")] | length' "$STATE/leases.json")
+excl_flag=$(jq -r '.leases[] | select(.ticket == "DOG16-C") | .exclusive' "$STATE/leases.json")
+if [[ "$grc" == 0 && "$c_n" == 1 && "$excl_flag" == "true" ]]; then
+  sup_ok 17d2 "no-owns candidate dispatched with an EXCLUSIVE lease once idle"
+else
+  sup_bad 17d2 "exclusive dispatch (rc=$grc, leases=$c_n, exclusive=$excl_flag)"
+fi
+
+# 17e: release pass — integrated evidence frees a lease; queued never does
+jq -cn '{version:1,leases:[
+  {ticket:"DOG16-A",seat:"arch-1-x",branch:"",owns:["lib/dog16/a.sh"],exclusive:false,acquired_at:"t"},
+  {ticket:"DOG16-C",seat:"arch-3-x",branch:"",owns:[],exclusive:true,acquired_at:"t"}]}' > "$STATE/leases.json"
+printf '{"ts":1,"ticket":"DOG16-A","seat":"arch-1-x","sha":"abc","status":"integrated"}\n' > "$STATE/integration.jsonl"
+printf '{"ts":2,"ticket":"DOG16-C","seat":"arch-3-x","sha":"def","status":"queued"}\n' >> "$STATE/integration.jsonl"
+RL_OUT=$(lease_release_integrated 2>&1 || true)
+a_gone=$(jq -r '[.leases[] | select(.ticket == "DOG16-A")] | length' "$STATE/leases.json")
+c_held=$(jq -r '[.leases[] | select(.ticket == "DOG16-C")] | length' "$STATE/leases.json")
+if [[ "$a_gone" == 0 && "$c_held" == 1 ]] && printf '%s' "$RL_OUT" | grep -q 'DOG16-A'; then
+  sup_ok 17e "integrated lease released by name; queued (green, unmerged) lease held"
+else
+  sup_bad 17e "release pass (A=$a_gone, C=$c_held)"
+fi
+
+# 17f: promoted evidence also frees; after it, the lease set is empty
+printf '{"ts":3,"ticket":"DOG16-C","status":"promoted"}\n' >> "$STATE/integration.jsonl"
+lease_release_integrated >/dev/null 2>&1
+c_gone=$(jq -r '[.leases[] | select(.ticket == "DOG16-C")] | length' "$STATE/leases.json")
+[[ "$c_gone" == 0 ]] && sup_ok 17f "promoted lease released" || sup_bad 17f "promoted release (C=$c_gone)"
+
+# 17g: an explicitly named ticket that resolves to no file never dispatches
+grc=0; dispatch_partition_guard arch-1-x "$D16_A" "DOG16-NOPE" >/dev/null 2>&1 || grc=$?
+[[ "$grc" == 1 ]] && sup_ok 17g "unresolvable named ticket fail-closed" \
+  || sup_bad 17g "unresolvable ticket guard (rc=$grc)"
+
+# 17h: a plain brief (no ticket frontmatter) still dispatches, lease-free
+PLAIN="$TEST_DIR/plain-brief.md"; printf 'no frontmatter here\n' > "$PLAIN"
+if ( cmd_dispatch arch-1-x "$PLAIN" ) >/dev/null 2>&1; then
+  p_lease=$(jq -r '(.leases // []) | length' "$STATE/leases.json")
+  grep -q "BRIEF (file): $PLAIN" "$PROMPTS" && [[ "$p_lease" == 0 ]] \
+    && sup_ok 17h "non-ticket brief dispatched without a partition lease" \
+    || sup_bad 17h "non-ticket dispatch (prompts=$(prompts_n), leases=$p_lease)"
+else
+  sup_bad 17h "non-ticket brief dispatch blocked"
+fi
+
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))

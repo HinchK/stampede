@@ -68,7 +68,7 @@
 
 ## 2. Active Status & Open Items
 
-- **Public Readiness Dogfood Run (Waves 1–6 Complete):**
+- **Public Readiness Dogfood Run (Waves 1–7 Complete):**
   - **Waves 1–3 Complete:** All 11 tickets resolved (`DOG-1`, `DOG-12`, `DOG-13`, `DOG-2`, `DOG-3`, `DOG-4`, `DOG-5`, `DOG-14`, `DOG-15`, `DOG-6`, `DOG-7`).
   - **Wave 4 Complete (PR #58, PR #59, PR #60):**
     - `DOG-8` (`30be2ac`): Hermetic `gh_sync` test suite with 27 assertions wired into aggregate test gate.
@@ -77,15 +77,16 @@
     - `DOG-9` (`bb8fda9`): Swept 48 tracked markdown files converting machine-local paths and `file://` URLs into clean repo-relative links.
   - **Wave 6 Complete (2026-09-21, `a552d34`):**
     - `DOG-10`: rename + slug migration executed human-attended. Repo at `~/Fun/stampede`; slug derives from `REPO=HinchK/stampede` → `hinchk-stampede`; both merged old-slug branches deleted locally (GitHub already clean); stale worktree registrations and dangling `local-source` remote removed; swarm re-seated (6 seats verified in `wT`); living-file stragglers fixed. Historical receipts retain the old name by decision — verification grep scoped to living files.
+  - **Wave 7 Complete (2026-09-21, `280ae5f`):**
+    - `DOG-16`: supervisor dispatch is partition-guarded and lease-carrying — `cmd_dispatch` resolves the ticket and runs `partition_check` + `lease_acquire` in one locked section before any prompt (collision → fail-closed block naming the holder; no-owns → exclusive-or-nothing). `lease_release_integrated` in the supervisor pass frees leases only on integrated/promoted evidence, never on green (ADR 0012 §5). Non-ticket briefs pass ungated; re-dispatch of a leased ticket blocks until a deliberate release.
 - **Standing Reporting Protocol:** Arch brief updated to mandate direct looper notification (`herdr agent prompt {{LOOPER_NAME}} "ARCH UPDATE: #<ticket> <sha> — <summary>"`) upon completion so the orchestrator is immediately notified without waiting for poll turns.
-- **Total Test Suite Health:** **184 passed, 0 failed** across 8 suites (42 worktree, 29 partition, 27 gh_sync, 20 arbiter, 18 config, 18 profile, 16 pyenv, 14 briefs); `make check` green (lint 0 warnings). Run under `/bin/bash` (3.2 floor).
+- **Total Test Suite Health:** **215 passed, 0 failed** across 8 suites (42 worktree, 39 partition, 38 arbiter, 27 gh_sync, 18 config, 18 profile, 17 async gate, 16 pyenv); `make check` green (lint 0 warnings). Run under `/bin/bash` (3.2 floor).
 
 ---
 
 ## 3. Immediate Next Step
 
-- **Wave 7 (DOG-16):** wire `partition_check` / `lease_acquire` into the supervisor/launcher dispatch path (`maps/tickets-staged/dispatch-partition-lease-wiring.md`).
-- **Post-Readiness Backlog:** Trust-tax instrumentation, headless execution mode, and P3-4 batched non-blocking arbiter drain.
+- **Public readiness waves complete.** Post-readiness backlog: trust-tax instrumentation, headless execution mode, and P3-4 batched non-blocking arbiter drain.
 
 
 
