@@ -1,0 +1,110 @@
+# CI — the mechanical external check (DOG-3).
+#
+# Runs the repo's own aggregate gate, `make check` (lint + all six suites), on
+# both platforms it claims to support, so the repo can never again be green on
+# one machine and broken on another. The suites are hermetic: they build
+# ephemeral scratch repos under /tmp and stub herdr/agy/opencode, so nothing
+# here needs a secret and no agent CLI is installed.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: make check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Never cancel the sibling leg: a cross-platform divergence is the exact
+      # finding this job exists to surface, so both legs must always report.
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # NOTE: no step here pins a Python version, deliberately, and none
+      # should be added. The runner's stock interpreter resolution is the
+      # configuration DOG-1 exists to survive (macOS ships /usr/bin/python3 =
+      # 3.9, and tomllib is 3.11+), so lib/pyenv.sh must be exercised against
+      # the unpinned image. Pinning would hide the regression this job catches.
+
+      - name: Install jq and coreutils
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update && sudo apt-get install -y jq
+          else
+            brew list jq >/dev/null 2>&1 || brew install jq
+            # coreutils supplies timeout(1), which every suite gate uses to
+            # bound its run. macOS ships none and the runner image does not
+            # install it, so without this the gate exits 127 and the arbiter
+            # recorded a RED verdict for a tree it never measured (DOG-15).
+            # The code declares this dependency in lib/preflight.sh and fails
+            # loudly without it; CI's job is to provide it.
+            brew list coreutils >/dev/null 2>&1 || brew install coreutils
+          fi
+
+      # shellcheck is PINNED (DOG-14). Taking apt's or Homebrew's current build
+      # made the "0 warnings" bar mean "0 on whatever you happen to have":
+      # apt's older build flagged SC2119/SC2120 in lib/preflight.sh that 0.11.0
+      # does not, so ubuntu failed lint while macOS reported it clean.
+      - name: Install pinned shellcheck
+        env:
+          SC_VERSION: v0.11.0
+        run: |
+          set -euo pipefail
+          case "$RUNNER_OS-$(uname -m)" in
+            Linux-x86_64)        asset="linux.x86_64" ;;
+            macOS-arm64)         asset="darwin.aarch64" ;;
+            macOS-x86_64)        asset="darwin.x86_64" ;;
+            *) echo "unsupported runner: $RUNNER_OS-$(uname -m)" >&2; exit 1 ;;
+          esac
+          url="https://github.com/koalaman/shellcheck/releases/download/${SC_VERSION}/shellcheck-${SC_VERSION}.${asset}.tar.xz"
+          curl -fsSL "$url" -o /tmp/shellcheck.tar.xz
+          tar -xJf /tmp/shellcheck.tar.xz -C /tmp
+          sudo install "/tmp/shellcheck-${SC_VERSION}/shellcheck" /usr/local/bin/shellcheck
+          # Fail loudly if the pin did not take, rather than silently linting
+          # with the platform build this step exists to replace.
+          have=$(shellcheck --version | awk '/^version:/{print "v"$2}')
+          [ "$have" = "$SC_VERSION" ] || { echo "pin failed: wanted $SC_VERSION, got $have" >&2; exit 1; }
+          echo "shellcheck pinned to $have at $(command -v shellcheck)"
+
+      - name: Configure git identity
+        run: |
+          # A hosted runner has no git identity and its hostname is not
+          # fully qualified, so git's auto-detection is refused rather than
+          # guessed. The suites set identity per commit, but the teardown
+          # checkpoint in lib/worktree.sh commits with the ambient identity —
+          # without this, test_worktree.sh fails for an environment reason.
+          git config --global user.name "stampede-ci"
+          git config --global user.email "ci@stampede.invalid"
+
+      - name: Record toolchain
+        run: |
+          bash --version | head -1
+          git --version
+          make --version | head -1
+          shellcheck --version | sed -n '2p'
+          jq --version
+          # Informational only — `make check` is the authoritative gate.
+          bash lib/pyenv.sh \
+            || echo "pyenv.sh: no tomllib-capable interpreter on PATH (lint will report it)"
+          # Name the resolved timeout(1) in the log: which of timeout/gtimeout
+          # wins is exactly what was unknown while DOG-15 was being diagnosed.
+          bash -c 'source lib/common.sh; resolve_timeout && echo "timeout -> $TIMEOUT_BIN"' \
+            || echo "resolve_timeout: none found (the suite preconditions will report it)"
+
+      - name: make check
+        run: make check

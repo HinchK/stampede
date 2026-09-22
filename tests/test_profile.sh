@@ -66,8 +66,16 @@ printf '[project]\nname = "x"\n' > "$R4/pyproject.toml"
 printf 'test:\n\techo hi\n' > "$R4/Makefile"
 check "4a" "pyproject beats Makefile -> python" \
   '[[ $(detect_ecosystem "$R4") == python ]]'
-check "4b" "python TEST_CMD unchanged (uv run pytest -q)" \
-  '[[ $(detect_test_cmd "$R4") == "uv run pytest -q" ]]'
+# The python TEST_CMD branches on which runner is installed, so pin the
+# environment rather than inheriting the developer's. Asserting only the uv
+# branch made this suite pass wherever uv happened to exist and fail on a
+# runner without it — the same class of defect as DOG-15's missing timeout(1).
+PROBE_BIN="$TEST_DIR/stub-bin"; mkdir -p "$PROBE_BIN"
+printf '#!/bin/sh\nexit 0\n' > "$PROBE_BIN/uv"; chmod +x "$PROBE_BIN/uv"
+check "4b" "python TEST_CMD with uv present -> uv run pytest -q" \
+  '[[ $(PATH="$PROBE_BIN:$PATH" detect_test_cmd "$R4") == "uv run pytest -q" ]]'
+check "4c" "python TEST_CMD with no uv and no poetry.lock -> pytest -q" \
+  '[[ $(PATH=/usr/bin:/bin detect_test_cmd "$R4") == "pytest -q" ]]'
 
 # ── 5. empty repo stays fail-closed ─────────────────────────────────────────
 R5="$TEST_DIR/empty-repo"; mkdir -p "$R5"
