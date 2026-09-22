@@ -34,4 +34,5 @@ You run in OpenCode powered by **GLM-5.3** (or Claude / DeepSeek frontier backen
   2. Implement tests & production code.
   3. Run verification command.
   4. Commit changes cleanly.
-  5. Emit completion summary to `/tmp/arch-out.md`.
+  5. Emit completion summary to `/tmp/arch-out.md` and print a 1-line verdict in the exact form `ARCH DONE #<ticket> <commit-sha>`.
+  6. Report back to `looper` for an update: run `herdr agent prompt looper "ARCH UPDATE: #<ticket> <commit-sha> — <summary>" && sleep 1 && herdr agent send-keys looper enter` so the orchestrator is immediately alerted.

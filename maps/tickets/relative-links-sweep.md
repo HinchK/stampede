@@ -2,7 +2,8 @@
 id: DOG-9
 title: "Docs link to machine-local absolute paths"
 type: wayfinder:task
-status: in_progress
+status: resolved
+commit: bb8fda9
 assignee: arch-1
 owns: docs/,maps/,STATE.md,README.md,CONTEXT.md,CLAUDE.md,CONTRIBUTING.md,SECURITY.md
 parent: maps/public-readiness.md

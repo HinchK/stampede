@@ -73,6 +73,7 @@ every claim in the docs backed by something the repo can show.
 - **DOG-3 resolved (via PR #9, `16bf8a3`; closed late as bookkeeping debt):** CI live — `.github/workflows/ci.yml` runs `make check` on `macos-latest` and `ubuntu-latest` for every push and PR. Done-criteria re-verified at close: valid YAML, both legs run the aggregate gate, zero `setup-python` (the stock-interpreter configuration DOG-1 exists to survive stays exercised), no secrets. First run was red on both legs for environment reasons fixed by DOG-15 (`timeout(1)`) and DOG-14 (pinned shellcheck); latest run on `main` is green on both legs.
 - **DOG-8 resolved (`30be2ac`, PR #58):** Hermetic test suite for `lib/gh_sync.sh` added in `tests/test_gh_sync.sh` (27 assertions) with stubbed `gh` on PATH testing zero-write dry-run default, drift detection, CREATE proposal label contracts, auth error handling, and directory requirements. Wired into aggregate gate (all 8 suites green).
 - **DOG-11 resolved (`bd0b90c`, PR #59):** Fixed fresh-clone partition deadlock where gitignored `.herdr-swarm/integration.jsonl` caused all resolved tickets to be treated as active leaseholders. Inactive determination no longer treats missing gitignored evidence as active; warns once on absent state file. 29 partition suite assertions pass cleanly.
+- **DOG-9 resolved (`bb8fda9`, PR #62):** Swept 48 tracked markdown files converting machine-local paths and `file://` URLs into clean relative repository links. Zero broken in-tree links; `grep 'file://'` and `grep '/Users/'` return empty (rc=1); all 8 suites green.
 
 ## Active Frontier
 
@@ -97,8 +98,7 @@ GitHub issues for anything released.
 - [x] **Wave 3 — runs alone.** DOG-7 kultivait optional (shares
       `loop-bot-herd.sh` and `lib/config.sh` with DOG-1).
 - [x] **Wave 4 — parallel.** [x] DOG-8 gh_sync tests (PR #58) · [x] DOG-11 fresh-clone partition deadlock (PR #59).
-- [ ] **Wave 5 — runs alone.** DOG-9 relative links (touches nearly every
-      markdown file; must follow DOG-5).
+- [x] **Wave 5 — runs alone.** DOG-9 relative links (PR #62).
 - [ ] **Wave 6 — HUMAN.** DOG-10 rename + slug migration. Floor down, ref moved
       by hand. Never dispatched unattended.
 

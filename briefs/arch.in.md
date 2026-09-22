@@ -39,3 +39,4 @@ You run in OpenCode powered by **GLM-5.3** (or frontier coding backend).
   3. Run verification command (`{{TEST_CMD}}`).
   4. Commit changes cleanly.
   5. Emit completion summary `ARCH DONE #<TICKET_OR_ID> <COMMIT_SHA> — <summary>` (the supervisor dedupes verdicts by (ticket, sha) and re-gates RED tickets only when the sha changes — always include your final commit sha).
+  6. Report back to `{{LOOPER_NAME}}` for an update: run `herdr agent prompt {{LOOPER_NAME}} "ARCH UPDATE: #<TICKET_OR_ID> <COMMIT_SHA> — <summary>" && sleep 1 && herdr agent send-keys {{LOOPER_NAME}} enter` so the orchestrator is immediately notified without waiting on a poll turn.
