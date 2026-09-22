@@ -39,8 +39,10 @@ An autonomous, config-gated cross-provider reviewer loop where `looper` dispatch
 - [x] **Wave 2 — Critique Brief & Implementer Refinement Protocol.** REV-2 (`efc857e`): Implementer brief update for critique dispatches (`round 2/2`) on existing worktree branches.
 - [x] **Wave 3 — Looper Review Loop State Machine.** REV-3 (`ed86598`): 2-round autonomous loop state machine in orchestrator with fail-closed human escalation.
 - [x] **Wave 4 — Review Telemetry, Rich Status & Full Verification.** REV-4 (`950e264`): Telemetry event logging, rich status dashboard aggregation, fast-follow contract fix, and full verification suite (412 assertions).
+- [ ] **Wave 5 — Supervisor Review Loop Wiring & String Ticket Harvesting.** REV-5: Wire review state machine directives into `loop-bot-herd.sh`, harvest `REVIEW VERDICT` anchors and alphanumeric ticket IDs, emit `review.*` telemetry.
 
 Dependency edges:
-REV-2 ← REV-1 · REV-3 ← REV-1,REV-2 · REV-4 ← REV-3.
+REV-2 ← REV-1 · REV-3 ← REV-1,REV-2 · REV-4 ← REV-3 · REV-5 ← REV-3,REV-4.
+
 
 

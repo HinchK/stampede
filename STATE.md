@@ -69,11 +69,12 @@
 
 ## 2. Active Status & Open Items
 
-- **Autonomous Reviewer Loop Milestone (COMPLETE — Waves 1–4 Shipped & Promoted):**
+- **Autonomous Reviewer Loop Milestone (Waves 1–4 Shipped & Promoted; Wave 5 In-Flight):**
   - **Wave 1 Complete:** `REV-1` (`e22697c`): Reviewer config flag (`loop`, `max_rounds`) in `swarm.config.toml` bound in `lib/config.sh`, dual-mode brief with `REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>` anchor and `.herdr-swarm/reviews/<ticket>-<sha>.md` report schema, +8 config assertions (promoted).
   - **Wave 2 Complete:** `REV-2` (`efc857e`): Critique delivery protocol: implementer refinement on existing worktree branch (`briefs/arch.in.md`, `briefs/arch.md`, `docs/user-guide.md`) (promoted).
   - **Wave 3 Complete:** `REV-3` (`ed86598`): Looper autonomous review loop state machine and fail-closed gate (`lib/lifecycle.sh`, `herdr-loop-swarm.sh`, `tests/test_review_loop.sh`). Durable `reviews.json`, directive contract, `--no-review-loop` flag, +40 assertions (promoted).
   - **Wave 4 Complete:** `REV-4` (`950e264`): Review domain telemetry events and badges in `lib/telemetry.py`, rich status `.reviews` aggregation in `lib/cli/stampede-status.sh`, fast-follow directive contract fix in `lib/lifecycle.sh`, +14 assertions (promoted).
+  - **Wave 5 In-Flight:** `REV-5`: Supervisor review loop wiring, verdict harvesting, and telemetry (`loop-bot-herd.sh`, `tests/test_async_gate.sh`). Released to `maps/tickets/`.
 - **Public Multi-Provider Milestone (COMPLETE — Waves 8–12 Shipped):**
   - Shipped `PUB-1` through `PUB-11` (all promoted).
 - **Standing Guardrails:**
@@ -85,8 +86,9 @@
 
 ## 3. Immediate Next Step
 
-- Milestone Complete: Autonomous Reviewer Loop PRD (`REV-1`..`REV-4`) 100% shipped and promoted to `main`.
-- Await operator direction on the next roadmap frontier or epic.
+- Dispatch `REV-5` (Supervisor review loop wiring, verdict harvesting, and telemetry) to `arch-1-hinchk-stampede`.
+- Verify and integrate `REV-5` via Arbiter.
+- Run PM audit, promote ff-only to `main`, and push to remote.
 
 
 
