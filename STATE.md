@@ -1,6 +1,6 @@
 # Swarm State Checkpoint: Universal Herdr Swarm (`herd-swarm`)
 
-**Updated:** 2026-09-21  
+**Updated:** 2026-09-22  
 **Plan of Record:** [maps/universal-herdr-swarm.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/maps/universal-herdr-swarm.md)  
 **Execution Roadmap:** [docs/reordered-plan.md](file:///Users/hinchk/Fun/loop-bot-herd-agy/docs/reordered-plan.md)  
 **Orchestrator:** `looper` (wM:p1, AGY Flash)  
@@ -68,9 +68,11 @@
 
 ## 2. Active Status & Open Items
 
-- **Public Readiness Dogfood Run (Wave 1 Complete):**
-  - **DOG-1 (Interpreter Resolver):** Landed in `3a9a70d` and resolved in `4993d58`.
-  - **Queue Status:** Wave 1 complete, queue empty for current wave, awaiting Wave 2 release from orchestrator.
+- **Public Readiness Dogfood Run (Waves 1–3 Complete; Waves 4–6 Charted):**
+  - **Waves 1–3 Complete:** All 11 tickets resolved (`DOG-1`, `DOG-12`, `DOG-13`, `DOG-2`, `DOG-3`, `DOG-4`, `DOG-5`, `DOG-14`, `DOG-15`, `DOG-6`, `DOG-7`).
+  - **DOG-3 Retirement:** Issue #5 closed; retirement commit `7526d9a` rides PR #16 (pending human merge).
+  - **Waves 4–6 Charted:** Four ticket files in `maps/tickets-staged/` (on PR #17, stacked on #16): `gh-sync-test-suite.md` and `fresh-clone-partition-deadlock.md` (Wave 4, parallel); `relative-links-sweep.md` (Wave 5); `rename-and-slug-migration.md` (Wave 6, HUMAN-only).
+  - **Queue / Frontier Status:** Active frontier is empty of released tickets. Next act is human operator: merge PR #16 and PR #17, then `mv` Wave 4 files from `maps/tickets-staged/` into `maps/tickets/` to release.
 - **Milestones M1, M2, M3 Complete & Audited.**
 - **Phase 2 Parallel Worktree Swarm Fan-Out: 100% COMPLETE & HARDENED.**
 - **Phase 3 Autonomous Multi-Worker Concurrent Fan-Out Progress:**
@@ -81,7 +83,7 @@
   - **P3-FLAKE-1 (Concurrent Provision Race):** Complete (`cf8b546`).
   - **P3-4 (Arbiter Batch Integration & Non-Blocking Drain):** Spec + ticket authored by `pm`, integrated and promoted (`97d31e2`); ticket `arbiter-batch-integration` is **backlog — next implementation target**.
 - **PM branch topology:** reconciled (#PM-BRANCH-RECON) — zero unmerged branches; `main`, `swarm/loop-bot-herd-agy/integration` (arbiter CAS baseline), and the live `pi` seat branch remain.
-- **Total Test Suite Health:** **148 passed, 0 failed** across 6 suites (42 worktree, 30 arbiter, 26 partition, 17 async-gate, 17 profile, 16 pyenv); `make check` green (lint 0 warnings). Run under `/bin/bash` (3.2 floor).
+- **Total Test Suite Health:** **175 passed, 0 failed** across 7 suites (42 worktree, 38 arbiter, 26 partition, 18 config, 18 profile, 17 async-gate, 16 pyenv); `make check` green (lint 0 warnings). Run under `/bin/bash` (3.2 floor).
 
 ---
 
