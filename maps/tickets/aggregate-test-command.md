@@ -7,6 +7,9 @@ commit: ec6d090
 assignee: pi
 owns: Makefile
 parent: maps/universal-herdr-swarm.md
+github_issue: 18
+github_url: "https://github.com/HinchK/stampede/issues/18"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # TEST-AGG: one command, all suites, failures propagate

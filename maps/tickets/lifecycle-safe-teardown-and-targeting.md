@@ -7,6 +7,9 @@ assignee: arch
 prototype_asset: lib/lifecycle.sh
 owns: lib/lifecycle.sh
 parent: maps/universal-herdr-swarm.md
+github_issue: 33
+github_url: "https://github.com/HinchK/stampede/issues/33"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # Lifecycle Safe Teardown and Target Disambiguation (D1 Fix)

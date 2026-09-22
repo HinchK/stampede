@@ -11,6 +11,9 @@ resolution:
   commit: 2455bc5
   verified_by: looper
   date: "2026-09-19"
+github_issue: 30
+github_url: "https://github.com/HinchK/stampede/issues/30"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # Integrate Config Registry, Namespacing, and Templated Brief Delivery (T-INT-2, T-005, T-INT-3)

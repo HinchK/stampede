@@ -6,6 +6,9 @@ status: ready
 assignee: arch
 owns: lib/partition.sh,tests/test_partition.sh
 parent: maps/public-readiness.md
+github_issue: 25
+github_url: "https://github.com/HinchK/stampede/issues/25"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # DOG-11 — Partition check deadlocks a fresh clone (WAVE 4)

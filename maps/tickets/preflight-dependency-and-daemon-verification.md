@@ -7,6 +7,9 @@ assignee: arch
 prototype_asset: lib/preflight.sh
 owns: lib/preflight.sh
 parent: maps/universal-herdr-swarm.md
+github_issue: 36
+github_url: "https://github.com/HinchK/stampede/issues/36"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # Preflight Dependency and Daemon Verification

@@ -7,6 +7,9 @@ assignee: looper
 resolution_file: loop-bot-herd.sh
 owns: loop-bot-herd.sh
 parent: maps/universal-herdr-swarm.md
+github_issue: 45
+github_url: "https://github.com/HinchK/stampede/issues/45"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # Supervisor Bug Fixes and Re-Verdict Logic

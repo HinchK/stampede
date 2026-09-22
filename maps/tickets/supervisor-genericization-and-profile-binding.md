@@ -11,6 +11,9 @@ resolution:
   commit: c308f2b
   verified_by: looper
   date: "2026-09-19"
+github_issue: 46
+github_url: "https://github.com/HinchK/stampede/issues/46"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # Supervisor Genericization and Profile Binding (T-007b)

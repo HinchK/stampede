@@ -7,6 +7,9 @@ commit: 14f8016
 assignee: pi
 owns: herdr-loop-swarm.sh,loop-bot-herd.sh,lib/config.sh,swarm.config.toml
 parent: maps/universal-herdr-swarm.md
+github_issue: 40
+github_url: "https://github.com/HinchK/stampede/issues/40"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # PROXY-GATE

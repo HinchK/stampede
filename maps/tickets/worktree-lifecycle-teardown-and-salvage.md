@@ -8,6 +8,9 @@ assignee: arch
 prototype_asset: lib/worktree.sh,lib/lifecycle.sh,tests/test_worktree.sh
 owns: lib/worktree.sh,lib/lifecycle.sh,tests/test_worktree.sh
 parent: maps/universal-herdr-swarm.md
+github_issue: 57
+github_url: "https://github.com/HinchK/stampede/issues/57"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # Worktree Lifecycle Teardown, Untracked Salvage, and Stale Branch Gate (P2-H)

@@ -8,6 +8,9 @@ prototype_asset: lib/briefs.sh
 owns: lib/briefs.sh
 templates_dir: briefs/
 parent: maps/universal-herdr-swarm.md
+github_issue: 23
+github_url: "https://github.com/HinchK/stampede/issues/23"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # Brief Templating Syntax and Nonce File Protocol

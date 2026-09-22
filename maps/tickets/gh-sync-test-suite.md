@@ -6,6 +6,9 @@ status: ready
 assignee: arch
 owns: tests/test_gh_sync.sh,lib/gh_sync.sh,Makefile
 parent: maps/public-readiness.md
+github_issue: 26
+github_url: "https://github.com/HinchK/stampede/issues/26"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # DOG-8 — Test the tracker integration (WAVE 4)

@@ -11,6 +11,9 @@ resolution:
   commit: b6237a0
   verified_by: looper
   date: "2026-09-19"
+github_issue: 31
+github_url: "https://github.com/HinchK/stampede/issues/31"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # Integrate Profile Detection into Swarm Launcher (T-INT-1)

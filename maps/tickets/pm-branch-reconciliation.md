@@ -7,6 +7,9 @@ commit: d50c128
 assignee: pi
 owns: maps/tickets/pm-branch-reconciliation.md
 parent: maps/universal-herdr-swarm.md
+github_issue: 35
+github_url: "https://github.com/HinchK/stampede/issues/35"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # PM-BRANCH-RECON

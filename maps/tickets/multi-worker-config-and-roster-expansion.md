@@ -8,6 +8,9 @@ assignee: arch
 prototype_asset: swarm.config.toml,lib/config.sh,herdr-loop-swarm.sh
 owns: swarm.config.toml,lib/config.sh,herdr-loop-swarm.sh
 parent: maps/universal-herdr-swarm.md
+github_issue: 34
+github_url: "https://github.com/HinchK/stampede/issues/34"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # Multi-Worker Config & Dynamic Roster Expansion (P3-1)

@@ -11,6 +11,9 @@ resolution:
   commit: pending
   verified_by: looper
   date: "2026-09-19"
+github_issue: 41
+github_url: "https://github.com/HinchK/stampede/issues/41"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # Comprehensive README and User Guide Polish (T-015b)

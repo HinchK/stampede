@@ -8,6 +8,9 @@ assignee: arch
 prototype_asset: herdr-loop-swarm.sh
 owns: herdr-loop-swarm.sh
 parent: maps/universal-herdr-swarm.md
+github_issue: 32
+github_url: "https://github.com/HinchK/stampede/issues/32"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # Preflight Verification and Lifecycle Subcommands in Swarm Launcher (T-INT-4, T-008)

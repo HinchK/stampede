@@ -8,6 +8,9 @@ assignee: arch
 prototype_asset: loop-bot-herd.sh,lib/worktree.sh
 owns: loop-bot-herd.sh,lib/worktree.sh
 parent: maps/universal-herdr-swarm.md
+github_issue: 49
+github_url: "https://github.com/HinchK/stampede/issues/49"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # Supervisor Worktree Suite Gating and Drift Validation (P2-3)

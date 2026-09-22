@@ -7,6 +7,9 @@ assignee: arch
 prototype_asset: loop-bot-herd.sh,herdr-loop-swarm.sh
 owns: loop-bot-herd.sh,herdr-loop-swarm.sh
 parent: maps/universal-herdr-swarm.md
+github_issue: 48
+github_url: "https://github.com/HinchK/stampede/issues/48"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # Strict Verdict Line Anchoring, Resume Mode Gate, and Verdict Log Hygiene (T-007c-fix)

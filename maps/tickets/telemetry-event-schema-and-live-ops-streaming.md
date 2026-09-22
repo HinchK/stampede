@@ -7,6 +7,9 @@ assignee: research
 resolution_doc: docs/findings/telemetry-schema.md
 owns: docs/findings/telemetry-schema.md
 parent: maps/universal-herdr-swarm.md
+github_issue: 52
+github_url: "https://github.com/HinchK/stampede/issues/52"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # Telemetry Event Schema and Live Ops Streaming

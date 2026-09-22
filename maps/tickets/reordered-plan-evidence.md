@@ -7,6 +7,9 @@ commit: babd619
 assignee: pm
 owns: docs/reordered-plan.md
 parent: maps/universal-herdr-swarm.md
+github_issue: 43
+github_url: "https://github.com/HinchK/stampede/issues/43"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # PM-PLAN-EVIDENCE

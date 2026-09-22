@@ -7,6 +7,9 @@ assignee: arch
 resolution_commit: 95044cc
 owns: .gitignore,README.md
 parent: maps/universal-herdr-swarm.md
+github_issue: 27
+github_url: "https://github.com/HinchK/stampede/issues/27"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # Foundations: Git Baseline Initialization

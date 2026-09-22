@@ -7,6 +7,9 @@ assignee: arch
 prototype_asset: lib/worktree.sh,tests/test_worktree.sh
 owns: lib/worktree.sh,tests/test_worktree.sh
 parent: maps/universal-herdr-swarm.md
+github_issue: 56
+github_url: "https://github.com/HinchK/stampede/issues/56"
+synced_at: "2026-09-22T03:16:07Z"
 ---
 
 # Worktree Lifecycle Library: Provisioning, Locking, Pruning & Reconcile (P2-1)
