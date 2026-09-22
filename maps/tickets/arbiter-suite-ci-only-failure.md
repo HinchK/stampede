@@ -45,6 +45,26 @@ its own merits.
 
 The ubuntu leg does not get this far; it fails earlier at lint (DOG-14).
 
+## 2b. SCOPE WIDENED — there are now TWO CI-only suite failures
+
+After the shellcheck pin and the hardcoded-path fix landed on PR #9 (`c0dbadd`),
+the legs fail in *different* suites:
+
+| leg | result |
+|---|---|
+| ubuntu | shellcheck pinned v0.11.0, **Lint clean**, `test_arbiter.sh` **passes**, then `✗ [12c] exclusive lease shape` in `tests/test_partition.sh` |
+| macOS | `test_arbiter.sh` still fails as before — integration ref never created |
+
+Two consequences. The arbiter failure is **macOS-only**, not universal — ubuntu
+gets past it. And `tests/test_partition.sh` never ran in CI before, because
+`make test` exits on the first failure and `test_arbiter.sh` sorts ahead of it;
+fixing the hardcoded path simply let it run for the first time and it failed.
+Assume more failures are queued behind these two.
+
+Case 12c is `lease_acquire T-SER arch-9-x "swarm/x/arch-9" "-"` — the no-owns
+path that should take an exclusive whole-repo lease — asserting
+`exclusive == true` and `owns` empty.
+
 ## 3. What has already been ruled out
 
 Do not re-test these:
@@ -56,6 +76,15 @@ Do not re-test these:
   CI's identity, `/bin/bash` — gives **34 passed, 0 failed**.
 - **Not a regression from this backlog's arbiter work.** The same suite is green
   locally on the exact PR branch commit.
+- **Not the git version.** The macOS runner reports `git 2.55.0`. Both suites
+  pass locally under Apple git 2.54.0 **and** Homebrew git 2.55.0 — 34 passed.
+- **Not the bash version.** macOS `/bin/bash` is 3.2.57, ubuntu's is 5.x. The
+  partition suite passes locally under 3.2.57 **and** 5.3.20 — 26 passed.
+- **Not shellcheck.** Pinned to v0.11.0 on both legs; ubuntu logs
+  `shellcheck pinned to v0.11.0` and `Lint clean (14 shell files)`.
+
+Every locally-reproducible hypothesis is exhausted. **Diagnose in CI** — that is
+now the only remaining path, and it is what section 5 already prescribes.
 
 ## 4. Suggested direction
 
