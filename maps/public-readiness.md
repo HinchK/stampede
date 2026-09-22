@@ -78,6 +78,11 @@ Release **one wave at a time** by moving files from `maps/tickets-staged/` into
 `maps/tickets/`. A ticket the looper cannot see is a ticket it cannot pull —
 that is the gate. Do not use `status:` for this (see hazard 3).
 
+Waves 4–6 are now **charted**: their ticket files live in
+`maps/tickets-staged/` with `owns:` lines verified disjoint within each
+parallel wave. Release is the human's `mv`; `gh_sync --apply` then files the
+GitHub issues for anything released.
+
 - [x] **Wave 1 — runs alone.** DOG-1 interpreter resolver. Unblocks everything;
       the swarm cannot reliably run until it lands.
 - [x] **Wave 1.5 — runs alone.** DOG-12 looper promote guardrail. Brief rule and
