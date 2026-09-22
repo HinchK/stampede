@@ -100,16 +100,32 @@ ctl_get paused >/dev/null   # materialize control.json (suite_gate default true)
 echo "── async gate suite (scratch: $RD)"
 
 # ── 1+12: concurrent gates, non-blocking scan ──────────────────────────────
+# [1b] budget is self-calibrating (the DOG-15 lesson applied to timing): the
+# scan's own cost is spawn-dominated (gate jobs, jq, partition/lease checks
+# since DOG-16), so a fixed 1500ms wall-clock budget fabricates a "blocked"
+# verdict on any machine busy enough — like this one whenever the herd runs.
+# We measure one reference spawn (sleep 0.05 under contention ≈ hundreds of
+# ms; ≈50ms idle) and scale the budget. The scan chains roughly ten
+# subprocess spawns (2 gate jobs, partition/lease checks, jq/ledger writes),
+# so the budget carries a 10× spawn multiplier; a blocking wait is one full
+# 3s gate PLUS those spawns and still exceeds it. [1a] remains the
+# load-independent blocking detector: a blocked scan returns after the gates
+# finish, so gate_running_count collapses.
+now_ms() { perl -MTime::HiRes -e 'print int(Time::HiRes::time()*1000)'; }
+command -v perl >/dev/null 2>&1 || now_ms() { python3 -c 'import time; print(int(time.time()*1000))'; }
 GATE_CONCURRENCY=2
 VERDICT_A="ARCH DONE #301 $SHA_A"
 VERDICT_B="ARCH DONE #302 $SHA_B"
-t0=$(date +%s%N 2>/dev/null || date +%s)
+r0=$(now_ms); sleep 0.05; r1=$(now_ms)
+ref_spawn=$(( r1 - r0 ))
+budget_ms=$(( 1500 + 10 * ref_spawn ))
+t0=$(now_ms)
 harvest_verdicts >/dev/null 2>&1
-t1=$(date +%s%N 2>/dev/null || date +%s)
-elapsed_ms=$(( (t1 - t0) / 1000000 ))
+t1=$(now_ms)
+elapsed_ms=$(( t1 - t0 ))
 njobs=$(gate_running_count)
 [[ "$njobs" == 2 ]] && assert_ok 1a "two gates spawned concurrently" || assert_bad 1a "two gates spawned (got $njobs)"
-if (( elapsed_ms < 1500 )); then assert_ok 1b "scan is non-blocking (${elapsed_ms}ms with 3s gate running)"; else assert_bad 1b "scan blocked (${elapsed_ms}ms)"; fi
+if (( elapsed_ms < budget_ms )); then assert_ok 1b "scan is non-blocking (${elapsed_ms}ms < ${budget_ms}ms budget, ref spawn ${ref_spawn}ms, 3s gate running)"; else assert_bad 1b "scan blocked (${elapsed_ms}ms ≥ ${budget_ms}ms budget, ref spawn ${ref_spawn}ms)"; fi
 sleep 1.5
 gate_reap >/dev/null 2>&1
 b_state=$(last_suite_of 302); a_state=$(last_suite_of 301)
