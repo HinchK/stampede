@@ -2,7 +2,7 @@
 id: PUB-1
 title: "bin/stampede unified entrypoint and lib/cli subcommand convention"
 type: wayfinder:task
-status: ready
+status: resolved
 assignee: arch
 owns: bin/stampede,Makefile,README.md,tests/test_cli.sh
 parent: maps/public-multi-provider.md

@@ -2,7 +2,7 @@
 id: PUB-4
 title: "examples/demo-repo: real test suite + one-verdict walkthrough"
 type: wayfinder:task
-status: ready
+status: resolved
 assignee: arch
 owns: examples/demo-repo/
 parent: maps/public-multi-provider.md

@@ -2,7 +2,7 @@
 id: PUB-3
 title: "Journey-ordered user guide (docs/user-guide.md)"
 type: wayfinder:task
-status: ready
+status: resolved
 assignee: arch
 owns: docs/user-guide.md
 parent: maps/public-multi-provider.md

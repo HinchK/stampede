@@ -2,7 +2,7 @@
 id: PUB-10
 title: "Trust-tax telemetry schema: measured numbers, never modelled"
 type: wayfinder:task
-status: ready
+status: resolved
 assignee: arch
 owns: lib/telemetry.py,docs/findings/telemetry-schema.md
 parent: maps/public-multi-provider.md

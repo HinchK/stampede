@@ -2,7 +2,7 @@
 id: PUB-2
 title: "Provider registry (lib/providers.sh) and stampede doctor"
 type: wayfinder:task
-status: ready
+status: resolved
 assignee: arch
 owns: lib/providers.sh,lib/cli/stampede-doctor.sh,tests/test_providers.sh,tests/test_cli_doctor.sh
 parent: maps/public-multi-provider.md

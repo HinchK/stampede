@@ -2,7 +2,7 @@
 id: PUB-6
 title: "Per-seat provider fallback chains (kinds = [...])"
 type: wayfinder:task
-status: ready
+status: resolved
 assignee: arch
 owns: herdr-loop-swarm.sh,lib/config.sh,swarm.config.toml,tests/test_config.sh,lib/providers.sh,lib/cli/stampede-doctor.sh,tests/test_providers.sh,tests/test_cli_doctor.sh,Makefile
 parent: maps/public-multi-provider.md

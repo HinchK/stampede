@@ -2,7 +2,7 @@
 id: PUB-5
 title: "VERSION, CHANGELOG.md, and stampede version"
 type: wayfinder:task
-status: ready
+status: resolved
 assignee: arch
 owns: VERSION,CHANGELOG.md,lib/cli/stampede-version.sh
 parent: maps/public-multi-provider.md

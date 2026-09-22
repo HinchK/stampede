@@ -117,18 +117,11 @@ All tickets staged in `maps/tickets-staged/` (invisible to the looper until
 the human `mv`s them — same release discipline as the public-readiness
 map). Waves continue numbering after that map's Wave 7.
 
-- [ ] **Wave 8 — runs alone.** PUB-1 `bin/stampede` entrypoint + CLI
-      convention. Everything else hangs off this.
-- [ ] **Wave 9 — parallel, file-disjoint.** PUB-2 doctor + provider
-      registry · PUB-3 user guide · PUB-4 demo repo · PUB-5 version +
-      changelog.
-- [ ] **Wave 10 — runs alone.** PUB-6 fallback chains (owns the launcher +
-      config schema; single-writer wave).
-- [ ] **Wave 11 — parallel, file-disjoint.** PUB-7 init · PUB-8
-      cross-provider reviewer lane · PUB-9 quota probing · PUB-10
-      trust-tax telemetry.
-- [ ] **Wave 12 — runs alone.** PUB-11 rich status (blocked_by PUB-10
-      schema).
+- [x] **Wave 8 — runs alone.** PUB-1 `bin/stampede` entrypoint + CLI convention (`19217bc`).
+- [x] **Wave 9 — parallel, file-disjoint.** PUB-2 doctor + provider registry (`9ffdbe8`) · PUB-3 user guide (`d3a03dd`) · PUB-4 demo repo (`a9b6e51`) · PUB-5 version + changelog (`fb63928`).
+- [x] **Wave 10 — runs alone.** PUB-6 fallback chains (`c752a8a`).
+- [ ] **Wave 11 — parallel, file-disjoint.** PUB-7 init (dispatched) · PUB-8 cross-provider reviewer lane · PUB-9 quota probing (dispatched) · [x] PUB-10 trust-tax telemetry (`e8a7450`).
+- [ ] **Wave 12 — runs alone.** PUB-11 rich status (blocked_by PUB-10 schema).
 
 Dependency edges (advisory prose; waves enforce them for real):
 PUB-2..5 ← PUB-1 · PUB-7 ← PUB-2,PUB-6 · PUB-9 ← PUB-2 · PUB-8 ← PUB-3 ·
