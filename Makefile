@@ -9,7 +9,18 @@ SHELL   := /bin/bash
 TESTS   := $(sort $(wildcard tests/test_*.sh))
 LINT_SH := bin/stampede herdr-loop-swarm.sh loop-bot-herd.sh $(wildcard lib/*.sh)
 
-.PHONY: test lint check
+.PHONY: test lint check version-check
+
+# Version discipline (PUB-5): the changelog's top entry must name the
+# version in VERSION. Publishing starts with the paperwork.
+version-check:
+	@v=$$(cat VERSION); \
+	top=$$(sed -nE 's/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/p' CHANGELOG.md | head -n1); \
+	if [ -z "$$top" ]; then printf 'version-check: no versioned entry in CHANGELOG.md\n' >&2; exit 1; fi; \
+	if [ "$$v" != "$$top" ]; then \
+	  printf 'version-check: VERSION=%s but CHANGELOG top entry is [%s]\n' "$$v" "$$top" >&2; exit 1; \
+	fi; \
+	printf 'version-check: %s == [%s] ✓\n' "$$v" "$$top"
 
 # Run every suite; any failure fails the target (set -e stops the loop).
 test:
