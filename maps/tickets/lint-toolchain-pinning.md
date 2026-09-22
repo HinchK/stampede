@@ -2,7 +2,8 @@
 id: DOG-14
 title: "The 0-warning lint bar is version-dependent: CI's shellcheck fails what the dev shell passes"
 type: wayfinder:defect
-status: in_progress
+status: resolved
+commit: c0dbadd
 assignee: arch-1
 owns: .github/workflows/ci.yml,lib/preflight.sh
 parent: maps/public-readiness.md
