@@ -101,6 +101,7 @@ GitHub issues for anything released.
 - [x] **Wave 5 — runs alone.** DOG-9 relative links (PR #62).
 - [ ] **Wave 6 — HUMAN.** DOG-10 rename + slug migration. Floor down, ref moved
       by hand. Never dispatched unattended.
+- [ ] **Wave 7 — Dispatch Safety.** DOG-16 wire partition checking and lease acquisition into supervisor dispatch (graduated from fog; staged).
 
 ## Not yet specified
 
@@ -110,8 +111,6 @@ GitHub issues for anything released.
   modelled 80% now.
 - Headless mode (no panes, no focus calls) — the capability that would make
   "autonomous" true rather than aspirational.
-- Wiring `partition_check` / `lease_acquire` into the dispatch path — **blocked
-  on DOG-11**, which this bootstrap discovered.
 
 ## Out of scope
 
