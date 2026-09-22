@@ -2,8 +2,8 @@
 id: REV-4
 title: "Review telemetry events, rich status review dashboard, and end-to-end verification"
 type: wayfinder:task
-status: ready
-assignee: arch
+status: resolved
+assignee: arch-1
 owns: lib/lifecycle.sh,lib/telemetry.py,lib/cli/stampede-status.sh,tests/test_review_loop.sh,tests/test_telemetry.sh,tests/test_cli_status.sh
 parent: maps/autonomous-reviewer-loop.md
 blocked_by: [REV-3]
@@ -54,3 +54,15 @@ bash tests/test_review_loop.sh
 bin/stampede status --rich --json | jq -e '.reviews'
 make check
 ```
+
+## 6. Resolution (2026-09-22, `950e264`)
+
+- **`lib/lifecycle.sh`**: Resolved PM finding from REV-3 by ensuring `review_loop_on_review_verdict()` prints `ALERT_INVALID <ticket> no-review-state` to stdout (removed `>&2`) so all machine directives consistently flow through stdout per line 15 contract.
+- **`lib/telemetry.py`**: Added review domain badges: `REVIEW:✓` / `REVIEW:✗` from explicit `payload.verdict` (`PASS|BLOCK`), plain `REVIEW` for dispatched/critique events. Checked before generic branches.
+- **`lib/cli/stampede-status.sh`**: Added `.reviews` rollup to `stampede status --rich --json` aggregating `total`, `passes`, `blocks`, `rerounds`, `findings_total`, and per-ticket detail. Rendered review line in ANSI human table (conditionally displayed only when review events exist).
+- **`tests/`**:
+  - `tests/test_review_loop.sh`: Added test 6b asserting missing-state-file path outputs `ALERT_INVALID` on stdout with rc 1 and no state file created (+3 assertions, 43 total).
+  - `tests/test_telemetry.sh`: Added assertions for review domain events, payload pass-through, and badge rendering (+6 assertions, 13 total).
+  - `tests/test_cli_status.sh`: Added fixture test simulating review lifecycle and verifying `.reviews` JSON structure and human summary table (+5 assertions, 32 total).
+- **Verification**: `bin/stampede status --rich --json | jq -e '.reviews'` succeeds; `make check` 16/16 suites green, 412 assertions passed, 0 failed; 0 shellcheck warnings across 22 shell files.
+
