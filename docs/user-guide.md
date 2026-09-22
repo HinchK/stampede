@@ -104,9 +104,9 @@ worktree = true
 ```
 
 With two providers, give different seats different kinds — e.g.
-`arch_1` on `opencode`, `pm` on `claude`. (A coming release adds
-`stampede init` to generate this file from what doctor finds; for now,
-copy the example above and edit.)
+`arch_1` on `opencode`, `pm` on `claude`. Short on patience for
+hand-editing? `stampede init` generates this file from the providers
+actually installed (`stampede init --non-interactive --preset minimal`).
 
 ## 5. First run, on the demo repo
 
@@ -164,7 +164,51 @@ A worker saying "tests pass" is not data. The JSONL line is data.
 never writes your base branch. `promote` is yours: it refuses to run
 without `--confirm`, because the human is the only hand on `main`.
 
-## 9. Watch the room
+## 9. Cross-provider review (optional lane)
+
+With two or more providers installed, you can seat a **reviewer** on a
+*different* provider than your implementer — different vendors' models
+have different blind spots biases, so a second pair of eyes from another
+provider catches what the first rationalizes past. It is one config flip:
+
+```toml
+[seats.reviewer]
+name = "reviewer"
+role = "Review Specialist"
+default_kind = "agy"          # any kind DIFFERENT from your implementer
+brief = "briefs/reviewer.md"
+tab = "ops"
+position = "top-right"
+```
+
+Your implementer seats might be `kinds = ["opencode", "claude"]`; seating
+the reviewer on `agy` (or any other kind) is the whole trick. Then
+`stampede up <dir> -m s` seats it like any other seat.
+
+What the reviewer does: audits the **gated sha** — the exact commit the
+supervisor's Suite Gate already tested — before you promote. Tests
+first, then the diff, findings cited `file:line` with remediations. It
+finishes with an advisory anchor line:
+
+```
+REVIEW DONE #<ticket> <sha>
+```
+
+What it never does — and this is the important part:
+
+- **It never merges.** Promote stays yours, `--confirm` and all.
+- **It never gates.** Review is advisory input to *your* promote
+  decision. The Suite Gate remains the only thing that retires a ticket;
+  a `REVIEW DONE` line retires nothing, and a reviewer PASS is not a
+  test result. If review and gate disagree, believe the gate.
+- It works read-only (`git show`/`git diff` on the gated sha — never
+  `git checkout` in the shared root). Need a reviewer with its own tree?
+  Add `worktree = true` to its seat.
+
+Read the review before you run `arbiter.sh promote --confirm`; treat a
+BLOCK as "ask the implementer seat to fix and re-verdict first".
+
+## 10. Watch the room
 
 - `bin/stampede status <dir>` — workspace, seats, profile, recent events.
 - The Ops pane — live one-line telemetry (dispatches, verdicts, gates).
