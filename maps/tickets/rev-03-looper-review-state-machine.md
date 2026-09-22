@@ -2,8 +2,8 @@
 id: REV-3
 title: "Looper autonomous review loop state machine and fail-closed gate"
 type: wayfinder:task
-status: ready
-assignee: arch
+status: resolved
+assignee: arch-1
 owns: lib/lifecycle.sh,herdr-loop-swarm.sh,tests/test_review_loop.sh
 parent: maps/autonomous-reviewer-loop.md
 blocked_by: [REV-1, REV-2]
@@ -45,3 +45,11 @@ Without orchestrator state tracking, the review process requires manual human co
 bash tests/test_review_loop.sh
 make check
 ```
+
+## 6. Resolution (2026-09-22, `ed86598`)
+
+- **`lib/lifecycle.sh`**: Implemented review loop state machine with durable storage in `.herdr-swarm/reviews.json` (atomic writes, fail-closed on corrupt state). Defined directive contract: `ENQUEUE`, `DISPATCH_REVIEWER`, `DISPATCH_CRITIQUE`, `ALERT_BLOCKED`, `ALERT_INVALID`. Pure state transitions: `review_loop_on_gate_green` and `review_loop_on_review_verdict` without shell-out side effects. Bounded round tracking with fail-closed block when rounds reach `CONFIG_REVIEW_MAX_ROUNDS`. Added `review_loop_status` reporting active reviews and override status in `swarm_status`.
+- **`herdr-loop-swarm.sh`**: Added `--no-review-loop` CLI flag creating durable runtime override marker `.herdr-swarm/review-loop.override` (survives daemon inspection, cleared on subsequent `up` without flag).
+- **`tests/test_review_loop.sh`**: Added 40 hermetic assertions validating all transition paths (direct pass, 1-round fix, max-rounds fail-closed block, override precedence, corrupt/invalid input handling, status formatting, launcher options).
+- **Verification**: `tests/test_review_loop.sh` 40/40 passed; `make check` 16/16 suites green, 398 assertions passed, 0 failed; 0 shellcheck warnings across 22 shell files.
+

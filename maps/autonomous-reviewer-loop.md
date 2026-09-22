@@ -18,6 +18,7 @@ An autonomous, config-gated cross-provider reviewer loop where `looper` dispatch
 <!-- the index: one line per closed ticket, enough to judge relevance, then zoom the link for the detail the ticket holds -->
 - [REV-1: Reviewer config flag and harvested verdict protocol](tickets/rev-01-reviewer-config-and-verdict-protocol.md): `[reviewer]` loop/max_rounds in `swarm.config.toml` bound in `lib/config.sh`; dual-mode brief with `REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>` anchor and durable `.herdr-swarm/reviews/<ticket>-<sha>.md` report schema (`e22697c`).
 - [REV-2: Critique delivery protocol: implementer refinement on existing worktree branch](tickets/rev-02-critique-delivery-protocol.md): `briefs/arch.in.md` Section 4 `DISPATCH CRITIQUE: #<ticket> round <N>/<MAX> — see <path>` protocol; in-flight branch refinement with `ARCH DONE #<ticket> <sha2>` re-verdict; user guide §9 multi-turn loop documentation (`efc857e`).
+- [REV-3: Looper autonomous review loop state machine and fail-closed gate](tickets/rev-03-looper-review-state-machine.md): Review loop state machine in `lib/lifecycle.sh` with durable `.herdr-swarm/reviews.json`, directive contract (`ENQUEUE`/`DISPATCH_*`/`ALERT_*`), fail-closed budget bounds, `--no-review-loop` CLI flag and status visibility (`ed86598`).
 
 ## Not yet specified
 
@@ -35,8 +36,9 @@ An autonomous, config-gated cross-provider reviewer loop where `looper` dispatch
 
 - [x] **Wave 1 — Reviewer Config & Verdict Protocol.** REV-1 (`e22697c`): `[reviewer] loop = true/false` config binding, and formal `REVIEW VERDICT` anchor + `.herdr-swarm/reviews/<ticket>-<sha>.md` report schema.
 - [x] **Wave 2 — Critique Brief & Implementer Refinement Protocol.** REV-2 (`efc857e`): Implementer brief update for critique dispatches (`round 2/2`) on existing worktree branches.
-- [ ] **Wave 3 — Looper Review Loop State Machine.** REV-3: 2-round autonomous loop state machine in orchestrator with fail-closed human escalation.
+- [x] **Wave 3 — Looper Review Loop State Machine.** REV-3 (`ed86598`): 2-round autonomous loop state machine in orchestrator with fail-closed human escalation.
 - [ ] **Wave 4 — Review Telemetry, Rich Status & Full Verification.** REV-4: Telemetry event logging, rich status dashboard aggregation, and hermetic multi-round test suite.
 
 Dependency edges:
 REV-2 ← REV-1 · REV-3 ← REV-1,REV-2 · REV-4 ← REV-3.
+

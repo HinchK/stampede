@@ -69,24 +69,25 @@
 
 ## 2. Active Status & Open Items
 
-- **Autonomous Reviewer Loop Milestone (IN FLIGHT — Waves 1–2 Complete):**
+- **Autonomous Reviewer Loop Milestone (IN FLIGHT — Waves 1–3 Complete):**
   - **Wave 1 Complete:** `REV-1` (`e22697c`): Reviewer config flag (`loop`, `max_rounds`) in `swarm.config.toml` bound in `lib/config.sh`, dual-mode brief with `REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>` anchor and `.herdr-swarm/reviews/<ticket>-<sha>.md` report schema, +8 config assertions (promoted).
   - **Wave 2 Complete:** `REV-2` (`efc857e`): Critique delivery protocol: implementer refinement on existing worktree branch (`briefs/arch.in.md`, `briefs/arch.md`, `docs/user-guide.md`) (promoted).
-  - **Wave 3 In-Flight (runs alone):** `REV-3`: Looper autonomous review loop state machine and fail-closed gate (`lib/lifecycle.sh`, `herdr-loop-swarm.sh`, `tests/test_review_loop.sh`). Released to `maps/tickets/`.
+  - **Wave 3 Complete:** `REV-3` (`ed86598`): Looper autonomous review loop state machine and fail-closed gate (`lib/lifecycle.sh`, `herdr-loop-swarm.sh`, `tests/test_review_loop.sh`). Durable `reviews.json`, directive contract, `--no-review-loop` flag, +40 assertions (promoted).
+  - **Wave 4 In-Flight (runs alone):** `REV-4`: Review telemetry, rich status aggregation, and end-to-end verification (plus fast-follow fix for `lib/lifecycle.sh:199` stdout directive).
 - **Public Multi-Provider Milestone (COMPLETE — Waves 8–12 Shipped):**
   - Shipped `PUB-1` through `PUB-11` (all promoted).
 - **Standing Guardrails:**
   - Arch briefs enforce Single-Ticket Scope Guardrail: workers halt and await looper dispatch after reporting completion.
   - Base branch promotion remains human-only (DOG-12).
-- **Total Test Suite Health:** **358 passed, 0 failed** across 15 suites (42 worktree, 39 partition, 38 arbiter, 33 config, 28 quota, 27 gh_sync, 27 cli_status, 24 cli_init, 18 profile, 17 async gate, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 7 telemetry); `make check` green (lint 0 warnings across 22 shell files).
+- **Total Test Suite Health:** **398 passed, 0 failed** across 16 suites (42 worktree, 40 review loop, 39 partition, 38 arbiter, 33 config, 28 quota, 27 gh_sync, 27 cli_status, 24 cli_init, 18 profile, 17 async gate, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 7 telemetry); `make check` green (lint 0 warnings across 22 shell files).
 
 ---
 
 ## 3. Immediate Next Step
 
-- Dispatch `REV-3` (Wave 3, looper review loop state machine and fail-closed gate) to an implementer seat (`arch-1` or `arch-2`).
-- Execute independent suite verification on `REV-3`.
-- CAS-integrate and audit `REV-3`.
+- Release `REV-4` from `maps/tickets-staged/` to `maps/tickets/` with status `ready`.
+- Dispatch `REV-4` (Review telemetry, rich status aggregation, and fast-follow stdout directive fix) to an implementer seat (`arch-1` or `arch-2`).
+- Verify and integrate `REV-4`.
 
 
 
