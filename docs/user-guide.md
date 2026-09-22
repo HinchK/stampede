@@ -208,6 +208,36 @@ What it never does — and this is the important part:
 Read the review before you run `arbiter.sh promote --confirm`; treat a
 BLOCK as "ask the implementer seat to fix and re-verdict first".
 
+### The multi-turn critique loop (`[reviewer] loop = true`)
+
+Flipping `[reviewer] loop = true` (with `max_rounds`, default 2) turns
+the single-shot review into a bounded refinement loop. One round:
+
+1. The reviewer audits the implementer's gated sha and writes durable
+   findings to `.herdr-swarm/reviews/<ticket>-<sha>.md`, then emits
+   `REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>`.
+2. A `BLOCK` routes back to the implementer as a critique dispatch:
+   `DISPATCH CRITIQUE: #<ticket> round <N>/<MAX> — see <path>`.
+3. The implementer reads the findings file, refines **on its existing
+   in-flight branch** (never a reset, never a rebase-away, never
+   reverting unrelated work — the gated-sha lineage is the evidence
+   trail), runs the suite locally, commits
+   `fix: address reviewer critique for #<ticket> (round N)`, and
+   re-emits `ARCH DONE #<ticket> <new-sha>`.
+4. The new sha re-enters the pipeline from the top: supervisor gate,
+   then (loop still on) a fresh review round at the new sha.
+
+Each round's findings file is a separate durable artifact — the audit
+trail of what was found and what changed because of it. The loop is
+bounded: after `max_rounds`, a still-standing BLOCK comes to you as an
+honest standoff instead of an infinite polish ping-pong.
+
+Two things the loop still never does: the review never replaces the
+Suite Gate (a PASS verdict is not a test result; the gate re-runs at
+every new sha regardless), and the reviewer never merges — promote
+remains yours. If implementer and reviewer disagree at the budget,
+you read the findings files and rule.
+
 ## 10. Watch the room
 
 - `bin/stampede status <dir>` — workspace, seats, profile, recent events.
