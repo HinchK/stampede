@@ -43,8 +43,10 @@ export PYTHON_BIN=/path/to/python3.11+
 An explicit `PYTHON_BIN` is honoured strictly — if it cannot import `tomllib`,
 the resolver errors instead of silently falling back. That is deliberate.
 
-`gh` is needed only for `lib/gh_sync.sh` (ticket ↔ GitHub issue
-reconciliation). Nothing else requires it.
+`gh` is not needed for `make check`. It is used by `lib/gh_sync.sh` (ticket ↔
+GitHub issue reconciliation), and the preflight matrix checks both `gh` and
+`gh auth status` fail-closed before any workspace mutation — so you need it
+authenticated to actually run a swarm, not to contribute a change.
 
 ## The one command
 
