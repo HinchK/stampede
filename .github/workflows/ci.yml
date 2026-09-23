@@ -1,6 +1,7 @@
 # CI — the mechanical external check (DOG-3).
 #
-# Runs the repo's own aggregate gate, `make check` (lint + all six suites), on
+# Runs the repo's own aggregate gate, `make check` (lint + every suite under
+# tests/ — 18 at present, PROVE-6; re-verify with `ls tests/*.sh | wc -l`), on
 # both platforms it claims to support, so the repo can never again be green on
 # one machine and broken on another. The suites are hermetic: they build
 # ephemeral scratch repos under /tmp and stub herdr/agy/opencode, so nothing

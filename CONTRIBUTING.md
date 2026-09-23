@@ -8,7 +8,7 @@ give you.
 
 ## Prerequisites
 
-You do **not** need Herdr or any agent CLI to contribute. The six test suites
+You do **not** need Herdr or any agent CLI to contribute. The test suites
 are hermetic: each builds an ephemeral scratch repository under `/tmp`, stubs
 `herdr`, `agy` and `opencode`, and cleans up after itself. No secrets, no
 network, no model calls.
@@ -64,7 +64,7 @@ Two halves, if you need to narrow down a failure:
 
 ```bash
 make lint    # shellcheck + bash -n + py_compile
-make test    # all six suites
+make test    # every suite under tests/
 ```
 
 **0 shellcheck warnings is the bar.** Not "no errors" — zero warnings, across

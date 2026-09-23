@@ -21,15 +21,28 @@ make test                              # all suites under /bin/bash (bash 3.2 is
 make lint                              # shellcheck 0-warning bar + bash -n + py_compile
 # CI parity (DOG-18): `make check` IS the gate — reach for it first; ci-local only adds the pin-parity signal
 scripts/ci-local.sh [--strict]          # runs make check (rc authoritative) + warns when local shellcheck != CI's pinned SC_VERSION (--strict: exit 1 on unproven parity)
-# Suites (each builds an ephemeral scratch git repo under /tmp and cleans up after itself)
-/bin/bash tests/test_worktree.sh        # 42 assertions — provisioning, salvage, teardown
-/bin/bash tests/test_arbiter.sh         # 38 — CAS integration, conflict, promote, string ticket ids
-/bin/bash tests/test_gh_sync.sh         # 27 — hermetic lib/gh_sync.sh suite, stubbed gh, zero network
-/bin/bash tests/test_partition.sh       # 29 — owns parsing, overlap, leases
-/bin/bash tests/test_config.sh          # 18 — swarm.config.toml binding, enabled=false suppression, PROXY_* emission
-/bin/bash tests/test_profile.sh         # 18 — ecosystem/test-cmd detection incl. make/run_all
-/bin/bash tests/test_async_gate.sh      # 17 — background gate jobs, reaping, invalidation
-/bin/bash tests/test_pyenv.sh           # 16 — tomllib interpreter resolver, PYTHON_BIN honouring
+# Suites — 18 as of this writing (PROVE-6); re-verify with `ls tests/*.sh | wc -l`
+# (each builds an ephemeral scratch git repo under /tmp and cleans up after itself.
+#  Per-suite assertion counts are deliberately omitted — they drift fastest; the
+#  suite's own summary line prints the live count.)
+/bin/bash tests/test_arbiter.sh       # CAS integration, conflict abort, promote, string ticket ids
+/bin/bash tests/test_async_gate.sh    # background gate jobs, reaping, invalidation, review-loop wiring
+/bin/bash tests/test_ci_local.sh      # ci-local make delegation + shellcheck pin-parity ladder
+/bin/bash tests/test_cli.sh           # bin/stampede entrypoint dispatch and pass-through
+/bin/bash tests/test_cli_doctor.sh    # `stampede doctor` end-to-end
+/bin/bash tests/test_cli_init.sh      # `stampede init` acceptance
+/bin/bash tests/test_cli_status.sh    # `stampede status --rich` session trust dashboard
+/bin/bash tests/test_config.sh        # swarm.config.toml binding, enabled=false suppression, PROXY_* emission
+/bin/bash tests/test_gh_sync.sh       # hermetic lib/gh_sync.sh suite, stubbed gh, zero network
+/bin/bash tests/test_partition.sh     # owns parsing, overlap, leases
+/bin/bash tests/test_profile.sh       # ecosystem/test-cmd detection incl. make/run_all
+/bin/bash tests/test_providers.sh     # lib/providers.sh registry and fallbacks
+/bin/bash tests/test_pyenv.sh         # tomllib interpreter resolver, PYTHON_BIN honouring
+/bin/bash tests/test_quota.sh         # lib/quota.sh + `stampede quota` probing
+/bin/bash tests/test_repo_state.sh    # scripts/repo-state.sh sections + gh degrade ladder
+/bin/bash tests/test_review_loop.sh   # autonomous reviewer-loop state machine
+/bin/bash tests/test_telemetry.sh     # telemetry envelope + round-trip
+/bin/bash tests/test_worktree.sh      # provisioning, salvage, teardown
 
 # Lint gate — tickets treat 0 warnings as the bar
 shellcheck herdr-loop-swarm.sh loop-bot-herd.sh lib/*.sh
