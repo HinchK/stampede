@@ -1,6 +1,6 @@
 # Swarm State Checkpoint: Universal Herdr Swarm (`herd-swarm`)
 
-**Updated:** 2026-09-22  
+**Updated:** 2026-09-23  
 **Plan of Record:** [maps/universal-herdr-swarm.md](maps/universal-herdr-swarm.md)  
 **Execution Roadmap:** [docs/reordered-plan.md](docs/reordered-plan.md)  
 **Orchestrator:** `looper` (wM:p1, AGY Flash)  
@@ -63,6 +63,8 @@
 - **Proxy Config Gating (#PROXY-GATE):** Resolved in commit `14f8016`. `[proxy] enabled` defaults false; launcher preflight/launch and the supervisor's credits probe are config-gated; serve command and health URL are config data (`serve_cmd`, `health_check_url`), not launcher hardcode. Recovery pointer now names this repo's launcher.
 - **PM Branch Reconciliation (#PM-BRANCH-RECON):** Resolved via the first real arbiter run: `P3-4` spec and `PM-PLAN-EVIDENCE` enqueued → gated (`make test`) → integrated (`97d31e2`, `d50c128`) → promoted ff-only to `main` (`d50c128`). Eleven superseded/equivalent pm branches deleted with per-branch evidence (`merge-tree` / `git cherry`); `.claude/worktrees/pm-audit` unlocked and removed; `git branch --no-merged main` is now empty.
 - **Python Interpreter Resolver (#DOG-1 / Wave 1):** Resolved in commit `3a9a70d` (ticket marked resolved in `4993d58`). Centralized Python interpreter resolution in `lib/pyenv.sh` (`resolve_python()`), replacing bare `python3` invocations across `Makefile`, supervisor, library scripts, and test suites with a capability probe for `tomllib` ($PYTHON_BIN, python3.14 down to python3) and actionable remediation guidance. Added `tests/test_pyenv.sh` (16 passing assertions).
+- **Single-Command Repo State Summary Script (#DOG-17 / Wave DX-1):** Resolved in commit `f78b0a1` (integrated onto `swarm/stampede/integration`). `scripts/repo-state.sh [dir]` prints branch, last 10 commits, local branches merged to `main`, best-effort CI status (degrading gracefully when `gh` is unavailable), and dirty tree summary. Added hermetic unit test suite in `tests/test_repo_state.sh` (34 passing assertions), 0 shellcheck warnings, documented in `CLAUDE.md`.
+- **Local CI-Parity Wrapper with Shellcheck Pin Check (#DOG-18 / Wave DX-1):** Resolved in commit `4025f4b` (integrated onto `swarm/stampede/integration`). `scripts/ci-local.sh` wraps `make check` with exit code propagation and verifies local `shellcheck --version` matches CI's pinned `SC_VERSION` (v0.11.0), with `--strict` mode. Added hermetic test suite in `tests/test_ci_local.sh` (17 passing assertions), 0 shellcheck warnings, documented in `CLAUDE.md`.
 - **Dogfood Plan Deviation & Public Readiness Records:** Documented in `docs/audits/2026-09-21-public-readiness-review.md` and `docs/dogfood/`; the planned two-clone dogfooding run was superseded by direct in-repo execution.
 
 ---
@@ -77,17 +79,21 @@
   - **Wave 5 Complete:** `REV-5` (`debd73e`): Supervisor review loop wiring, verdict harvesting, telemetry, string ticket support end-to-end (JSON quoting fix), and tput dumb-terminal fallback (`loop-bot-herd.sh`, `tests/test_async_gate.sh`), +16 assertions (promoted).
 - **Public Multi-Provider Milestone (COMPLETE — Waves 8–12 Shipped):**
   - Shipped `PUB-1` through `PUB-11` (all promoted).
+- **Developer Experience Wave DX-1 (COMPLETE — Integrated on `swarm/stampede/integration` at `4025f4b`):**
+  - **DOG-17 Complete:** `f78b0a1`: `scripts/repo-state.sh`, 34 tests passing in `tests/test_repo_state.sh`, 0 shellcheck warnings.
+  - **DOG-18 Complete:** `4025f4b`: `scripts/ci-local.sh` (shellcheck v0.11.0 pin-parity check), 17 tests passing in `tests/test_ci_local.sh`, 0 shellcheck warnings.
+  - Both tickets integrated onto `swarm/stampede/integration` at commit `4025f4b`; awaiting human promote to `main`.
 - **Standing Guardrails:**
   - Arch briefs enforce Single-Ticket Scope Guardrail: workers halt and await looper dispatch after reporting completion.
   - Base branch promotion remains human-only (DOG-12), with explicit user command authorization for arbiter promote runs.
-- **Total Test Suite Health:** **428 passed, 0 failed** across 16 suites (43 review loop, 42 worktree, 39 partition, 38 arbiter, 33 async gate, 33 config, 32 cli_status, 28 quota, 27 gh_sync, 24 cli_init, 18 profile, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 13 telemetry); `make check` green (lint 0 warnings across 22 shell files).
+- **Total Test Suite Health:** **479 passed, 0 failed** across 18 suites on integration (43 review loop, 42 worktree, 39 partition, 38 arbiter, 34 repo_state, 33 async gate, 33 config, 32 cli_status, 28 quota, 27 gh_sync, 24 cli_init, 18 profile, 17 ci_local, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 13 telemetry); `make check` green (lint 0 warnings).
 
 ---
 
 ## 3. Immediate Next Step
 
-- Milestone Complete: Autonomous Reviewer Loop PRD is fully shipped, end-to-end wired, verified, and promoted to `main`.
-- Stand by for human driver instructions or next epic chart in the roadmap.
+- **Human Promote**: Promote integrated Wave DX-1 commits (DOG-17 `f78b0a1`, DOG-18 `4025f4b`) from `swarm/stampede/integration` to `main` via `bin/stampede promote` / `lib/arbiter.sh promote --confirm`.
+- Stand by for human driver instructions or next wave dispatch.
 
 
 
