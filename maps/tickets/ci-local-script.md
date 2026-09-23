@@ -2,7 +2,8 @@
 id: DOG-18
 title: "scripts/ci-local.sh: local CI-parity wrapper (PM flags likely redundant — see PM Note)"
 type: wayfinder:task
-status: ready
+status: resolved
+commit: 4025f4b
 assignee: arch
 owns: scripts/ci-local.sh,CLAUDE.md
 parent: maps/public-readiness.md

@@ -60,15 +60,24 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 
 - [Phase 3: Task Intake Partition Checking and Ledger Lease Protocol](tickets/task-intake-partition-checking.md): Enforcing disjoint file path ownership (`owns`) at ticket intake and managing durable path leases in .herdr-swarm/leases.json (P3-2, 1992e37).
 - [Phase 3: Asynchronous Supervisor Harvesting and Durable Gate Jobs](tickets/async-supervisor-harvesting.md): Decoupled suite gate execution into non-blocking background jobs with durable tracking in .herdr-swarm/gates/, concurrency capping, and arbiter enqueueing (P3-3, eafdc91).
+- Concurrent `worktree_provision` Race Mitigation: Serialized provisioning under an advisory `provision.lock` with idempotent retry (P3-FLAKE-1, `cf8b546`); later hardened by the bash 3.2 floor fix below.
+- Bash 3.2 Platform Floor: Fixed a `//`-collapse backslash leak in `owns_normalize` and an early-EXIT-trap bug where `wait` reaping a signal-killed background job deleted the worktree suite's own scratch tree under macOS system bash. All suites now run under `/bin/bash` (#BASH32-FLOOR, `b9678f3`, `50ad127`).
+- Aggregate Test Command: `Makefile` with a failure-propagating `test` (all suites), a 0-warning `lint`, and `check` — the root fix for "one failure, four symptoms" (no aggregate runner → no CI → red landed on `main`) (#TEST-AGG, `ec6d090`).
+- Self-Dogfooding Profile: `detect_ecosystem` resolves `make`/`run_all` after project markers so the swarm gates its own repo from a clean clone (`TEST_CMD=make test`) (#PROFILE-MAKE, `27c8b13`).
+- Arbiter String Ticket Ids: `--argjson t` silently dropped every non-numeric ticket id (the repo's entire vocabulary); the queue is now string-typed end-to-end, caught by the arbiter's own integration gate before promote (#ARB-STR, `29667a1`, `906d699`).
+- Proxy Config Gating: `[proxy] enabled` defaults false; launcher preflight/launch and the supervisor's credits probe are config-gated rather than hardcoded (#PROXY-GATE, `14f8016`).
+- PM Branch Reconciliation: First real arbiter run end to end — `P3-4` spec and `PM-PLAN-EVIDENCE` enqueued, gated, integrated (`97d31e2`, `d50c128`), and promoted ff-only to `main`; eleven superseded pm branches deleted with per-branch evidence (#PM-BRANCH-RECON).
+- **[Stampede Public Readiness](public-readiness.md):** complete. DOG-1 through DOG-18 (Python interpreter resolver, LICENSE, CI, kultivait-optional, partition/lease dispatch wiring, `repo-state.sh`, `ci-local.sh`, and more) — see that map's own Decisions so far for the full index.
+- **[Stampede Public Multi-Provider](public-multi-provider.md):** complete. PUB-1 through PUB-11 (provider registry, fallback chains, `stampede init`/`quota`/`status --rich`, cross-provider review lane) — see that map.
+- **[Autonomous Reviewer Loop](autonomous-reviewer-loop.md):** complete, REV-1 through REV-5, all promoted — see that map. **Caveat (2026-09-23 PM audit):** shipped and unit-tested, but never exercised on a real ticket; see `docs/audits/2026-09-23-promote-blocker-and-unproven-reviewer-loop.md`.
 
 ## Active Frontier
 
-- [Phase 3 Defect: Concurrent worktree_provision Race Mitigation](tickets/concurrent-provision-race-mitigation.md): Hardening worktree provisioning against concurrent race conditions with advisory directory locks and idempotent retry logic (P3-FLAKE-1).
+- **[Prove and Reconcile](prove-and-reconcile.md):** closes the gap between "shipped" and "proven" surfaced by the
+  2026-09-23 PM audit (`docs/audits/2026-09-23-promote-blocker-and-unproven-reviewer-loop.md`) — the DOG-17/18
+  promote, the unproven Autonomous Reviewer Loop, and `arbiter_drain` automation.
 
 ## Not yet specified
-
-- **Cross-LLM Quota and Credit Probing:** Live API credit/rate-limit detection across Anthropic, Google Gemini, and Z.AI backends to gracefully pause or reroute workers before rate limits fail tasks.
-
 
 
 
