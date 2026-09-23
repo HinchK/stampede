@@ -39,6 +39,7 @@ automatically after a successful enqueue (promote to `main` stays the untouchabl
   branch only takes effect once it reaches `main` through the same pipeline the launcher/supervisor read from.
 - **Issue tracker mechanics:** local Markdown, released directly into `maps/tickets/` (not staged) — confirmed with
   the driver 2026-09-23; DOG-16 means a released ticket immediately holds a lease on its `owns:` paths.
+- **PROVE-2 resolved (`d7c3563`):** Reviewer loop and seat enabled in `swarm.config.toml` (`reviewer.loop = true`, `seats.reviewer.enabled = true`; commit `d7c3563`, 18 suites green).
 
 ## Active Frontier
 
