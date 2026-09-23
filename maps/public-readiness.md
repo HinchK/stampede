@@ -76,6 +76,7 @@ every claim in the docs backed by something the repo can show.
 - **DOG-9 resolved (`bb8fda9`, PR #62):** Swept 48 tracked markdown files converting machine-local paths and `file://` URLs into clean relative repository links. Zero broken in-tree links; `grep 'file://'` and `grep '/Users/'` return empty (rc=1); all 8 suites green.
 - **DOG-16 resolved (`280ae5f`):** Hazard 1 closed — `partition_check` / `lease_acquire` have a live caller: `cmd_dispatch` gates every ticket dispatch on them (collision blocks with the holding lease named; no-owns acquires an exclusive whole-repo lease or nothing), and the supervisor's pass releases leases only when `integration.jsonl` records integrated/promoted — green-queued never releases (ADR 0012 §5). Partition suite grew 29 → 39 assertions covering the supervisor acquire/release lifecycle; all 8 suites green, shellcheck 0 warnings.
 - **DOG-17 resolved (`f78b0a1`):** `scripts/repo-state.sh` single-command git/gh state summary (commit `f78b0a1`, 34 tests passing in `tests/test_repo_state.sh`, 0 shellcheck warnings).
+- **DOG-18 resolved (`4025f4b`):** `scripts/ci-local.sh` local CI-parity wrapper (commit `4025f4b`, PM-recommended pin-parity variant checking shellcheck v0.11.0, 17 hermetic tests in `tests/test_ci_local.sh`, 0 shellcheck warnings).
 
 ## Active Frontier
 
