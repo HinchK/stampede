@@ -2,7 +2,8 @@
 id: DOG-17
 title: "scripts/repo-state.sh: single-command git/gh state summary"
 type: wayfinder:task
-status: ready
+status: resolved
+commit: f78b0a1
 assignee: arch
 owns: scripts/repo-state.sh,CLAUDE.md
 parent: maps/public-readiness.md
