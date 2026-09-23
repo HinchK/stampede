@@ -738,11 +738,39 @@ cmd_dispatch() { # dispatch WORKER BRIEF_FILE [TICKET]
   note "poll: while [ ! -s $out ]; do sleep 5; done"
 }
 
+# ---- 4b. arbiter auto-drain (PROVE-4) --------------------------------------
+# A green enqueue (gate_reap's ENQUEUE directive, or the review loop's PASS
+# path) must not sit in integration.jsonl until an operator runs
+# `lib/arbiter.sh drain`. The drain runs in the same supervisor pass as the
+# enqueue — but never inline: it gates inside its own lock and is slow
+# (P3-3 §2.2), so it spawns as a single background job. arbiter_lock
+# serializes any overlap into a no-op (the loser exits after a bounded
+# wait), and a lock held by a live drain means this pass spawns nothing —
+# the worst case is a wasted process, never corruption. Conflicts still
+# abort back to the worker; main still moves only by human promote.
+arbiter_auto_drain() {
+  local queued
+  queued=$(arbiter_queued_count 2>/dev/null || printf '0')
+  [[ "$queued" =~ ^[0-9]+$ ]] || queued=0
+  (( queued > 0 )) || return 0
+  if [[ -d "${STATE_DIR}/arbiter.lock" ]]; then
+    note "arbiter drain already running — ${queued} queued record(s) left to it"
+    return 0
+  fi
+  mkdir -p "${STATE_DIR}/gate-logs"
+  note "arbiter auto-drain: ${queued} queued record(s) — drain spawned (log: ${STATE_DIR}/gate-logs/arbiter-drain.log)"
+  {
+    printf '\n[%s] auto-drain pass (supervisor pid %s)\n' "$(date '+%H:%M:%S')" "$$"
+    arbiter_drain
+  } >> "${STATE_DIR}/gate-logs/arbiter-drain.log" 2>&1 &
+}
+
 cmd_once() {
   gate_recover
   health_pass
   harvest_verdicts
   gate_reap
+  arbiter_auto_drain    # PROVE-4: green enqueues drain without an operator
   lease_release_integrated   # DOG-16: freed by integration evidence, never by green
   unpushed_watch
   credits_watch
