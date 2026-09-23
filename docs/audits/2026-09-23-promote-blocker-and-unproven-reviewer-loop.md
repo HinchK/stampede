@@ -79,21 +79,24 @@ test results from evidence, not a summary line"), re-verified by summing the per
 trusting the aggregate line:
 
 ```
-$ cd $(mktemp-equivalent) && git worktree add --detach <tmp> swarm/stampede/integration
-$ make test 2>&1 | grep -E '^[0-9]+ passed|All suites green'
-38 33 17 15 14 24 32 33 27 39 18 13 16 28 34 43 13 42   (18 numbers)
+$ git worktree add --detach "$CLAUDE_JOB_DIR/tmp/integ" swarm/stampede/integration
+$ cd "$CLAUDE_JOB_DIR/tmp/integ" && make test 2>&1 | grep -E '^[0-9]+ passed|All suites green'
+38 33 17 15 14 24 32 33 27 39 18 13 16 28 34 43 13 42   (18 per-suite counts)
 All suites green (18)
-$ # sum: 479
-$ git worktree remove <tmp>   # clean, no --force
+$ cd - && git worktree remove "$CLAUDE_JOB_DIR/tmp/integ"   # clean, no --force
 ```
 
-Sum = 479. Matches `STATE.md` exactly. `main` (16 suites, missing `test_repo_state.sh` and `test_ci_local.sh` until
-promote lands) sums to 428, also 0 failed. Both figures are real.
+Sum of the 18 per-suite counts = **479**. Matches `STATE.md` exactly. The same grep-and-sum against `main` (16
+suites — missing `test_repo_state.sh` and `test_ci_local.sh` until promote lands) gives 38+33+15+14+24+32+33+27+39+
+18+13+16+28+43+13+42 = **428**, also 0 failed. Both figures are real, re-derived independently rather than trusted
+from the "All suites green" summary line.
 
-## 5. Finding: partition/lease machinery is now live (corrects the 9/21 audit)
+## 5. Finding: partition/lease machinery is live, confirming DOG-16 (already recorded)
 
-The 2026-09-21 public-readiness review found `partition_check` / `lease_acquire` had "no caller at all." That's no
-longer true:
+The 2026-09-21 public-readiness review found `partition_check` / `lease_acquire` had "no caller at all." That gap
+was closed the same day: DOG-16 ("Wire partition checking and lease acquisition into supervisor dispatch",
+`280ae5f`, recorded in `maps/public-readiness.md`) wired `cmd_dispatch` to resolve the ticket and acquire through
+`lease_acquire`'s locked section before any prompt. Re-confirmed live here, independent of that record:
 
 ```
 $ grep -n 'partition_check\|lease_acquire' loop-bot-herd.sh
@@ -101,8 +104,8 @@ loop-bot-herd.sh:687:  partition_check "$tf" "$REPO_DIR" || prc=$?
 loop-bot-herd.sh:694:  if ! lease_acquire "$tname" "$worker" "" "-"; then
 ```
 
-Both are called from the supervisor's dispatch path. Good — record the correction so the next audit doesn't
-re-flag it as missing.
+Both are called from the supervisor's dispatch path. This is a confirmation, not a new correction — noted here only
+because it's easy to mis-cite the 9/21 finding as still current if you don't check `public-readiness.md` first.
 
 ## 6. Finding: `arbiter_drain` is still operator-only (confirms the 9/21 audit)
 
@@ -116,11 +119,10 @@ appears to be by design per ADR 0009 (human-gated integration), but it means the
 steps today — drain, then promote — not one. Worth an explicit decision: is that the intended steady state, or
 should drain auto-run after enqueue, leaving only promote as the human gate?
 
-## 7. Finding: the Reviewer Loop has never been exercised on a real ticket
+## 7. Finding: the Reviewer Loop has never been exercised — because it's still switched off
 
-Five waves (REV-1 through REV-5) shipped a full autonomous review loop: config flag, dual-mode brief, verdict
-protocol, state machine, telemetry, and supervisor wiring — 43 + 33 + ... assertions across the suites, all green.
-But:
+Five waves (REV-1 through REV-5, 43+33+... assertions across the suites, all green) shipped a full autonomous
+review loop: config flag, dual-mode brief, verdict protocol, state machine, telemetry, and supervisor wiring. But:
 
 ```
 $ ls .herdr-swarm/reviews/
@@ -132,17 +134,40 @@ $ cat .herdr-swarm/session-verdicts.jsonl
 {"ticket": "DOG-18", ..., "verdict": "ARCH DONE #DOG-18 4025f4b..." (green)}
 ```
 
-Zero `REVIEW VERDICT` lines. Zero files in `.herdr-swarm/reviews/`. The directory that the whole milestone exists to
-populate does not exist yet outside the test fixtures. This is exactly the gap the original `docs/reordered-plan.md`
-warned about for the ops-tab reviewer proposal: "deferred — re-propose after M3 with evidence that the reviewer
-catches something." Five waves later, that evidence still doesn't exist. It doesn't need another wave of
-engineering — it needs one ticket run through `loop` mode with a real `PASS`/`BLOCK` harvested.
+Zero `REVIEW VERDICT` lines. Zero files in `.herdr-swarm/reviews/`. The root cause is mechanical, not architectural:
+
+```
+$ sed -n '/\[reviewer\]/,/^\[/p' swarm.config.toml
+[reviewer]
+loop = false          # keeps the reviewer advisory: nothing harvested
+max_rounds = 2
+
+$ sed -n '/\[seats\.reviewer\]/,/^$/p' swarm.config.toml
+[seats.reviewer]
+...
+enabled = false
+```
+
+`[reviewer].loop` and `[seats.reviewer].enabled` were never flipped after REV-5 shipped, so the reviewer seat isn't
+even in the current `.herdr-swarm/seats.json` ledger (confirmed: only `pm`, `arch-1`, `arch-2`, `looper`, `agy-docs`,
+`agy-gh` are seated today). `briefs/reviewer.in.md` was already rewritten for this by PUB-8 — the seat is ready to
+go, just off. This is exactly the gap the original `docs/reordered-plan.md` warned about for the ops-tab reviewer
+proposal: "deferred — re-propose after M3 with evidence that the reviewer catches something." Five waves later, that
+evidence still doesn't exist, and it can't until these two flags flip and one ticket actually runs through `loop`
+mode.
 
 ## 8. Doc drift (fixed in this same commit, within `pm`'s write boundary)
 
-- `maps/universal-herdr-swarm.md` (the linked "Plan of Record") was three milestones stale — Active Frontier still
-  listed the already-resolved P3-FLAKE-1, and "Not yet specified" still listed quota probing, which shipped as
-  PUB-9 weeks ago. Backfilled in this commit.
+- `maps/universal-herdr-swarm.md`'s **root-map-level** decisions (`P3-FLAKE-1`, `#BASH32-FLOOR`, `#TEST-AGG`,
+  `#PROFILE-MAKE`, `#ARB-STR`, `#PROXY-GATE`, `#PM-BRANCH-RECON` — confirmed via each ticket's own
+  `parent:` field) were genuinely missing from its Decisions so far, and its Active Frontier still listed the
+  already-resolved `P3-FLAKE-1`. Fixed. **Correction to an earlier draft of this audit:** the Public Multi-Provider
+  (PUB-1..11), Autonomous Reviewer Loop (REV-1..5), and public-readiness (DOG-1..18, including DOG-17/18) decisions
+  are *not* missing — they were already correctly recorded in their own per-milestone sub-maps
+  (`maps/public-multi-provider.md`, `maps/autonomous-reviewer-loop.md`, `maps/public-readiness.md`, per each
+  ticket's `parent:`). PUB-9 (quota probing) landed 2026-09-22, one day before this audit, not "weeks ago" as an
+  earlier draft claimed. The root map now carries one pointer line to each sub-map instead of duplicating their
+  content.
 
 ## 9. Doc drift (out of `pm`'s write boundary — reported, not edited)
 
@@ -159,14 +184,26 @@ engineering — it needs one ticket run through `loop` mode with a real `PASS`/`
 
 ## 10. Recommended sequence
 
-1. **Reconcile `main` into `integration`, re-gate, promote DOG-17/18.** Arbiter/human action; blocks everything else
-   that touches `main`.
+0. **Fold this audit's own branch (`worktree-pm-audit-2026-09-23`) into `main` first.** It carries this doc plus the
+   `maps/universal-herdr-swarm.md` fix, based off `origin/main` — not off local `main`'s current tip. If it lands
+   *after* the reconcile below instead of before, `main` diverges from `integration` again immediately.
+1. **Reconcile `main` into `integration`, re-gate, promote DOG-17/18.** Precedent: the equivalent-shaped fix last
+   time (`d7f875f`) was committed by the human driver directly, not an agent seat — worth continuing that pattern
+   rather than assuming an arch/looper ticket. Blocks everything else that touches `main`.
 2. **Push `main` to `origin`** once reconciled, so CI actually sees the current tip. Human-authorized per
    `CONTEXT.md`'s Git Remote Safety rule.
 3. **Dispatch one real ticket through the Reviewer Loop** and confirm a genuine verdict lands in
-   `.herdr-swarm/reviews/`. Do this before scoping any new milestone that assumes the loop works.
-4. **Decide `arbiter_drain`'s steady state**: stays operator-only, or gets an automatic caller. Either is defensible;
-   pick one and document it in ADR 0009 or a follow-up ADR.
+   `.herdr-swarm/reviews/`. **Sequencing note:** the supervisor and launcher run from the root checkout on `main`
+   (no supervisor process is currently running — `ps aux` confirms — so nothing has read a config change yet), so a
+   `swarm.config.toml` flip made on an arch worktree branch only takes effect once it's gone through the same
+   reconcile → drain → promote pipeline as item 1. This step is **blocked by** item 1, not parallel to it. A
+   doc-only ticket used as the guinea pig would only exercise the `PASS`/harvest path, not `BLOCK` → refine
+   (REV-2/REV-3) — worth picking a ticket with at least one plausible finding, or accepting that a clean PASS alone
+   isn't proof of the whole loop.
+4. **Decide `arbiter_drain`'s steady state**: stays operator-only, or gets an automatic caller. ADR 0009 locks
+   *promote*-to-`main` as sovereign-human forever but does not decide *drain* (which only advances the integration
+   ref, not `main`) — so this is a genuinely open decision, not something ADR 0009 already settled. Either answer is
+   defensible; pick one and record it.
 5. **Arch-seat pass** on the CLAUDE.md/ci.yml suite-count drift (§9) — cheap, mechanical.
 
 Only after 1–3 land does it make sense to scope new feature work. Candidates surfacing from this audit, roughly in
