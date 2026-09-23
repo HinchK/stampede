@@ -40,6 +40,9 @@ bash -n herdr-loop-swarm.sh              # syntax-only check
 ./herdr-loop-swarm.sh up [dir] -m s                # seat-only: no task dispatch
 ./herdr-loop-swarm.sh down [dir] [-y] [--keep-ws]  # selective teardown (destructive)
 
+# One-call repo state (read-only) — prefer this over ad-hoc git log/gh probe sequences (DOG-17)
+scripts/repo-state.sh [dir]                        # branch, last 10 commits, merged-to-main branches, best-effort CI, dirty tree
+
 # Supervisor daemon
 ./loop-bot-herd.sh status          # control flags, verdict count, channel files
 ./loop-bot-herd.sh once            # one pass: health, verdict harvest, suite gate
