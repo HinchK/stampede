@@ -82,18 +82,24 @@
 - **Developer Experience Wave DX-1 (COMPLETE — Integrated on `swarm/stampede/integration` at `4025f4b`):**
   - **DOG-17 Complete:** `f78b0a1`: `scripts/repo-state.sh`, 34 tests passing in `tests/test_repo_state.sh`, 0 shellcheck warnings.
   - **DOG-18 Complete:** `4025f4b`: `scripts/ci-local.sh` (shellcheck v0.11.0 pin-parity check), 17 tests passing in `tests/test_ci_local.sh`, 0 shellcheck warnings.
-  - Both tickets integrated onto `swarm/stampede/integration` at commit `4025f4b`; awaiting human promote to `main`.
+  - Both tickets integrated onto `swarm/stampede/integration` at commit `4025f4b`.
+- **Prove and Reconcile Wave 1 (COMPLETE — Integrated on `swarm/stampede/integration` at `430aa44`):**
+  - **PROVE-2 Complete:** `d7c3563`: Reviewer loop and seat enabled in `swarm.config.toml` (`reviewer.loop = true`, `seats.reviewer.enabled = true`).
+  - **PROVE-6 Complete:** `b02609d`: Fixed stale suite-count claims in `CLAUDE.md`, `.github/workflows/ci.yml`, and `CONTRIBUTING.md` (all 18 suites listed alphabetically; assertion counts dropped to prevent drift).
+  - **PROVE-4 Complete:** `16dd481`: Auto-wired `arbiter_drain` after successful `arbiter_enqueue` (`arbiter_enqueue_and_drain` in `lib/arbiter.sh`, background drain pass step in `loop-bot-herd.sh`; 53 assertions passing in `tests/test_arbiter.sh`).
+  - All Wave 1 tickets integrated on `swarm/stampede/integration` at merge commit `430aa44`.
 - **Standing Guardrails:**
   - Arch briefs enforce Single-Ticket Scope Guardrail: workers halt and await looper dispatch after reporting completion.
   - Base branch promotion remains human-only (DOG-12), with explicit user command authorization for arbiter promote runs.
-- **Total Test Suite Health:** **479 passed, 0 failed** across 18 suites on integration (43 review loop, 42 worktree, 39 partition, 38 arbiter, 34 repo_state, 33 async gate, 33 config, 32 cli_status, 28 quota, 27 gh_sync, 24 cli_init, 18 profile, 17 ci_local, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 13 telemetry); `make check` green (lint 0 warnings).
+- **Total Test Suite Health:** **494 passed, 0 failed** across 18 suites on integration (53 arbiter, 43 review loop, 42 worktree, 39 partition, 34 repo_state, 33 async gate, 33 config, 32 cli_status, 28 quota, 27 gh_sync, 24 cli_init, 18 profile, 17 ci_local, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 13 telemetry); `make check` green (lint 0 warnings).
 
 ---
 
 ## 3. Immediate Next Step
 
-- **Human Promote**: Promote integrated Wave DX-1 commits (DOG-17 `f78b0a1`, DOG-18 `4025f4b`) from `swarm/stampede/integration` to `main` via `bin/stampede promote` / `lib/arbiter.sh promote --confirm`.
-- Stand by for human driver instructions or next wave dispatch.
+- **Human Promote & Wave 2 Release**:
+  - Human driver promotes `swarm/stampede/integration` (merge commit `430aa44`, carrying DOG-17, DOG-18, PROVE-2, PROVE-6, PROVE-4) into `main` via `bin/stampede promote` / `lib/arbiter.sh promote --confirm` and pushes to `origin/main`.
+  - Release Wave 2 tickets (`maps/tickets-staged/` -> `maps/tickets/`): PROVE-1 (reconcile & promote), PROVE-3 (prove reviewer loop on real ticket), and PROVE-5 (record auto-drain decision in new ADR).
 
 
 
