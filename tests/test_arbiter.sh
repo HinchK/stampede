@@ -241,6 +241,78 @@ check "string ticket merge commit references the string id" \
   'git -C "$REPO" log --format=%s -1 "$(git -C "$REPO" rev-parse '"$IREF"')" | grep -q "integrate #P3-4-spec"'
 if arbiter_enqueue "P3-4-spec" seat-s "$SHA_S" 2>/dev/null; then ok "string re-enqueue tolerated"; else bad "string re-enqueue tolerated"; fi
 
+# ── 10. auto-wire: enqueue triggers drain in the same call (PROVE-4) ───────
+# A green enqueue must not sit queued until an operator runs drain. The
+# trigger is exercised end-to-end: ff integration with no separate drain
+# call, conflict hand-back, CLI parity, and lock serialization.
+arbiter_drain 2>/dev/null   # section 9's tolerated re-enqueue left a queued record
+MAIN_AUTO=$(git -C "$REPO" rev-parse main)
+check "queued_count predicate: 0 on a drained queue" \
+  '[[ $(arbiter_queued_count) == 0 ]]'
+
+git -C "$REPO" branch "swarm/ptest/seat-f" main
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wf" "swarm/ptest/seat-f"
+printf 'foxtrot-alpha\n' > "$TEST_DIR/wf/alpha.txt"
+printf 'foxtrot\n' > "$TEST_DIR/wf/foxtrot.txt"
+SHA_F=$(commit_at "$TEST_DIR/wf" "seat-f work")
+check "queued_count predicate: 1 after an enqueue" \
+  'arbiter_enqueue 209 seat-f "$SHA_F" >/dev/null 2>&1; [[ $(arbiter_queued_count) == 1 ]]'
+arbiter_enqueue_and_drain 209 seat-f "$SHA_F" 2>/dev/null
+ck 209 integrated "auto-wire: enqueue_and_drain integrates without a separate drain"
+check "auto-wire advanced the integration ref past main" \
+  'git -C "$REPO" merge-base --is-ancestor "$SHA_F" '"$IREF"' && [[ $(git -C "$REPO" rev-parse '"$IREF"') != "$MAIN_AUTO" ]]'
+check "auto-wire leaves the queue drained" \
+  '[[ $(arbiter_queued_count) == 0 ]]'
+check "auto-wire never touches main" \
+  '[[ $(git -C "$REPO" rev-parse main) == "$MAIN_AUTO" ]]'
+
+# conflict during auto-drain: aborted + recorded + ref unmoved (ADR 0009
+# invariant unchanged — the arbiter never resolves conflicts itself)
+git -C "$REPO" branch "swarm/ptest/seat-g" main
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wg" "swarm/ptest/seat-g"
+printf 'ALPHA-CONFLICT\n' > "$TEST_DIR/wg/alpha.txt"
+SHA_G=$(commit_at "$TEST_DIR/wg" "seat-g conflicting work")
+REF_PRE_G=$(git -C "$REPO" rev-parse "$IREF")
+arbiter_enqueue_and_drain 210 seat-g "$SHA_G" 2>/dev/null
+ck 210 conflict "auto-wire conflict aborts and records (no automatic resolution)"
+check "auto-wire conflict leaves the integration ref unmoved" \
+  '[[ $(git -C "$REPO" rev-parse '"$IREF"') == "$REF_PRE_G" ]]'
+check "auto-wire conflict lists the conflicting file" \
+  '[[ $(jq -r -s --arg t2 210 "[.[] | select((.ticket|tostring) == \$t2)] | .[-1].files[0]" "$Q") == "alpha.txt" ]]'
+check "auto-wire conflict never touches main" \
+  '[[ $(git -C "$REPO" rev-parse main) == "$MAIN_AUTO" ]]'
+
+# CLI parity: the enqueue subcommand auto-drains (operator runs one step,
+# not two); drain stays for manual re-runs. seat-g's follow-up restores
+# alpha.txt to its base content so the merge is clean.
+printf 'alpha\n' > "$TEST_DIR/wg/alpha.txt"
+printf 'golf\n' > "$TEST_DIR/wg/golf.txt"
+SHA_G2=$(commit_at "$TEST_DIR/wg" "seat-g clean work")
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/arbiter.sh" \
+  enqueue 211 seat-g "$SHA_G2" >/dev/null 2>&1
+ck 211 integrated "CLI enqueue auto-drains (no separate drain invocation)"
+check "CLI auto-drain never touches main" \
+  '[[ $(git -C "$REPO" rev-parse main) == "$MAIN_AUTO" ]]'
+
+# serialization: while another drain holds arbiter.lock, enqueue_and_drain
+# defers (record stays queued, ref unmoved) and the record integrates once
+# the lock frees — auto-wiring adds no new lock, it reuses the existing one.
+git -C "$REPO" branch "swarm/ptest/seat-h" main
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wh" "swarm/ptest/seat-h"
+printf 'hotel\n' > "$TEST_DIR/wh/hotel.txt"
+SHA_H=$(commit_at "$TEST_DIR/wh" "seat-h work")
+mkdir -p "$REPO/.herdr-swarm/arbiter.lock"
+printf '%s\n' "$$" > "$REPO/.herdr-swarm/arbiter.lock/pid"   # live holder: this shell
+REF_PRE_H=$(git -C "$REPO" rev-parse "$IREF")
+ARBITER_TMP_SLEEP=0.02   # bounded loser wait: 50 tries × 0.02s ≈ 1s
+arbiter_enqueue_and_drain 212 seat-h "$SHA_H" 2>/dev/null
+ck 212 queued "drain defers while another drain holds the lock"
+check "deferred auto-wire leaves the integration ref unmoved" \
+  '[[ $(git -C "$REPO" rev-parse '"$IREF"') == "$REF_PRE_H" ]]'
+rm -rf "$REPO/.herdr-swarm/arbiter.lock"
+arbiter_drain 2>/dev/null
+ck 212 integrated "deferred record integrates once the lock frees"
+
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))

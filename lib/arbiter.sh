@@ -134,6 +134,26 @@ arbiter_enqueue() {
     "$(jq -cn '{summary:"queued for integration"}')"
 }
 
+# ── auto-wire: enqueue → drain in the same pass (PROVE-4) ──────────────────
+# The settled steady state (grilled with the driver 2026-09-23): a green
+# verdict's enqueue must not sit queued until an operator runs
+# `lib/arbiter.sh drain`. Wiring the trigger here changes no gate: the drain
+# still takes the arbiter lock (serialized against any concurrent drain),
+# still never writes the base branch, and still aborts conflicts back to the
+# worker. Only the manual step is removed — promote stays human (ADR 0009).
+arbiter_enqueue_and_drain() { # TICKET SEAT SHA
+  arbiter_enqueue "$@" || return $?
+  arbiter_drain
+}
+
+# Queued-record count (0 when no queue exists) — the supervisor's auto-drain
+# trigger predicate: drain only when there is something to drain.
+arbiter_queued_count() {
+  _arb_cfg
+  [[ -f "$ARB_QUEUE" ]] || { printf '0\n'; return 0; }
+  jq -r -s '[.[] | select(.status == "queued")] | length' "$ARB_QUEUE" 2>/dev/null || printf '0'
+}
+
 # ── detached worktree management ───────────────────────────────────────────
 _arb_worktree() { # START_COMMIT — ensure detached worktree at START_COMMIT
   if [[ ! -d "$ARB_WT" ]]; then
@@ -356,12 +376,13 @@ if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
   cmd="${1:-}"
   shift 2>/dev/null || true
   case "$cmd" in
-    enqueue) arbiter_enqueue "$@" ;;
+    enqueue) arbiter_enqueue_and_drain "$@" ;;   # PROVE-4: enqueue auto-drains
     drain)   arbiter_drain ;;
     promote) arbiter_promote "$@" ;;
     pr-body) arbiter_pr_body "${1:?out-file}" ;;
     *)
       printf 'Usage: %s enqueue <ticket> <seat> <sha> | drain | promote [--pr] [--confirm] | pr-body <file>\n' "$0" >&2
+      printf '       enqueue also drains the queue in the same invocation (PROVE-4); drain remains for manual re-runs\n' >&2
       exit 1 ;;
   esac
 fi
