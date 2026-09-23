@@ -26,7 +26,7 @@ max_workers = 2           # back-pressure comparison point
 # .herdr-swarm/reviews/<ticket>-<sha>.md and the terminal anchor becomes
 # REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>. max_rounds bounds re-review
 # rounds per (ticket, sha).
-loop = false
+loop = true
 max_rounds = 2
 
 [proxy]
@@ -135,4 +135,4 @@ model = "gemini-2.5-flash"
 brief = "briefs/reviewer.md"
 tab = "ops"
 position = "optional"
-enabled = false
+enabled = true

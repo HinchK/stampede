@@ -179,8 +179,10 @@ check "6c" "loop = true → CONFIG_REVIEW_LOOP 1" \
   'eval "$(config_dump_env x "$C6B")" && [[ $CONFIG_REVIEW_LOOP == "1" ]]'
 check "6d" "max_rounds = 3 → CONFIG_REVIEW_MAX_ROUNDS 3" \
   'eval "$(config_dump_env x "$C6B")" && [[ $CONFIG_REVIEW_MAX_ROUNDS == "3" ]]'
-check "6e" "shipped config: reviewer loop off by default" \
-  'eval "$(config_dump_env x "$SCRIPT_DIR/swarm.config.toml")" && [[ $CONFIG_REVIEW_LOOP == "0" && $CONFIG_REVIEW_MAX_ROUNDS == "2" ]]'
+check "6e" "shipped config: reviewer loop ON by default (PROVE-2)" \
+  'eval "$(config_dump_env x "$SHIPPED")" && [[ $CONFIG_REVIEW_LOOP == "1" && $CONFIG_REVIEW_MAX_ROUNDS == "2" ]]'
+check "6e2" "shipped config: reviewer seat in roster (PROVE-2)" \
+  '[[ $(config_get_seats "$SHIPPED") == *reviewer* ]]'
 
 C6C="$TEST_DIR/reviewer-badloop.toml"
 cat > "$C6C" <<'TOML'

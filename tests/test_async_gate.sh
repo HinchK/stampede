@@ -59,6 +59,14 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/loop-bot-herd.sh" statu
 # shellcheck disable=SC1091
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/worktree.sh"
 
+# PROVE-2 flipped the shipped default (reviewer.loop = true), and the
+# source-time `eval config_env` above binds CONFIG_REVIEW_LOOP from the repo's
+# swarm.config.toml. Sections 1–12 assert the pre-review ambient (loop off →
+# ENQUEUE) and §13 toggles the loop explicitly per scenario, so pin the ambient
+# here: the suite must stay hermetic against the shipping default in either
+# direction (off before PROVE-2, on after).
+export CONFIG_REVIEW_LOOP=0
+
 # Every gate this suite exercises bounds its run with timeout(1), which macOS
 # does not ship. Fail once with the remedy rather than cascading into a dozen
 # failures that all blame the supervisor for a missing binary (DOG-15).
