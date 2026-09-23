@@ -17,8 +17,10 @@ not this one.
 ```bash
 # Aggregate entry points (the Suite Gate resolves to `make test` here — #PROFILE-MAKE)
 make check                              # lint + every suite, failure-propagating
-make test                              # all eight suites under /bin/bash (bash 3.2 is the platform floor)
+make test                              # all suites under /bin/bash (bash 3.2 is the platform floor)
 make lint                              # shellcheck 0-warning bar + bash -n + py_compile
+# CI parity (DOG-18): `make check` IS the gate — reach for it first; ci-local only adds the pin-parity signal
+scripts/ci-local.sh [--strict]          # runs make check (rc authoritative) + warns when local shellcheck != CI's pinned SC_VERSION (--strict: exit 1 on unproven parity)
 # Suites (each builds an ephemeral scratch git repo under /tmp and cleans up after itself)
 /bin/bash tests/test_worktree.sh        # 42 assertions — provisioning, salvage, teardown
 /bin/bash tests/test_arbiter.sh         # 38 — CAS integration, conflict, promote, string ticket ids
