@@ -5,7 +5,7 @@ type: wayfinder:doc
 status: backlog
 assignee: agy-docs
 blocked_by: PROVE-4
-owns: docs/adr/
+owns: docs/adr/,README.md
 parent: maps/prove-and-reconcile.md
 ---
 

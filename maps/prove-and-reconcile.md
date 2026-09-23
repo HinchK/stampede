@@ -16,8 +16,14 @@ automatically after a successful enqueue (promote to `main` stays the untouchabl
 - Source: `docs/audits/2026-09-23-promote-blocker-and-unproven-reviewer-loop.md` (PM audit, evidence-backed).
 - Core Invariant: `looper` orchestrates and verifies; implementation is delegated to `arch`. Promotion to `main` and
   pushes to `origin` are human-only, always (ADR 0009, `CONTEXT.md` Git Remote Safety).
-- Issue tracker: Local Markdown Tracker (`maps/tickets/`) — release directly, per driver instruction (2026-09-23);
-  don't stage. `agy-gh` should run `gh_sync --apply` once these land to file the matching GitHub issues.
+- Issue tracker: Local Markdown Tracker (`maps/tickets/`). Per driver instruction (2026-09-23), release directly
+  rather than defaulting to staging everything — **refined during chartering** to match this repo's own documented
+  dispatch hazards (`maps/public-readiness.md` hazards 2–3): `blocked_by` is parsed by nothing (advisory prose in
+  `briefs/looper.in.md` only), a released ticket with no `owns:` grabs an exclusive whole-repo lease the moment
+  it's dispatched (DOG-16), and `assignee: human` does not reliably stop automated pickup (`lib/gh_sync.sh` never
+  calls the real GitHub assignee API). So the three tickets with no real ordering hazard release directly; the
+  three that are genuinely sequenced or human-timed stage instead, exactly like DOG-10 did. `agy-gh` should run
+  `gh_sync --apply` once Wave 1 lands to file the matching GitHub issues.
 - `pi` is explicitly **out of scope** for this map (see below).
 
 ## Decisions so far
@@ -36,12 +42,22 @@ automatically after a successful enqueue (promote to `main` stays the untouchabl
 
 ## Active Frontier
 
-- [Reconcile main into integration, promote and push DOG-17/18](tickets/prove-reconcile-and-promote.md) (PROVE-1)
+**Wave 1 — released, dispatchable now** (no ordering hazard, disjoint `owns:`):
+
 - [Enable the Reviewer seat](tickets/prove-enable-reviewer-seat.md) (PROVE-2)
-- [Prove the Reviewer Loop on a real ticket](tickets/prove-reviewer-loop-real-verdict.md) (PROVE-3) — blocked by PROVE-1, PROVE-2
 - [Auto-wire arbiter_drain after enqueue](tickets/prove-auto-wire-arbiter-drain.md) (PROVE-4)
-- [Record the arbiter_drain decision in a new ADR](tickets/prove-drain-adr.md) (PROVE-5) — blocked by PROVE-4
 - [Fix stale suite-count claims in CLAUDE.md and ci.yml](tickets/prove-fix-suite-count-drift.md) (PROVE-6)
+
+**Wave 2 — staged in `maps/tickets-staged/`, released by human `mv` once ready** (sequenced or human-timed; a
+no-`owns:` or `assignee: human` ticket dispatched early would either stall (exclusive lease, DOG-16) or run before
+its prerequisites — see Notes):
+
+- [Reconcile main into integration, promote and push DOG-17/18](tickets-staged/prove-reconcile-and-promote.md)
+  (PROVE-1) — release and work whenever the human is ready; not gated on anything else in this map.
+- [Prove the Reviewer Loop on a real ticket](tickets-staged/prove-reviewer-loop-real-verdict.md) (PROVE-3) —
+  release once PROVE-1 and PROVE-2 have both landed on `main`.
+- [Record the arbiter_drain decision in a new ADR](tickets-staged/prove-drain-adr.md) (PROVE-5) — release once
+  PROVE-4 has landed.
 
 ## Not yet specified
 

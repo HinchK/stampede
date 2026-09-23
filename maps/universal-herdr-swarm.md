@@ -73,7 +73,9 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 
 ## Active Frontier
 
-_(none charted against this root map right now — see `docs/audits/2026-09-23-promote-blocker-and-unproven-reviewer-loop.md` for the open items surfaced by the latest PM audit, pending a new map)_
+- **[Prove and Reconcile](prove-and-reconcile.md):** closes the gap between "shipped" and "proven" surfaced by the
+  2026-09-23 PM audit (`docs/audits/2026-09-23-promote-blocker-and-unproven-reviewer-loop.md`) — the DOG-17/18
+  promote, the unproven Autonomous Reviewer Loop, and `arbiter_drain` automation.
 
 ## Not yet specified
 
