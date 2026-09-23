@@ -60,15 +60,25 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 
 - [Phase 3: Task Intake Partition Checking and Ledger Lease Protocol](tickets/task-intake-partition-checking.md): Enforcing disjoint file path ownership (`owns`) at ticket intake and managing durable path leases in .herdr-swarm/leases.json (P3-2, 1992e37).
 - [Phase 3: Asynchronous Supervisor Harvesting and Durable Gate Jobs](tickets/async-supervisor-harvesting.md): Decoupled suite gate execution into non-blocking background jobs with durable tracking in .herdr-swarm/gates/, concurrency capping, and arbiter enqueueing (P3-3, eafdc91).
+- Concurrent `worktree_provision` Race Mitigation: Serialized provisioning under an advisory `provision.lock` with idempotent retry (P3-FLAKE-1, `cf8b546`); later hardened by the bash 3.2 floor fix below.
+- Bash 3.2 Platform Floor: Fixed a `//`-collapse backslash leak in `owns_normalize` and an early-EXIT-trap bug where `wait` reaping a signal-killed background job deleted the worktree suite's own scratch tree under macOS system bash. All suites now run under `/bin/bash` (#BASH32-FLOOR, `b9678f3`, `50ad127`).
+- Aggregate Test Command: `Makefile` with a failure-propagating `test` (all suites), a 0-warning `lint`, and `check` — the root fix for "one failure, four symptoms" (no aggregate runner → no CI → red landed on `main`) (#TEST-AGG, `ec6d090`).
+- Self-Dogfooding Profile: `detect_ecosystem` resolves `make`/`run_all` after project markers so the swarm gates its own repo from a clean clone (`TEST_CMD=make test`) (#PROFILE-MAKE, `27c8b13`).
+- Arbiter String Ticket Ids: `--argjson t` silently dropped every non-numeric ticket id (the repo's entire vocabulary); the queue is now string-typed end-to-end, caught by the arbiter's own integration gate before promote (#ARB-STR, `29667a1`, `906d699`).
+- Proxy Config Gating: `[proxy] enabled` defaults false; launcher preflight/launch and the supervisor's credits probe are config-gated rather than hardcoded (#PROXY-GATE, `14f8016`).
+- PM Branch Reconciliation: First real arbiter run end to end — `P3-4` spec and `PM-PLAN-EVIDENCE` enqueued, gated, integrated (`97d31e2`, `d50c128`), and promoted ff-only to `main`; eleven superseded pm branches deleted with per-branch evidence (#PM-BRANCH-RECON).
+- Python Interpreter Resolver: Centralized `resolve_python()` in `lib/pyenv.sh` (tomllib capability probe, `$PYTHON_BIN` honoring), replacing bare `python3` calls across the repo (#DOG-1, `3a9a70d`).
+- **Public Multi-Provider Milestone (PUB-1 through PUB-11, all promoted):** Provider-interviewed config generator (`stampede init`, PUB-7, `3a534c0`), read-only cross-provider quota/headroom probing (`stampede quota`, PUB-9, `d5083eb`), cross-provider review lane in the reviewer brief (PUB-8, `eda9042`), and `stampede status --rich` session trust dashboard (PUB-11, `cf5f7b1`). Full per-ticket detail: `STATE.md` §1 and `docs/audits/2026-09-21-public-readiness-review.md`.
+- **Autonomous Reviewer Loop Milestone (REV-1 through REV-5, all promoted):** Reviewer config flag + dual-mode brief + `REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>` anchor (REV-1, `e22697c`); critique delivery and implementer refinement protocol (REV-2, `efc857e`); looper review loop state machine and fail-closed gate (REV-3, `ed86598`); review telemetry and rich status aggregation (REV-4, `950e264`); supervisor review loop wiring and verdict harvesting end to end (REV-5, `debd73e`). **Caveat (2026-09-23 PM audit):** shipped and unit-tested, but `.herdr-swarm/reviews/` has never been populated and no `REVIEW VERDICT` line has been harvested outside the test suites — the loop has not yet been exercised on a real ticket. See `docs/audits/2026-09-23-promote-blocker-and-unproven-reviewer-loop.md`.
+- Developer Experience Wave DX-1: `scripts/repo-state.sh` (DOG-17, `f78b0a1`, 34 tests) and `scripts/ci-local.sh` (DOG-18, `4025f4b`, 17 tests). Both ticket-resolved and integrated onto `swarm/stampede/integration`; **not yet promoted to `main`** — see Active Frontier.
 
 ## Active Frontier
 
-- [Phase 3 Defect: Concurrent worktree_provision Race Mitigation](tickets/concurrent-provision-race-mitigation.md): Hardening worktree provisioning against concurrent race conditions with advisory directory locks and idempotent retry logic (P3-FLAKE-1).
+- **Promote is blocked, not just pending.** `main` and `swarm/stampede/integration` have diverged (`main` carries DOG-17/18's docs-resolution commits that `integration` lacks; `integration` carries the DOG-17/18 code commits that `main` lacks), so the documented `merge --ff-only` promote will fail until `main` is reconciled into `integration` (the same move as `d7f875f`), re-gated, and re-attempted. Local `main` is also 5 commits ahead of `origin/main` — nothing has been pushed, so CI has not seen the current tip. See `docs/audits/2026-09-23-promote-blocker-and-unproven-reviewer-loop.md`.
+- **Prove the Reviewer Loop.** Five waves shipped it; zero tickets have run through it for real. Dispatch one ticket in review mode and confirm a genuine `PASS` or `BLOCK` lands in `.herdr-swarm/reviews/` before building anything further on top of it.
+- `partition_check` / `lease_acquire` are now called from `loop-bot-herd.sh`'s dispatch path (confirmed live, correcting the 9/21 audit's "no caller" finding). `arbiter_drain` remains CLI/operator-only by design — no automatic caller yet.
 
 ## Not yet specified
-
-- **Cross-LLM Quota and Credit Probing:** Live API credit/rate-limit detection across Anthropic, Google Gemini, and Z.AI backends to gracefully pause or reroute workers before rate limits fail tasks.
-
 
 
 
