@@ -43,6 +43,10 @@ automatically after a successful enqueue (promote to `main` stays the untouchabl
 - **PROVE-6 resolved (`b02609d`):** Fixed stale suite-count claims across `CLAUDE.md`, `.github/workflows/ci.yml`, and `CONTRIBUTING.md` (all 18 suites listed alphabetically; assertion counts dropped to prevent drift; commit `b02609d`).
 - **PROVE-4 resolved (`16dd481`):** Auto-wired `arbiter_drain` after successful `arbiter_enqueue` (`arbiter_enqueue_and_drain` in `lib/arbiter.sh`, background drain pass step in `loop-bot-herd.sh`; commit `16dd481`, 53 assertions passing in `tests/test_arbiter.sh`).
 - **Wave 1 Complete:** All three Wave 1 tickets (PROVE-2, PROVE-6, PROVE-4) resolved and integrated on `swarm/stampede/integration` at merge commit `430aa44`.
+- **PROVE-1 resolved (`9b4491c`):** Human reconcile + promote + push to `origin/main` at commit `9b4491c` (`main` and `swarm/stampede/integration` reconciled, DOG-17 and DOG-18 promoted).
+- **PROVE-5 resolved (`7419b78`):** Authored ADR 0014 (`docs/adr/0014-arbiter-drain-automation.md`) documenting `arbiter_drain` auto-wire decision and safety invariants; indexed in `docs/adr/README.md` and `README.md`.
+- **PROVE-3 resolved:** Reviewer Loop proved live on PROVE-4 @ `16dd481` with PASS verdict and durable findings in `.herdr-swarm/reviews/PROVE-4-16dd48121c78780f36440a3181bf2b2ba54db3c6.md` and recorded in `.herdr-swarm/reviews.json`.
+- **Wave 2 Complete:** All Wave 2 tickets (PROVE-1, PROVE-3, PROVE-5) resolved and verified. Map destination fully achieved.
 
 ## Active Frontier
 
@@ -52,16 +56,11 @@ automatically after a successful enqueue (promote to `main` stays the untouchabl
 - [x] [Auto-wire arbiter_drain after enqueue](tickets/prove-auto-wire-arbiter-drain.md) (PROVE-4)
 - [x] [Fix stale suite-count claims in CLAUDE.md and ci.yml](tickets/prove-fix-suite-count-drift.md) (PROVE-6)
 
-**Wave 2 — staged in `maps/tickets-staged/`, released by human `mv` once ready** (sequenced or human-timed; a
-no-`owns:` or `assignee: human` ticket dispatched early would either stall (exclusive lease, DOG-16) or run before
-its prerequisites — see Notes):
+**Wave 2 — COMPLETE** (all tickets resolved):
 
-- [Reconcile main into integration, promote and push DOG-17/18](tickets-staged/prove-reconcile-and-promote.md)
-  (PROVE-1) — release and work whenever the human is ready; not gated on anything else in this map.
-- [Prove the Reviewer Loop on a real ticket](tickets-staged/prove-reviewer-loop-real-verdict.md) (PROVE-3) —
-  release once PROVE-1 and PROVE-2 have both landed on `main`.
-- [Record the arbiter_drain decision in a new ADR](tickets-staged/prove-drain-adr.md) (PROVE-5) — release once
-  PROVE-4 has landed.
+- [x] [Reconcile main into integration, promote and push DOG-17/18](tickets-staged/prove-reconcile-and-promote.md) (PROVE-1) — resolved by human driver @ `9b4491c`
+- [x] [Prove the Reviewer Loop on a real ticket](tickets/prove-reviewer-loop-real-verdict.md) (PROVE-3) — proved live on PROVE-4 @ `16dd481`
+- [x] [Record the arbiter_drain decision in a new ADR](tickets/prove-drain-adr.md) (PROVE-5) — ADR 0014 authored in `7419b78`
 
 ## Not yet specified
 

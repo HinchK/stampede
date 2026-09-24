@@ -2,7 +2,13 @@
 id: PROVE-3
 title: "Prove the Reviewer Loop on a real ticket"
 type: wayfinder:task
-status: backlog
+status: resolved
+resolution:
+  ticket: PROVE-4
+  target_sha: 16dd48121c78780f36440a3181bf2b2ba54db3c6
+  verdict: PASS
+  review_file: .herdr-swarm/reviews/PROVE-4-16dd48121c78780f36440a3181bf2b2ba54db3c6.md
+  reviews_store: .herdr-swarm/reviews.json
 assignee: looper
 blocked_by: PROVE-1,PROVE-2
 parent: maps/prove-and-reconcile.md

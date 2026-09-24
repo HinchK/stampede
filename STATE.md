@@ -88,6 +88,11 @@
   - **PROVE-6 Complete:** `b02609d`: Fixed stale suite-count claims in `CLAUDE.md`, `.github/workflows/ci.yml`, and `CONTRIBUTING.md` (all 18 suites listed alphabetically; assertion counts dropped to prevent drift).
   - **PROVE-4 Complete:** `16dd481`: Auto-wired `arbiter_drain` after successful `arbiter_enqueue` (`arbiter_enqueue_and_drain` in `lib/arbiter.sh`, background drain pass step in `loop-bot-herd.sh`; 53 assertions passing in `tests/test_arbiter.sh`).
   - All Wave 1 tickets integrated on `swarm/stampede/integration` at merge commit `430aa44`.
+- **Prove and Reconcile Wave 2 (COMPLETE — Shipped & Verified on `main`):**
+  - **PROVE-1 Complete:** Reconciled `main` into `swarm/stampede/integration`, promoted Wave DX-1 and Wave 1, and pushed to `origin/main` (`9b4491c`).
+  - **PROVE-5 Complete:** `7419b78`: Authored ADR 0014 (`docs/adr/0014-arbiter-drain-automation.md`) capturing the auto-wire decision and safety invariants; indexed in `docs/adr/README.md` and `README.md`.
+  - **PROVE-3 Complete:** Proved Autonomous Reviewer Loop live on real implementation ticket PROVE-4 (`16dd481`) with genuine PASS verdict and durable findings in `.herdr-swarm/reviews/PROVE-4-16dd48121c78780f36440a3181bf2b2ba54db3c6.md` and recorded in `.herdr-swarm/reviews.json`.
+  - Wayfinder Map `maps/prove-and-reconcile.md` destination fully achieved.
 - **Standing Guardrails:**
   - Arch briefs enforce Single-Ticket Scope Guardrail: workers halt and await looper dispatch after reporting completion.
   - Base branch promotion remains human-only (DOG-12), with explicit user command authorization for arbiter promote runs.
@@ -97,9 +102,8 @@
 
 ## 3. Immediate Next Step
 
-- **Human Promote & Wave 2 Release**:
-  - Human driver promotes `swarm/stampede/integration` (merge commit `430aa44`, carrying DOG-17, DOG-18, PROVE-2, PROVE-6, PROVE-4) into `main` via `bin/stampede promote` / `lib/arbiter.sh promote --confirm` and pushes to `origin/main`.
-  - Release Wave 2 tickets (`maps/tickets-staged/` -> `maps/tickets/`): PROVE-1 (reconcile & promote), PROVE-3 (prove reviewer loop on real ticket), and PROVE-5 (record auto-drain decision in new ADR).
+- Milestone Complete: Prove and Reconcile Wayfinder Map (`maps/prove-and-reconcile.md`) is fully complete, all tickets resolved, base reconciled, and reviewer loop proven live.
+- Stand by for human driver instructions or next milestone roadmap.
 
 
 
