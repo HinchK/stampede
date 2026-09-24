@@ -2,7 +2,7 @@
 
 ## Destination
 
-`bin/stampede drain --headless [--max-tickets N] [--timeout M]` drains already-queued `backlog` tickets from
+`bin/stampede headless [--max-tickets N] [--timeout M]` drains already-queued `backlog` tickets from
 `maps/tickets/` without opening any Herdr panes — spawning worker CLIs as direct background subprocesses, using
 the reply-channel protocol already in `loop-bot-herd.sh:734-738` for completion signaling instead of terminal
 scrollback scraping. This is **additive**: `stampede up` (interactive, pane-based) remains the primary
@@ -40,6 +40,11 @@ daemon or display is available at all.
   still-open work corrected to reflect its actual resolution).
 - **Destination and mechanism (grilled and settled 2026-09-24):** additive batch queue drainer, Option A (direct
   subprocess, not a detached Herdr session).
+- **CLI naming, corrected during PM guidance (2026-09-24):** `stampede headless`, not `stampede drain --headless`
+  — the latter collides with `arbiter_drain`'s already-established meaning (advancing the integration ref), a
+  completely different operation from draining the ticket backlog unattended.
+- **Re-verdict ceiling is config-driven, not hardcoded (2026-09-24 guidance):** `[headless] max_verdict_attempts`
+  in `swarm.config.toml`, matching the `[reviewer].max_rounds` precedent, not a shell constant.
 
 ## Active Frontier
 
@@ -48,7 +53,7 @@ daemon or display is available at all.
   — staged, blocked by HEADLESS-3.
 - [Unattended safety hardening](tickets-staged/headless-5-safety-hardening.md) (HEADLESS-5) — staged, blocked by
   HEADLESS-4.
-- [`stampede drain --headless` CLI entrypoint](tickets-staged/headless-6-cli-entrypoint.md) (HEADLESS-6) — staged,
+- [`stampede headless` CLI entrypoint](tickets-staged/headless-6-cli-entrypoint.md) (HEADLESS-6) — staged,
   blocked by HEADLESS-5.
 - [ADR: Headless Batch Drain Mode](tickets-staged/headless-7-adr.md) (HEADLESS-7) — staged, blocked by HEADLESS-6,
   written against what actually got built.
