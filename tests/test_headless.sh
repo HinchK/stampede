@@ -79,6 +79,15 @@ check 2d  "channel file path is namespaced by worker under state/channel" \
   'grep -qE "REPLY CHANNEL: write your complete response to [^ ]*/channel/worker-a-[0-9]+-[0-9]+\.md" <<<"$REC"'
 check 2e  "no keystroke-injection machinery in executable library lines" \
   '! sed "/^[[:space:]]*#/d" "$SCRIPT_DIR/lib/headless.sh" | grep -nE "send-keys|agent prompt|enter$" '
+# 2f. round-2 critique: a relative BRIEF path resolves against the caller's
+# cwd at validation time but the worker resolves it inside the worktree —
+# spawn must normalize to absolute so the pointer means the same file.
+export HL_STUB_RECORD="$TEST_DIR/stub-rel.txt"
+( cd "$TEST_DIR" && headless_spawn worker-r brief.md "$WT" opencode >/dev/null )
+sleep 0.6
+check 2f  "relative brief normalized to absolute in the delivered prompt" \
+  'grep -qE "argv=run BRIEF \(file\): $TEST_DIR/brief.md " "$TEST_DIR/stub-rel.txt"'
+export HL_STUB_RECORD="$TEST_DIR/stub-record.txt"
 
 # ── 3. vendor-specific entrypoints ─────────────────────────────────────────
 export HL_STUB_SLEEP=0.1 HL_STUB_RECORD="$TEST_DIR/stub-claude.txt"
@@ -119,6 +128,12 @@ check 4d  "hard kill (no marker) reported as dead" \
 check 4e  "never-spawned worker reported untracked" \
   '[[ $(headless_status worker-ghost 2>/dev/null) == untracked ]]'
 
+# 4f. round-2 critique: marker detection must survive trailing log noise —
+# the conclusion marker is the last marker line, not strictly the final line.
+printf '\n\n' >> "$STATE_DIR/logs/worker-e.log"
+check 4f  "status still reports exited rc=0 despite trailing blank lines" \
+  '[[ $(headless_status worker-e) == "exited rc=0" ]]'
+
 # ── 5. spawn guards: double-spawn refused, stale pidfile evicted ───────────
 export HL_STUB_SLEEP=1
 headless_spawn worker-d "$TEST_DIR/brief.md" "$WT" opencode >/dev/null
@@ -134,15 +149,34 @@ check 5b  "spawn evicts a stale pidfile and proceeds" \
   'headless_spawn worker-s "$TEST_DIR/brief.md" "$WT" opencode >/dev/null 2>&1'
 headless_kill worker-s >/dev/null 2>&1
 
-# ── 6. kill: signal delivered, pidfile cleaned ─────────────────────────────
+# ── 6. kill: signal delivered, pidfile cleaned, CHILD dies too ─────────────
+# Round-2 critique: the pidfile records the wrapper subshell; TERM to the
+# wrapper must not orphan the vendor CLI child still running in the worktree.
 export HL_STUB_SLEEP=30
 headless_spawn worker-z "$TEST_DIR/brief.md" "$WT" opencode >/dev/null
+sleep 0.4
 zpid=$(cat "$STATE_DIR/pids/worker-z.pid")
+zchild=$(pgrep -P "$zpid" | head -n1)
+check 6pre "vendor child located before kill" '[[ -n "$zchild" ]]'
 headless_kill worker-z >/dev/null
-sleep 0.3
-check 6a  "kill terminates the subprocess" '! kill -0 "$zpid" 2>/dev/null'
+sleep 0.5
+check 6a  "kill terminates the wrapper" '! kill -0 "$zpid" 2>/dev/null'
+check 6a2 "kill terminates the vendor child (no orphan)" '! kill -0 "$zchild" 2>/dev/null'
 check 6b  "kill removes the pidfile" '[[ ! -f "$STATE_DIR/pids/worker-z.pid" ]]'
 check 6c  "kill of an untracked worker is idempotent (rc 0)" 'headless_kill worker-ghost >/dev/null 2>&1'
+
+# 6d. direct TERM to the wrapper (outside headless_kill) also reaches the
+# child: the wrapper's signal traps forward, then it concludes WITHOUT the
+# exit marker — a killed run is `dead`, never `exited rc=N`.
+headless_spawn worker-t "$TEST_DIR/brief.md" "$WT" opencode >/dev/null
+sleep 0.4
+tpid=$(cat "$STATE_DIR/pids/worker-t.pid")
+tchild=$(pgrep -P "$tpid" | head -n1)
+kill -TERM "$tpid" 2>/dev/null
+sleep 0.5
+check 6d  "direct TERM: wrapper forwards signal to child" '! kill -0 "$tchild" 2>/dev/null'
+check 6d2 "signalled run reports dead (no fabricated exit marker)" \
+  '[[ $(headless_status worker-t) == dead ]]'
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))

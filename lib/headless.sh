@@ -52,7 +52,15 @@ headless_spawn() {
         wt="${3:?worktree dir required}" kind="${4:-opencode}"
   local pidfile="$HL_PIDS/$worker.pid" log="$HL_LOGS/$worker.log"
 
+  # Absolute paths before the wrapper runs: the brief is validated against
+  # the caller's cwd but resolved by the worker inside the worktree — a
+  # relative pointer would name a different file there. Normalization comes
+  # after the existence check so a bad path fails with the caller's own
+  # spelling (and dirname of an existing file always resolves, keeping
+  # set -e quiet).
   [[ -f "$brief" ]] || { printf 'headless: brief file not found: %s\n' "$brief" >&2; return 1; }
+  brief=$(cd "$(dirname "$brief")" && pwd)/$(basename "$brief")
+  wt=$(cd "$wt" && pwd)
   [[ -d "$wt" ]] || { printf 'headless: worktree dir not found: %s\n' "$wt" >&2; return 1; }
   case "$kind" in
     opencode|claude|agy) ;;
@@ -83,17 +91,34 @@ headless_spawn() {
 
   # Wrapper subshell: cwd = worktree, both output streams to the durable
   # log, exit marker appended after the vendor exits so status can tell
-  # `exited rc=N` from `dead`. Vendor invoked through its non-interactive
-  # entrypoint with the prompt as a CLI argument — never PTY injection:
-  # there is no `send-keys`, no `sleep`, no synthetic enter anywhere here.
+  # `exited rc=N` from `dead`. The vendor runs as a direct child of this
+  # wrapper, and the wrapper's signal traps FORWARD to it before
+  # concluding — a TERM to the pidfile pid must never orphan a vendor CLI
+  # that is still executing inside the worktree (round-2 critique). A
+  # signalled conclusion exits 128+SIG and deliberately writes NO marker:
+  # killed is `dead`, never a fabricated `exited rc=N`.
+  # Vendor invoked through its non-interactive entrypoint with the prompt
+  # as a CLI argument — never PTY injection: there is no `send-keys`, no
+  # `sleep`, no synthetic enter anywhere here.
   (
     cd "$wt" || exit 127
+    child=""
+    # shellcheck disable=SC2329  # invoked indirectly via the traps below
+    _hl_signal() { # SIGNAL_NAME SIGNAL_NUMBER → forward, reap, conclude dead
+      [[ -n "$child" ]] && kill -s "$1" "$child" 2>/dev/null || true
+      wait "$child" 2>/dev/null
+      exit $((128 + $2))
+    }
+    trap '_hl_signal TERM 15' TERM
+    trap '_hl_signal INT 2'  INT
+    trap '_hl_signal HUP 1'  HUP
     rc=0
     case "$kind" in
-      claude)   claude -p "$prompt"   || rc=$? ;;
-      opencode) opencode run "$prompt" || rc=$? ;;
-      agy)      agy -p "$prompt"      || rc=$? ;;
+      claude)   claude -p "$prompt"    & child=$! ;;
+      opencode) opencode run "$prompt" & child=$! ;;
+      agy)      agy -p "$prompt"      & child=$! ;;
     esac
+    wait "$child" || rc=$?
     printf '\n[_exit_ rc=%s]\n' "$rc"
     exit "$rc"
   ) >"$log" 2>&1 &
@@ -120,10 +145,12 @@ headless_status() {
     printf 'running (pid %s)\n' "$pid"
     return 0
   fi
-  # Process gone: the wrapper's exit marker (last line of the log) separates
-  # a concluded run from one that died without reporting.
-  marker=$(tail -n1 "$HL_LOGS/$worker.log" 2>/dev/null \
-             | sed -nE 's/^\[_exit_ rc=([0-9]+)\]$/\1/p')
+  # Process gone: the wrapper's exit marker separates a concluded run from
+  # one that died without reporting. Scanned across the trailing lines, not
+  # just the final one — late log noise (or a trailing blank line) must not
+  # flip `exited` into `dead`.
+  marker=$(tail -n5 "$HL_LOGS/$worker.log" 2>/dev/null \
+             | sed -nE 's/^\[_exit_ rc=([0-9]+)\]$/\1/p' | tail -n1)
   if [[ -n "$marker" ]]; then
     printf 'exited rc=%s\n' "$marker"
   else
@@ -145,8 +172,13 @@ headless_kill() {
   fi
   pid=$(head -n1 "$pidfile" 2>/dev/null || true)
   if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+    # Children first (the vendor CLI is the wrapper's direct child): stopping
+    # it immediately halts worktree mutation, and the wrapper's own traps
+    # would forward too — belt and braces, because kill -9 to the wrapper
+    # can't be trapped.
+    pkill -P "$pid" 2>/dev/null || true
     kill -s "$sig" "$pid" 2>/dev/null || true
-    printf 'headless: sent %s to %s (pid %s)\n' "$sig" "$worker" "$pid" >&2
+    printf 'headless: sent %s to %s (pid %s) + children\n' "$sig" "$worker" "$pid" >&2
   else
     printf 'headless: %s pidfile stale (pid %s dead) — cleaning up\n' "$worker" "${pid:-empty}" >&2
   fi
