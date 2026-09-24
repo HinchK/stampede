@@ -4,7 +4,6 @@ title: "bin/stampede headless CLI entrypoint"
 type: wayfinder:task
 status: backlog
 assignee: arch
-blocked_by: HEADLESS-5
 owns: lib/cli/stampede-headless.sh,bin/stampede,tests/test_cli.sh,CLAUDE.md
 parent: maps/headless-run-mode.md
 ---
