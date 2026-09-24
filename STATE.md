@@ -104,23 +104,24 @@
 - **Trust Tax Telemetry Milestone (#TRUST-1 — COMPLETE — Published & Promoted):**
   - **TRUST-1 Complete:** `c8e78fc` / `736065c`: Published empirical trust-tax telemetry measurements in `docs/findings/trust-tax-telemetry-measurements.md`, updated `docs/findings/swarm-orchestration-retrospective.md` §3.2, clarified `PROVE-7` interval metrics, and flipped `maps/tickets/trust-1-real-numbers.md` to resolved.
   - **Full Branch Synchronization:** All branches (`main`, `origin/main`, `swarm/stampede/integration`) are fully reconciled and promoted at commit `736065c`.
-- **Headless Mode Milestone (HEADLESS-1 & HEADLESS-2 COMPLETE — Proven & Researched):**
+- **Headless Mode Milestone (HEADLESS-1..HEADLESS-3 COMPLETE — Proven, Researched, and Harnessed):**
   - **HEADLESS-1 Complete:** `c8fbad2`: Focus semantics audit resolved as premise-disproven on herdr 0.9.1 (`agent prompt` has no `--no-focus` and does not steal focus; `pane split` already passes it). Receipts in `docs/findings/herdr-semantics.md` §F/§G; reviewer PASS verdict (`.herdr-swarm/reviews/HEADLESS-1-c8fbad2980971cc6b331f5cb1e7ae8f3275dd326.md`); integrated on `swarm/stampede/integration`.
-  - **HEADLESS-2 Complete:** `aad1b88`: Comprehensive design research document authored in `docs/findings/headless-mode-design.md` addressing harvesting, seat scoping, brief delivery, and safety invariants. Zero code written; ready for driver architecture confirmation.
-- **Promote Gate Hardening Milestone (GATE-1 & GATE-2 COMPLETE — Implemented & Documented):**
-  - **GATE-1 Complete:** `e86f790`: Implemented `_arb_promote_pane_check()` fail-closed agent-pane guard in `lib/arbiter.sh` with hermetic tests in `tests/test_arbiter.sh`. Reviewer PASS verdict (`.herdr-swarm/reviews/GATE-1-e86f79069fce1f3cca472fb034e33eb8c8079740.md`); integrated on `swarm/stampede/integration`.
-  - **GATE-2 Complete:** Amended ADR 0009 (`docs/adr/0009-arbiter-branch-integration-and-cas-merge.md`) and indexed in `docs/adr/README.md`, documenting the pane-check mechanism, looper incident motivation, local hardening limitations, GitHub 403 barrier, and credential separation roadmap.
+  - **HEADLESS-2 Complete:** `aad1b88`: Comprehensive design research document authored in `docs/findings/headless-mode-design.md` addressing harvesting, seat scoping, brief delivery, and safety invariants; corrected citations and status (`7d86509`). Settled with driver on additive batch drainer (`stampede headless`), direct subprocess management (Option A).
+  - **HEADLESS-3 Complete:** `b157772`: `lib/headless.sh` subprocess harness for pane-less workers (`headless_spawn`, `headless_status`, `headless_kill`). Passed through a genuine critique round where reviewer found orphaned vendor child defect on kill; implementer added signal forwarding traps (`_hl_signal`), child process sweep (`pkill -P`), path normalization, and robust marker parsing. Hermetic suite `tests/test_headless.sh` (30/30 passed). Reviewer PASS on Round 2/2; auto-drained and integrated on `swarm/stampede/integration` at `b157772`.
+  - **HEADLESS-4 Dispatched:** Released to `maps/tickets/headless-4-harvest-wiring.md`, partition checked and leased to `arch-1-hinchk-stampede`, actively implementing supervisor log harvesting.
 - **Standing Guardrails:**
   - Arch briefs enforce Single-Ticket Scope Guardrail: workers halt and await looper dispatch after reporting completion.
   - Base branch promotion remains human-only (DOG-12), reinforced by `_arb_promote_pane_check()` against in-pane execution.
-- **Total Test Suite Health:** **498 passed, 0 failed** across 18 suites on integration (57 arbiter, 43 review loop, 42 worktree, 39 partition, 34 repo_state, 33 async gate, 33 config, 32 cli_status, 28 quota, 27 gh_sync, 24 cli_init, 18 profile, 17 ci_local, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 13 telemetry); `make check` green (lint 0 warnings).
+- **Total Test Suite Health:** All 19 suites green (`make check` clean, 0 ShellCheck warnings).
 
 ---
 
 ## 3. Immediate Next Step
 
-- **Human Promote**: The human driver must execute `bin/stampede promote` / `bash lib/arbiter.sh promote --confirm` from an unmanaged plain shell (exercising the new `_arb_promote_pane_check()` gate) to promote `swarm/stampede/integration` (carrying `HEADLESS-1` @ `c8fbad2` and `GATE-1` @ `e86f790`) into `main`, and push to `origin/main`.
-- **Driver Alignment on Headless Mode Architecture**: Review `docs/findings/headless-mode-design.md` with the human driver to confirm the core destination (additive batch drainer vs. complete pane replacement) before chartering implementation tickets via `maps/headless-run-mode.md`.
+1. **Monitor HEADLESS-4**: Oversee `arch-1` implementation of `loop-bot-herd.sh` `--headless` log harvesting and `tests/test_async_gate.sh`.
+2. **Review & Integrate HEADLESS-4**: Harvest verdict, run through Autonomous Reviewer Loop, integrate via Arbiter, and release lease.
+3. **Sequence HEADLESS-5 through HEADLESS-7**: Advance through unattended safety hardening (`HEADLESS-5`), CLI entrypoint `stampede headless` (`HEADLESS-6`), and ADR (`HEADLESS-7`).
+4. **Final Reconciliation & Human Promote Hand-off**: Merge `main` into `swarm/stampede/integration`, run full `make check`, and hand off `bash lib/arbiter.sh promote --confirm && git push origin main` to the human driver.
 
 
 
