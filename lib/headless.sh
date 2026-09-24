@@ -35,6 +35,13 @@
 
 set -euo pipefail
 
+# resolve_timeout (DOG-15 idiom, shared): every spawned worker is bounded by
+# a hard wall-clock timeout, so the harness needs the same resolver the
+# suite gates use. Sourced lazily-resilient: common.sh only defines helpers.
+SCRIPT_DIR_HL=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck disable=SC1091  # sibling shared helpers (resolve_timeout)
+source "${SCRIPT_DIR_HL}/lib/common.sh"
+
 _hl_cfg() {
   HL_STATE="${STATE_DIR:-${REPO_DIR:-$PWD}/.herdr-swarm}"
   HL_PIDS="${HL_STATE}/pids"
@@ -68,6 +75,18 @@ headless_spawn() {
   esac
 
   mkdir -p "$HL_PIDS" "$HL_LOGS" "$HL_CHANNEL"
+
+  # Hard wall-clock bound (HEADLESS-5 hazard 2): an unattended worker that
+  # hangs holds its lease and starves every later ticket touching the same
+  # paths, so every spawn runs under timeout(1). Fail closed when no
+  # runnable timeout exists — an unbounded headless worker is exactly the
+  # wedge this exists to prevent (DOG-15 semantics: environment defect, not
+  # a worker failure).
+  if ! resolve_timeout; then
+    printf 'headless: no runnable timeout(1) — refusing to spawn %s unbounded\n' "$worker" >&2
+    return 1
+  fi
+  local tmo="${CONFIG_HEADLESS_WORKER_TIMEOUT_S:-${HEADLESS_WORKER_TIMEOUT_S:-600}}"
 
   # Double-spawn guard: a live pid for this worker means one subprocess per
   # worktree is already enforced — refuse rather than pile a second vendor
@@ -114,9 +133,9 @@ headless_spawn() {
     trap '_hl_signal HUP 1'  HUP
     rc=0
     case "$kind" in
-      claude)   claude -p "$prompt"    & child=$! ;;
-      opencode) opencode run "$prompt" & child=$! ;;
-      agy)      agy -p "$prompt"      & child=$! ;;
+      claude)   "$TIMEOUT_BIN" "$tmo" claude -p "$prompt"    & child=$! ;;
+      opencode) "$TIMEOUT_BIN" "$tmo" opencode run "$prompt" & child=$! ;;
+      agy)      "$TIMEOUT_BIN" "$tmo" agy -p "$prompt"      & child=$! ;;
     esac
     wait "$child" || rc=$?
     printf '\n[_exit_ rc=%s]\n' "$rc"
@@ -186,6 +205,59 @@ headless_kill() {
   return 0
 }
 
+# headless_reap — next-pass eviction of stale pidfiles (HEADLESS-5 hazard 2):
+# a worker killed by its wall-clock (or by anything else) must not leave its
+# marker dangling. Live holders are left alone — same kill -0 live/dead
+# judgement as the arbiter lock and lease lock evictions (PROVE-7).
+headless_reap() {
+  _hl_cfg
+  local pf pid
+  [[ -d "$HL_PIDS" ]] || return 0
+  for pf in "$HL_PIDS"/*.pid; do
+    [[ -f "$pf" ]] || continue
+    pid=$(head -n1 "$pf" 2>/dev/null || true)
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      continue
+    fi
+    printf 'headless: evicting stale pidfile %s (pid %s dead)\n' "$(basename "$pf")" "${pid:-empty}" >&2
+    rm -f "$pf"
+  done
+  return 0
+}
+
+# ── re-verdict ceiling + dead letter (HEADLESS-5 hazards 1+3) ───────────────
+# Pure functions over the supervisor's session-verdict log: the ceiling
+# counts a ticket's own conclusive failures (RED/invalidated/stale — the
+# three outcomes that trigger a critique re-verdict), never its greens.
+
+headless_attempt_count() { # TICKET SESSION_LOG
+  jq -r -s --arg t "$1" \
+    '[.[] | select((.ticket|tostring) == $t and (.suite == "RED" or .suite == "invalidated" or .suite == "stale"))] | length' \
+    "$2" 2>/dev/null || printf '0'
+}
+
+headless_deadletter_due() { # TICKET MAX_ATTEMPTS SESSION_LOG → rc 0 when due
+  local n
+  n=$(headless_attempt_count "$1" "$3")
+  [[ "$n" =~ ^[0-9]+$ ]] || n=0
+  (( n >= $2 ))
+}
+
+dead_letter_record() { # TICKET SHA REASON [SESSION] [STATE_DIR]
+  local ticket="$1" sha="$2" reason="$3" session="${4:-none}" sd="${5:-${STATE_DIR:-$PWD/.herdr-swarm}}"
+  mkdir -p "$sd"
+  jq -cn --argjson ts "$(date +%s)" --arg s "$session" --arg t "$ticket" \
+       --arg h "$sha" --arg r "$reason" \
+       '{ts: $ts, session: $s, ticket: $t, sha: $h, reason: $r}' \
+    >> "$sd/dead-letter.jsonl"
+}
+
+headless_deadletter_count() { # [SESSION] [DEADLETTER_FILE] → prints count
+  local session="${1:-none}" f="${2:-${STATE_DIR:-$PWD/.herdr-swarm}/dead-letter.jsonl}"
+  [[ -f "$f" ]] || { printf '0\n'; return 0; }
+  jq -r -s --arg s "$session" '[.[] | select(.session == $s)] | length' "$f" 2>/dev/null || printf '0'
+}
+
 # CLI dispatcher (library siblings' convention; also keeps `bash -n` honest)
 if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
   cmd="${1:-}"
@@ -194,8 +266,16 @@ if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
     spawn)  headless_spawn "$@" ;;
     status) headless_status "$@" ;;
     kill)   headless_kill "$@" ;;
+    reap)   headless_reap "$@" ;;
+    # Batch entrypoint helper: a headless run exits non-zero when its own
+    # session left anything in the dead-letter log (Hazard 3 — CI must see it).
+    deadletter-check)
+      n=$(headless_deadletter_count "${1:-none}" "${2:+$2/dead-letter.jsonl}")
+      printf '%s\n' "$n"
+      (( n == 0 ))
+      ;;
     *)
-      printf 'Usage: %s spawn <worker> <brief-file> <worktree-dir> [kind] | status <worker> | kill <worker> [signal]\n' "$0" >&2
+      printf 'Usage: %s spawn <worker> <brief> <worktree> [kind] | status <worker> | kill <worker> [sig] | reap | deadletter-check <session> [state-dir]\n' "$0" >&2
       exit 1
       ;;
   esac

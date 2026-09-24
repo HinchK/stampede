@@ -13,10 +13,12 @@ PASS=0
 FAIL=0
 
 cleanup() { rm -rf "$TEST_DIR"; }
-trap cleanup EXIT
+# preserve the failing status through cleanup (bash 3.2 EXIT-trap quirk:
+# a plain trap body can re-report success and hide a red run)
+trap 'rc=$?; rm -rf "$TEST_DIR"; exit $rc' EXIT
 
-ok()   { printf '  ✓ [%s] %s\n' "$1" "$2"; PASS=$((PASS + 1)); }
-bad()  { printf '  ✗ [%s] %s\n' "$1" "$2"; FAIL=$((FAIL + 1)); }
+ok()   { printf '  ✓ [%s] %s\n' "$1" "${2:-}"; PASS=$((PASS + 1)); }
+bad()  { printf '  ✗ [%s] %s\n' "$1" "${2:-}"; FAIL=$((FAIL + 1)); }
 check() { # LABEL DESCRIPTION 'ASSERTION (eval)'
   local label="$1" desc="$2" body="$3"
   if eval "$body" >/dev/null 2>&1; then ok "$label" "$desc"; else bad "$label" "$desc"; fi
@@ -177,6 +179,83 @@ sleep 0.5
 check 6d  "direct TERM: wrapper forwards signal to child" '! kill -0 "$tchild" 2>/dev/null'
 check 6d2 "signalled run reports dead (no fabricated exit marker)" \
   '[[ $(headless_status worker-t) == dead ]]'
+
+# ── 7. hard wall-clock timeout on every spawn (HEADLESS-5 hazard 2) ────────
+# Fail closed when no runnable timeout(1) exists (DOG-15 pattern): spawn
+# must refuse rather than run unbounded.
+if TIMEOUT_BIN="/nonexistent/timeout" headless_spawn worker-to "$TEST_DIR/brief.md" "$WT" opencode >/dev/null 2>&1; then
+  bad "7a spawn refuses when timeout(1) is unresolvable"
+else
+  ok "7a spawn refuses when timeout(1) is unresolvable"
+fi
+[[ ! -f "$STATE_DIR/pids/worker-to.pid" ]] \
+  && ok "7a2 refused spawn left no pidfile" || bad "7a2 refused spawn left no pidfile"
+# shellcheck disable=SC1091  # resolve_timeout lives in the sibling common lib
+if source "$SCRIPT_DIR/lib/common.sh" && resolve_timeout; then
+  export HL_STUB_SLEEP=30 CONFIG_HEADLESS_WORKER_TIMEOUT_S=1
+  headless_spawn worker-hang "$TEST_DIR/brief.md" "$WT" opencode >/dev/null
+  sleep 2.5
+  [[ "$(headless_status worker-hang)" == "exited rc=124" ]] \
+    && ok "7b hung worker timeout-killed at the wall clock (rc=124)" \
+    || bad "7b hung worker: $(headless_status worker-hang)"
+  unset CONFIG_HEADLESS_WORKER_TIMEOUT_S
+  export HL_STUB_SLEEP=0.3
+else
+  printf '  · [7b] skipped — no runnable timeout(1) on this machine\n' >&2
+fi
+
+# headless_reap: stale pidfiles (dead holder) evicted on the next pass,
+# live ones untouched (PROVE-7's kill -0 idiom, surfaced for pids/).
+stale_pid=$(sh -c 'sleep 0.1 & printf %s $!' | head -n1)
+sleep 0.4
+printf '%s\n' "$stale_pid" > "$STATE_DIR/pids/worker-gone.pid"
+export HL_STUB_SLEEP=30
+headless_spawn worker-live "$TEST_DIR/brief.md" "$WT" opencode >/dev/null
+headless_reap >/dev/null 2>&1
+check 7c  "reap evicts the stale pidfile" '[[ ! -f "$STATE_DIR/pids/worker-gone.pid" ]]'
+check 7d  "reap leaves the live worker's pidfile alone" \
+  '[[ -f "$STATE_DIR/pids/worker-live.pid" ]]'
+headless_kill worker-live >/dev/null 2>&1
+export HL_STUB_SLEEP=0.3
+
+# ── 8. re-verdict ceiling + dead-letter (HEADLESS-5 hazards 1+3) ───────────
+SLOG="$TEST_DIR/session.jsonl"; : > "$SLOG"
+# two conclusive failures for DL-1 — attempt 1 critiques, attempt 2 dead-letters
+printf '{"ticket":"DL-1","sha":"aaaaaaa","suite":"RED"}\n' >> "$SLOG"
+[[ $(headless_attempt_count DL-1 "$SLOG") == 1 ]] \
+  && ok "8a attempt count reads the session log" || bad "8a attempt count: $(headless_attempt_count DL-1 "$SLOG")"
+if headless_deadletter_due DL-1 2 "$SLOG" 2>/dev/null; then
+  bad "8b below ceiling: not yet dead-letter due"
+else
+  ok "8b below ceiling: not yet dead-letter due"
+fi
+printf '{"ticket":"DL-1","sha":"bbbbbbb","suite":"RED"}\n' >> "$SLOG"
+headless_deadletter_due DL-1 2 "$SLOG" \
+  && ok "8c at ceiling: dead-letter due" || bad "8c at ceiling: not due"
+printf '{"ticket":"DL-2","sha":"ccccccc","suite":"green"}\n' >> "$SLOG"
+if headless_deadletter_due DL-2 2 "$SLOG" 2>/dev/null; then
+  bad "8d green tickets never dead-letter"
+else
+  ok "8d green tickets never dead-letter"
+fi
+
+dead_letter_record DL-1 bbbbbbb "suite RED twice — re-verdict ceiling" sess-test
+dead_letter_record DL-9 ddddddd "review blocked after 2 rounds" sess-test
+dead_letter_record DL-3 eeeeeee "other run" sess-other
+DL="$STATE_DIR/dead-letter.jsonl"
+check 8e  "dead-letter records are structured JSONL" \
+  'jq -e -s "length == 3" "$DL" >/dev/null'
+check 8f  "records carry session, ticket, sha, reason" \
+  'jq -e -s ".[0] | .session == \"sess-test\" and .ticket == \"DL-1\" and .reason != \"\"" "$DL" >/dev/null'
+[[ $(headless_deadletter_count sess-test "$DL") == 2 ]] \
+  && ok "8g per-run count filters by session" || bad "8g count: $(headless_deadletter_count sess-test "$DL")"
+if "$SCRIPT_DIR/lib/headless.sh" deadletter-check sess-test "$STATE_DIR" >/dev/null 2>&1; then
+  bad "8h deadletter-check exits non-zero when this run has entries"
+else
+  ok "8h deadletter-check exits non-zero when this run has entries"
+fi
+"$SCRIPT_DIR/lib/headless.sh" deadletter-check sess-clean "$STATE_DIR" >/dev/null 2>&1 \
+  && ok "8i deadletter-check exits 0 for a clean run" || bad "8i clean run exited non-zero"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))

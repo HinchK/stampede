@@ -124,6 +124,7 @@ geom = cfg.get('geometry', {})
 fanout = cfg.get('fanout', {})
 seats = cfg.get('seats', {})
 reviewer = cfg.get('reviewer', {})
+headless = cfg.get('headless', {})
 
 emit('SWARM_CONFIG_NAME', swarm.get('name', 'herd'))
 emit('SWARM_WORKSPACE_LABEL', swarm.get('workspace_label', 'herd'))
@@ -144,6 +145,17 @@ if not isinstance(reviewer_rounds, int) or isinstance(reviewer_rounds, bool) or 
     sys.exit("config error: reviewer.max_rounds must be an integer >= 1")
 emit('CONFIG_REVIEW_LOOP', 1 if reviewer_loop else 0)
 emit('CONFIG_REVIEW_MAX_ROUNDS', reviewer_rounds)
+# Headless safety ceilings (HEADLESS-5): same strict-integer validation as
+# reviewer.max_rounds — these bound unattended retries and wall clocks, so a
+# truthy string or 0 must fail closed at binding time, not mid-run.
+hl_attempts = headless.get('max_verdict_attempts', 2)
+if not isinstance(hl_attempts, int) or isinstance(hl_attempts, bool) or hl_attempts < 1:
+    sys.exit("config error: headless.max_verdict_attempts must be an integer >= 1")
+hl_timeout = headless.get('worker_timeout_s', 600)
+if not isinstance(hl_timeout, int) or isinstance(hl_timeout, bool) or hl_timeout < 1:
+    sys.exit("config error: headless.worker_timeout_s must be an integer >= 1")
+emit('CONFIG_HEADLESS_MAX_ATTEMPTS', hl_attempts)
+emit('CONFIG_HEADLESS_WORKER_TIMEOUT_S', hl_timeout)
 emit('PROXY_ENABLED', str(proxy.get('enabled', False)).lower())
 # No localhost fallbacks (DOG-7): a config without [proxy] endpoint/health
 # keys binds empty; the only live proxy URLs live in swarm.config.toml.

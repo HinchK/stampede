@@ -184,6 +184,39 @@ check "6e" "shipped config: reviewer loop ON by default (PROVE-2)" \
 check "6e2" "shipped config: reviewer seat in roster (PROVE-2)" \
   '[[ $(config_get_seats "$SHIPPED") == *reviewer* ]]'
 
+# ── 7. headless safety ceilings (HEADLESS-5) ───────────────────────────────
+C7="$TEST_DIR/headless-defaults.toml"
+cat > "$C7" <<'TOML'
+[swarm]
+name = "x"
+TOML
+check "7a" "no [headless] table → max attempts default 2" \
+  'eval "$(config_dump_env x "$C7")" && [[ $CONFIG_HEADLESS_MAX_ATTEMPTS == "2" ]]'
+check "7b" "no [headless] table → worker timeout default 600" \
+  'eval "$(config_dump_env x "$C7")" && [[ $CONFIG_HEADLESS_WORKER_TIMEOUT_S == "600" ]]'
+C7B="$TEST_DIR/headless-set.toml"
+cat > "$C7B" <<'TOML'
+[headless]
+max_verdict_attempts = 3
+worker_timeout_s = 900
+TOML
+check "7c" "explicit ceilings bind" \
+  'eval "$(config_dump_env x "$C7B")" && [[ $CONFIG_HEADLESS_MAX_ATTEMPTS == "3" && $CONFIG_HEADLESS_WORKER_TIMEOUT_S == "900" ]]'
+C7C="$TEST_DIR/headless-bad.toml"
+cat > "$C7C" <<'TOML'
+[headless]
+max_verdict_attempts = "2"
+TOML
+check "7d" "truthy-string attempts fail closed" '! config_dump_env x "$C7C" >/dev/null 2>&1'
+C7D="$TEST_DIR/headless-zero.toml"
+cat > "$C7D" <<'TOML'
+[headless]
+max_verdict_attempts = 0
+TOML
+check "7e" "zero attempts fail closed" '! config_dump_env x "$C7D" >/dev/null 2>&1'
+check "7f" "shipped config binds the headless ceilings" \
+  'eval "$(config_dump_env x "$SHIPPED")" && [[ $CONFIG_HEADLESS_MAX_ATTEMPTS == "2" && $CONFIG_HEADLESS_WORKER_TIMEOUT_S == "600" ]]'
+
 C6C="$TEST_DIR/reviewer-badloop.toml"
 cat > "$C6C" <<'TOML'
 [reviewer]

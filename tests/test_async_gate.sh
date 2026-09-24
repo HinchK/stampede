@@ -398,6 +398,37 @@ harvest_verdicts >/dev/null 2>&1
 ! grep -q "looper ::" "$PROMPTS" \
   && assert_ok 14c3 "no herdr prompt to looper in headless mode" || assert_bad 14c3 "looper prompt leaked"
 
+# [14e] headless re-verdict ceiling (HEADLESS-5): second conclusive RED for
+# the same ticket → DEAD_LETTER, lease released, NO third critique spawn.
+export CONFIG_HEADLESS_MAX_ATTEMPTS=2
+printf '#!/bin/sh\nexit 3\n' > "$WTB/gate.sh"   # still the failing gate
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m dl1
+SHA_H4=$(git -C "$WTB" rev-parse HEAD)
+printf 'ARCH DONE #H-4 %s\n' "$SHA_H4" > "$STATE/logs/seat-b.log"
+printf '{"version":1,"leases":[{"ticket":"H-4","seat":"seat-b","paths":[]}]}\n' > "$STATE/leases.json"
+harvest_verdicts >/dev/null 2>&1
+sleep 0.6; gate_reap >/dev/null 2>&1
+[[ "$(last_suite_of H-4)" == "RED" ]] \
+  && assert_ok 14e1 "attempt 1: RED critiques as usual" || assert_bad 14e1 "attempt 1 ($(last_suite_of H-4))"
+grep -q '"ticket":"H-4"' "$STATE/leases.json" 2>/dev/null \
+  && assert_ok 14e2 "lease held while attempts remain" || assert_bad 14e2 "lease missing mid-retries"
+sleep 0.5
+: > "$TEST_DIR/hb-argv.log"
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m dl2
+SHA_H5=$(git -C "$WTB" rev-parse HEAD)
+printf 'ARCH DONE #H-4 %s\n' "$SHA_H5" > "$STATE/logs/seat-b.log"
+harvest_verdicts >/dev/null 2>&1
+sleep 0.6; gate_reap >/dev/null 2>&1
+[[ "$(last_suite_of H-4)" == "dead_letter" ]] \
+  && assert_ok 14e3 "attempt 2 at ceiling: DEAD_LETTER recorded" || assert_bad 14e3 "attempt 2 ($(last_suite_of H-4))"
+jq -e -s 'any(.[]; .ticket == "H-4" and .reason != "")' "$STATE/dead-letter.jsonl" >/dev/null 2>&1 \
+  && assert_ok 14e4 "dead-letter.jsonl carries the structured record" || assert_bad 14e4 "no dead-letter record"
+! grep -q '"ticket":"H-4"' "$STATE/leases.json" 2>/dev/null \
+  && assert_ok 14e5 "DEAD_LETTER released the lease" || assert_bad 14e5 "lease still held"
+[[ ! -s "$TEST_DIR/hb-argv.log" ]] \
+  && assert_ok 14e6 "no critique spawn past the ceiling" || assert_bad 14e6 "spawned anyway: $(cat "$TEST_DIR/hb-argv.log")"
+unset CONFIG_HEADLESS_MAX_ATTEMPTS
+
 # [14d] pane mode untouched by all of the above
 unset HEADLESS_MODE
 VERDICT_A=""

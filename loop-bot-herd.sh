@@ -301,7 +301,12 @@ gate_reap() {
 
     if ! gate_tree_matches "$dir" "$sha"; then
       suite_ok="invalidated"; bad "gate job ${jid}: INVALIDATED — tree drifted during the background run"
-      worker_feedback "$seat" "$ticket" "$sha" invalidated "LOOP-BOT: suite run for #$ticket @ ${sha} was INVALIDATED — the tree changed during the gate. Re-verdict 'ARCH DONE #$ticket <sha>' from a stable tree."
+      if _headless_ceiling_breached "$ticket" 1; then
+        suite_ok="dead_letter"
+        _headless_deadletter "$ticket" "$sha" "tree drifted during the gate (ceiling reached)"
+      else
+        worker_feedback "$seat" "$ticket" "$sha" invalidated "LOOP-BOT: suite run for #$ticket @ ${sha} was INVALIDATED — the tree changed during the gate. Re-verdict 'ARCH DONE #$ticket <sha>' from a stable tree."
+      fi
     elif [[ "$rc_val" == "0" ]]; then
       suite_ok="green"; ok "gate job ${jid}: GREEN (log: $gate_log)"
       looper_notice "LOOP-BOT: filed verdict for #$ticket @ ${sha} from $seat's pane (green)."
@@ -324,7 +329,12 @@ gate_reap() {
       fi
     else
       suite_ok="RED"; bad "gate job ${jid}: RED (rc=${rc_val}) — NOT filed; worker must fix (log: $gate_log)"
-      worker_feedback "$seat" "$ticket" "$sha" red "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate log: $gate_log)."
+      if _headless_ceiling_breached "$ticket" 1; then
+        suite_ok="dead_letter"
+        _headless_deadletter "$ticket" "$sha" "suite RED — re-verdict ceiling reached"
+      else
+        worker_feedback "$seat" "$ticket" "$sha" red "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate log: $gate_log)."
+      fi
     fi
 
     echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"exit_code\": $rc_val, \"log\": \"$gate_log\"}" >> "$SESSION_LOG"
@@ -391,6 +401,11 @@ _review_directives() { # DIRECTIVES-LINES TICKET SHA
         # d1=ticket d2=sha d3=round d4=max — fail closed, never enqueued
         bad "review loop: #$d1 @ ${d2} BLOCKED after ${d4} rounds — human review required"
         looper_notice "LOOP-BOT: review for #${d1} @ ${d2} BLOCKED after ${d4} rounds — human review required."
+        # HEADLESS-5 hazard 3: a blocked review is a terminal outcome —
+        # dead-letter it so the unattended run's exit code reflects it.
+        if _headless_active; then
+          _headless_deadletter "$d1" "$d2" "review blocked after ${d4} rounds"
+        fi
         ;;
       ALERT_INVALID)
         # d1=ticket d2..=reason (reason may contain spaces)
@@ -525,8 +540,40 @@ worker_feedback() { # SEAT TICKET SHA TAG MESSAGE
   fi
 }
 
+# DEAD_LETTER transition (HEADLESS-5 hazard 1): the re-verdict ceiling
+# exists to stop the runaway critique loop, so this NEVER spawns another
+# turn — it records the outcome in the session log, drops a durable
+# dead-letter entry (hazard 3), releases the ticket's lease (paths re-open),
+# and escalates through the durable notice channel.
+_headless_deadletter() { # TICKET SHA REASON
+  local ticket="$1" sha="$2" reason="$3"
+  bad "headless: #$ticket @ ${sha} → DEAD_LETTER — ${reason}"
+  echo "{\"ts\": $(date +%s), \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"headless\", \"suite\": \"dead_letter\", \"reason\": \"$reason\"}" >> "$SESSION_LOG"
+  dead_letter_record "$ticket" "$sha" "$reason" "$SESSION_ID"
+  lease_release "$ticket" >/dev/null 2>&1 || true
+  looper_notice "LOOP-BOT: #$ticket @ ${sha} moved to DEAD_LETTER (${reason}) — lease released; human evaluation required."
+}
+
+# Ceiling judgement for the feedback sites. The inline paths append their
+# session record BEFORE branching, the async gate_reap appends it AFTER —
+# PENDING=1 accounts for the in-flight outcome there. "Due" means the
+# ticket's own conclusive failures (RED/invalidated/stale, recorded +
+# pending) have reached [headless] max_verdict_attempts.
+_headless_ceiling_breached() { # TICKET [PENDING=0]
+  _headless_active || return 1
+  local max="${CONFIG_HEADLESS_MAX_ATTEMPTS:-2}" pending="${2:-0}" n
+  [[ "$pending" =~ ^[0-9]+$ ]] || pending=0
+  n=$(headless_attempt_count "$1" "$SESSION_LOG")
+  (( n + pending >= max ))
+}
+
 harvest_verdicts() {
   local seat out
+  # Next-pass eviction (HEADLESS-5 hazard 2): pidfiles of workers that died
+  # at their wall clock (or otherwise) must not dangle into this pass.
+  if _headless_active; then
+    headless_reap
+  fi
   for seat in "${EXPECTED_SEATS[@]}"; do
     # HEADLESS-4 read seam: where the output comes from is the ONLY mode
     # difference — same anchored regexes, same dedupe, same gate below.
@@ -587,7 +634,11 @@ harvest_verdicts() {
       if ! gate_tree_matches "$GATE_DIR" "$sha"; then
         warn "verdict for #$ticket @ ${sha}: gate tree is STALE (HEAD moved or dirty/untracked files) — not gating"
         echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"stale\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
-        worker_feedback "$seat" "$ticket" "$sha" stale "LOOP-BOT: verdict for #$ticket @ ${sha} rejected as STALE — the gate tree does not match that commit (uncommitted or untracked files, or HEAD moved). Commit your changes or remove stray files (no git stash), then re-verdict 'ARCH DONE #$ticket <new sha>'."
+        if _headless_ceiling_breached "$ticket"; then
+          _headless_deadletter "$ticket" "$sha" "gate tree stale (ceiling reached)"
+        else
+          worker_feedback "$seat" "$ticket" "$sha" stale "LOOP-BOT: verdict for #$ticket @ ${sha} rejected as STALE — the gate tree does not match that commit (uncommitted or untracked files, or HEAD moved). Commit your changes or remove stray files (no git stash), then re-verdict 'ARCH DONE #$ticket <new sha>'."
+        fi
         continue
       fi
       local suite_ok="skipped"
@@ -622,14 +673,22 @@ harvest_verdicts() {
         if ! gate_tree_matches "$GATE_DIR" "$sha"; then
           suite_ok="invalidated"; bad "suite run for #$ticket @ ${sha} INVALIDATED — tree changed during the gate"
           echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
-          worker_feedback "$seat" "$ticket" "$sha" invalidated "LOOP-BOT: suite run for #$ticket @ ${sha} was INVALIDATED — the tree changed during the gate. Re-verdict 'ARCH DONE #$ticket <sha>' from a stable tree."
+          if _headless_ceiling_breached "$ticket"; then
+            _headless_deadletter "$ticket" "$sha" "tree drifted during the gate (ceiling reached)"
+          else
+            worker_feedback "$seat" "$ticket" "$sha" invalidated "LOOP-BOT: suite run for #$ticket @ ${sha} was INVALIDATED — the tree changed during the gate. Re-verdict 'ARCH DONE #$ticket <sha>' from a stable tree."
+          fi
         elif [[ "$gate_rc" -eq 0 ]]; then
           suite_ok="green"; ok "suite gate GREEN for #$ticket @ ${sha} (log: $gate_log)"
           echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
         else
           suite_ok="RED"; bad "suite gate RED for #$ticket @ ${sha} — NOT filed; arch must fix before done (log: $gate_log)"
           echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
-          worker_feedback "$seat" "$ticket" "$sha" red "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate log: $gate_log)."
+          if _headless_ceiling_breached "$ticket"; then
+            _headless_deadletter "$ticket" "$sha" "suite RED — re-verdict ceiling reached"
+          else
+            worker_feedback "$seat" "$ticket" "$sha" red "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate log: $gate_log)."
+          fi
         fi
       elif [[ "$(ctl_get suite_gate)" == "true" ]]; then
         # No runnable suite for this project — never fake-green, record as skipped

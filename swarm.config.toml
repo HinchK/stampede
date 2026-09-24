@@ -29,6 +29,17 @@ max_workers = 2           # back-pressure comparison point
 loop = true
 max_rounds = 2
 
+[headless]
+# Unattended-run safety ceilings (HEADLESS-5, design doc §5 hazards):
+# max_verdict_attempts bounds the re-verdict loop per ticket — after this
+# many conclusive failures (RED / invalidated / stale) the ticket moves to
+# DEAD_LETTER, its lease releases, and a record lands in
+# .herdr-swarm/dead-letter.jsonl instead of retrying forever.
+# worker_timeout_s is the hard wall-clock bound on every spawned headless
+# worker (a hung worker starves every later ticket on the same paths).
+max_verdict_attempts = 2
+worker_timeout_s = 600
+
 [proxy]
 # Off by default: a universal target repo must not inherit this machine's
 # kultivait setup. Flip to true (and set serve_cmd) to route seats through
