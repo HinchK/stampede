@@ -2,7 +2,7 @@
 id: HEADLESS-6
 title: "bin/stampede headless CLI entrypoint"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: lib/cli/stampede-headless.sh,bin/stampede,tests/test_cli.sh,CLAUDE.md
 parent: maps/headless-run-mode.md
@@ -44,3 +44,10 @@ subcommand the natural fit, not a flag on a name that already means something el
 bash tests/test_cli.sh
 PATH=$(echo "$PATH" | tr ':' '\n' | grep -v herdr | paste -sd:) bin/stampede headless --max-tickets 1
 ```
+
+## Resolution
+
+- **Commit**: `155f3e4` (integrated into `swarm/stampede/integration`)
+- **Review Verdict**: PASS (Round 1/2) by `reviewer-hinchk-stampede` (`.herdr-swarm/reviews/HEADLESS-6-155f3e459698f617411836b0cd8f1a13e7d1b3a7.md`)
+- **Tests**: `tests/test_cli.sh` (31/31 passed), `make check` all 19 suites green.
+

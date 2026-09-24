@@ -53,9 +53,9 @@ daemon or display is available at all.
   — resolved, integrated @ 85b2758.
 - [Unattended safety hardening](tickets/headless-5-safety-hardening.md) (HEADLESS-5) — resolved,
   integrated @ 7f97e6e.
-- [`stampede headless` CLI entrypoint](tickets/headless-6-cli-entrypoint.md) (HEADLESS-6) — released,
-  in progress.
-- [ADR: Headless Batch Drain Mode](tickets-staged/headless-7-adr.md) (HEADLESS-7) — staged, blocked by HEADLESS-6,
+- [`stampede headless` CLI entrypoint](tickets/headless-6-cli-entrypoint.md) (HEADLESS-6) — resolved,
+  integrated @ 155f3e4.
+- [ADR: Headless Batch Drain Mode](tickets/headless-7-adr.md) (HEADLESS-7) — released, in progress,
   written against what actually got built.
 
 ## Not yet specified
