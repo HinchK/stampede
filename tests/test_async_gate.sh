@@ -248,8 +248,10 @@ GATE_CONCURRENCY=2
 # BLOCK→critique. herdr stub extended to RECORD prompts (the observable side
 # of DISPATCH directives) and serve the reviewer seat's pane.
 PROMPTS="$TEST_DIR/prompts.log"; : > "$PROMPTS"
+READS="$TEST_DIR/herdr-reads.log"; : > "$READS"
 herdr() {
   if [[ "${1:-}" == "agent" && "${2:-}" == "read" ]]; then
+    printf 'read %s\n' "$3" >> "$READS"
     [[ "${3:-}" == "seat-a" && -n "$VERDICT_A" ]] && printf '%s\n' "$VERDICT_A"
     [[ "${3:-}" == "seat-b" && -n "$VERDICT_B" ]] && printf '%s\n' "$VERDICT_B"
     [[ "${3:-}" == "seat-r" && -n "$VERDICT_R" ]] && printf '%s\n' "$VERDICT_R"
@@ -336,6 +338,72 @@ dumb_rc=0
 ( cd "$RROOT" && TERM=dumb bash -c 'set -euo pipefail; REPO_DIR="$REPO_DIR" STATE_DIR="$STATE_DIR" source ./loop-bot-herd.sh status' ) >/dev/null 2>&1 || dumb_rc=$?
 [[ "$dumb_rc" == 0 ]] && assert_ok 13e "supervisor sources cleanly under TERM=dumb" || assert_bad 13e "TERM=dumb source rc=$dumb_rc"
 unset CONFIG_REVIEW_LOOP SEAT_NAME_reviewer
+
+# ── 14: headless harvest wiring (HEADLESS-4) ────────────────────────────────
+# Verdicts read from logs/<seat>.log (lib/headless.sh harness) instead of
+# `herdr agent read`; gate + downstream identical; worker feedback becomes a
+# headless_spawn critique turn; looper notices become durable log lines.
+# Stub vendor CLI per HEADLESS-3's suite: bin-dir script recording its argv.
+HB_BIN="$TEST_DIR/hb-bin"; mkdir -p "$HB_BIN"
+printf '#!/bin/sh\nprintf "argv=%%s cwd=%%s\\n" "$*" "$(pwd)" >> "%s"\nsleep "${HB_STUB_SLEEP:-0.3}"\nexit "${HB_STUB_RC:-0}"\n' \
+  "$TEST_DIR/hb-argv.log" > "$HB_BIN/opencode"
+chmod +x "$HB_BIN/opencode"
+export PATH="$HB_BIN:$PATH"
+mkdir -p "$STATE/logs"
+
+# [14a] headless green: log-scraped verdict, gate identical, enqueued
+: > "$READS"
+SHA_H1=$(git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m headless1 && git -C "$WTB" rev-parse HEAD)
+printf 'worker chatter\nARCH DONE #H-1 %s\n' "$SHA_H1" > "$STATE/logs/seat-b.log"
+VERDICT_B=""   # pane read must not be the source here
+export HEADLESS_MODE=1
+harvest_verdicts >/dev/null 2>&1
+sleep 0.6; gate_reap >/dev/null 2>&1
+[[ "$(last_suite_of H-1)" == "green" ]] \
+  && assert_ok 14a "headless: log verdict gated green" || assert_bad 14a "headless green ($(last_suite_of H-1))"
+[[ ! -s "$READS" ]] \
+  && assert_ok 14a2 "headless: no herdr agent read issued" || assert_bad 14a2 "pane read leaked: $(cat "$READS")"
+[[ "$(qcount H-1 "$SHA_H1")" == 1 ]] \
+  && assert_ok 14a3 "headless green enqueues exactly like pane mode" || assert_bad 14a3 "enqueue ($(qcount H-1 "$SHA_H1"))"
+
+# [14b] headless RED: critique turn via headless_spawn, not PTY injection
+: > "$PROMPTS"; : > "$TEST_DIR/hb-argv.log"
+printf '#!/bin/sh\nexit 3\n' > "$WTB/gate.sh"
+git -C "$WTB" add -A; git -C "$WTB" -c user.email=t@t -c user.name=t commit -qm headlessred
+SHA_H2=$(git -C "$WTB" rev-parse HEAD)
+printf 'ARCH DONE #H-2 %s\n' "$SHA_H2" > "$STATE/logs/seat-b.log"
+harvest_verdicts >/dev/null 2>&1
+sleep 0.6; gate_reap >/dev/null 2>&1
+[[ "$(last_suite_of H-2)" == "RED" ]] \
+  && assert_ok 14b "headless RED recorded by the same gate" || assert_bad 14b "headless RED ($(last_suite_of H-2))"
+CRIT_BRIEF="$STATE/briefs/seat-b-H-2-${SHA_H2}-red.md"
+[[ -f "$CRIT_BRIEF" ]] \
+  && assert_ok 14b2 "RED feedback written as a critique brief" || assert_bad 14b2 "no critique brief at $CRIT_BRIEF"
+grep -q "ARCH DONE #H-2" "$CRIT_BRIEF" && grep -q "suite is RED" "$CRIT_BRIEF" \
+  && assert_ok 14b3 "critique brief carries re-verdict protocol + reason" || assert_bad 14b3 "critique brief content"
+grep -q "BRIEF (file): $CRIT_BRIEF" "$TEST_DIR/hb-argv.log" \
+  && assert_ok 14b4 "critique delivered via headless_spawn (vendor argv)" || assert_bad 14b4 "vendor argv: $(cat "$TEST_DIR/hb-argv.log")"
+! grep -q "seat-b :: LOOP-BOT.*RED" "$PROMPTS" \
+  && assert_ok 14b5 "no PTY prompt injected for RED in headless mode" || assert_bad 14b5 "herdr prompt leaked: $(cat "$PROMPTS")"
+sleep 0.5   # let the stub vendor exit before the next spawn guard
+
+# [14c] headless skipped-verdict: looper notice durable, no pane prompt
+: > "$PROMPTS"
+printf 'ARCH DONE #H-3 deadbeefdeadbeef\n' > "$STATE/logs/seat-b.log"
+harvest_verdicts >/dev/null 2>&1
+[[ "$(last_suite_of H-3)" == "skipped" ]] \
+  && assert_ok 14c "fabricated sha still skipped (fail-closed unchanged)" || assert_bad 14c "H-3 $(last_suite_of H-3)"
+[[ -f "$STATE/headless-notices.log" ]] && grep -q "absent from the repo" "$STATE/headless-notices.log" \
+  && assert_ok 14c2 "looper notice durably logged (no swallowed alert)" || assert_bad 14c2 "no durable notice"
+! grep -q "looper ::" "$PROMPTS" \
+  && assert_ok 14c3 "no herdr prompt to looper in headless mode" || assert_bad 14c3 "looper prompt leaked"
+
+# [14d] pane mode untouched by all of the above
+unset HEADLESS_MODE
+VERDICT_A=""
+harvest_verdicts >/dev/null 2>&1
+[[ -s "$READS" ]] \
+  && assert_ok 14d "pane mode still reads via herdr agent read" || assert_bad 14d "pane read missing"
 
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"

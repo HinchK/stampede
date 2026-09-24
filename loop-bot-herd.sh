@@ -77,6 +77,10 @@ if [[ ! -f "$SCRIPT_DIR/lib/lifecycle.sh" ]]; then
 fi
 # shellcheck disable=SC1091  # dynamically resolved sibling lib (review loop)
 source "$SCRIPT_DIR/lib/lifecycle.sh"
+# shellcheck disable=SC1091  # headless subprocess harness (HEADLESS-3/4):
+# headless_spawn/status/kill and the logs/<seat>.log convention the headless
+# harvest seam reads from. Pane mode never calls into it.
+source "$SCRIPT_DIR/lib/headless.sh"
 
 # Project profile (rendered by the launcher's ensure_profile pass)
 PROFILE_ENV="${REPO_DIR}/.herdr-swarm/profile.env"
@@ -297,10 +301,10 @@ gate_reap() {
 
     if ! gate_tree_matches "$dir" "$sha"; then
       suite_ok="invalidated"; bad "gate job ${jid}: INVALIDATED — tree drifted during the background run"
-      herdr agent prompt "$seat" "LOOP-BOT: suite run for #$ticket @ ${sha} was INVALIDATED — the tree changed during the gate. Re-verdict 'ARCH DONE #$ticket <sha>' from a stable tree." >/dev/null 2>&1 || true
+      worker_feedback "$seat" "$ticket" "$sha" invalidated "LOOP-BOT: suite run for #$ticket @ ${sha} was INVALIDATED — the tree changed during the gate. Re-verdict 'ARCH DONE #$ticket <sha>' from a stable tree."
     elif [[ "$rc_val" == "0" ]]; then
       suite_ok="green"; ok "gate job ${jid}: GREEN (log: $gate_log)"
-      herdr agent prompt looper "LOOP-BOT: filed verdict for #$ticket @ ${sha} from $seat's pane (green)." >/dev/null 2>&1 || true
+      looper_notice "LOOP-BOT: filed verdict for #$ticket @ ${sha} from $seat's pane (green)."
       if [[ "$iso" == "true" ]]; then
         # Review loop seam (REV-5): the state machine decides what a green
         # gate means next — ENQUEUE when the loop is off (the pre-REV-5
@@ -320,7 +324,7 @@ gate_reap() {
       fi
     else
       suite_ok="RED"; bad "gate job ${jid}: RED (rc=${rc_val}) — NOT filed; worker must fix (log: $gate_log)"
-      herdr agent prompt "$seat" "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate log: $gate_log)." >/dev/null 2>&1 || true
+      worker_feedback "$seat" "$ticket" "$sha" red "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate log: $gate_log)."
     fi
 
     echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"exit_code\": $rc_val, \"log\": \"$gate_log\"}" >> "$SESSION_LOG"
@@ -368,7 +372,7 @@ _review_directives() { # DIRECTIVES-LINES TICKET SHA
         # d1=reviewer-seat d2=ticket d3=sha d4=round d5=max
         local rseat="${SEAT_NAME_reviewer:-reviewer}"
         note "review loop: dispatching reviewer for #$d2 @ ${d3} (round ${d4}/${d5})"
-        herdr agent prompt "$rseat" "DISPATCH: Review #${d2} @ ${d3} (round ${d4}/${d5}). Follow your seat brief." >/dev/null 2>&1 || true
+        worker_feedback "$rseat" "$d2" "$d3" "review-r${d4}" "DISPATCH: Review #${d2} @ ${d3} (round ${d4}/${d5}). Follow your seat brief."
         "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" review.dispatched "$rseat" "$d2" \
           "$(jq -cn --arg t "$d2" --arg h "$d3" --arg r "$d4" \
             '{ticket:$t, sha:$h, round:($r|tonumber), summary:("review round " + $r + " dispatched for #" + $t)}')" \
@@ -377,7 +381,7 @@ _review_directives() { # DIRECTIVES-LINES TICKET SHA
       DISPATCH_CRITIQUE)
         # d1=impl-seat d2=ticket d3=round d4=max d5=findings-path
         note "review loop: critique round ${d3}/${d4} for #$d2 —> ${d1}"
-        herdr agent prompt "$d1" "DISPATCH CRITIQUE: #${d2} round ${d3}/${d4} — see ${d5}" >/dev/null 2>&1 || true
+        worker_feedback "$d1" "$d2" "$sha" "critique-r${d3}" "DISPATCH CRITIQUE: #${d2} round ${d3}/${d4} — see ${d5}"
         "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" review.critique "$d1" "$d2" \
           "$(jq -cn --arg t "$d2" --arg h "$sha" --arg r "$d3" --arg rec "$d1" \
             '{ticket:$t, sha:$h, round:($r|tonumber), recipient:$rec, summary:("critique round " + $r + " for #" + $t + " -> " + $rec)}')" \
@@ -386,13 +390,13 @@ _review_directives() { # DIRECTIVES-LINES TICKET SHA
       ALERT_BLOCKED)
         # d1=ticket d2=sha d3=round d4=max — fail closed, never enqueued
         bad "review loop: #$d1 @ ${d2} BLOCKED after ${d4} rounds — human review required"
-        herdr agent prompt looper "LOOP-BOT: review for #${d1} @ ${d2} BLOCKED after ${d4} rounds — human review required." >/dev/null 2>&1 || true
+        looper_notice "LOOP-BOT: review for #${d1} @ ${d2} BLOCKED after ${d4} rounds — human review required."
         ;;
       ALERT_INVALID)
         # d1=ticket d2..=reason (reason may contain spaces)
         local reason="${line#ALERT_INVALID "${d1}" }"
         bad "review loop: invalid review verdict for #${d1}: ${reason}"
-        herdr agent prompt looper "LOOP-BOT: invalid review verdict for #${d1}: ${reason}" >/dev/null 2>&1 || true
+        looper_notice "LOOP-BOT: invalid review verdict for #${d1}: ${reason}"
         ;;
       *)
         warn "review loop: unknown directive ignored: $line"
@@ -440,10 +444,97 @@ _review_scan_verdicts() { # SEAT PANE-OUTPUT
   done < <(grep -E '^[[:space:]]*REVIEW VERDICT #[A-Za-z0-9_.-]+[[:space:]]+[0-9a-fA-F]{7,40}[[:space:]]+(PASS|BLOCK)[[:space:]]*$' <<<"$out" | tail -n 5)
 }
 
+# ---- 2c. headless seams (HEADLESS-4) ---------------------------------------
+# In headless mode (HEADLESS_MODE=1) the workers are lib/headless.sh
+# subprocesses, not panes: verdicts are scraped from logs/<seat>.log with
+# the SAME anchored regexes (the harness's log IS the scrollback
+# equivalent), worker feedback is a fresh headless_spawn critique turn —
+# there is no PTY to type into; a rejected verdict is a new dispatch
+# (REV-2's critique-delivery shape) — and looper-directed notices append to
+# a durable file instead of prompting a pane that does not exist (a
+# swallowed alert is Hazard 3 of docs/findings/headless-mode-design.md).
+# Pane mode (default) behaviour is byte-identical to before: every seam
+# falls through to the same herdr call with the same message.
+
+_headless_active() { [[ "${HEADLESS_MODE:-0}" == "1" ]]; }
+
+# One seat's harvestable output: the vendor CLI's redirected stdout/stderr.
+# headless_status (lib/headless.sh) contributes liveness context only — the
+# harness's own exit-marker line matches neither verdict anchor.
+_headless_seat_output() { # SEAT
+  local logf="${STATE_DIR}/logs/$1.log"
+  [[ -f "$logf" ]] || return 0
+  local st
+  st=$(headless_status "$1" 2>/dev/null || true)
+  note "headless harvest: $1 status: ${st:-untracked}"
+  cat "$logf"
+}
+
+# Durable looper-channel: without panes there is nothing to prompt.
+_headless_notice() { # MESSAGE
+  mkdir -p "$STATE_DIR"
+  printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >> "${STATE_DIR}/headless-notices.log"
+}
+
+looper_notice() { # MESSAGE — pane: herdr prompt · headless: durable log
+  if _headless_active; then
+    _headless_notice "$1"
+    return 0
+  fi
+  herdr agent prompt looper "$1" >/dev/null 2>&1 || true
+}
+
+# Ledger (seats.json v2) field for a seat: worktree_dir / kind.
+_headless_seat_field() { # SEAT FIELD
+  jq -r --arg s "$1" --arg f "$2" \
+    '.seats[]? | select(.name == $s) | .[$f] // empty' \
+    "${STATE_DIR}/seats.json" 2>/dev/null | head -n1
+}
+
+# Machine→worker traffic, one voice: pane mode types into the seat's PTY,
+# headless mode spawns a critique turn carrying the same message as a brief
+# file pointer (the ADR 0003 rule: pointers, never inlined documents).
+worker_feedback() { # SEAT TICKET SHA TAG MESSAGE
+  local seat="$1" ticket="$2" sha="$3" tag="$4" msg="$5"
+  if ! _headless_active; then
+    herdr agent prompt "$seat" "$msg" >/dev/null 2>&1 || true
+    return 0
+  fi
+  local wt kind brief
+  wt=$(_headless_seat_field "$seat" worktree_dir)
+  kind=$(_headless_seat_field "$seat" kind)
+  if [[ -z "$wt" || ! -d "$wt" ]]; then
+    warn "headless feedback for $seat: no worktree in ledger — notice logged only"
+    _headless_notice "$msg"
+    return 0
+  fi
+  case "$kind" in opencode|claude|agy) ;; *) kind="opencode" ;; esac
+  brief="${STATE_DIR}/briefs/${seat}-${ticket}-${sha}-${tag}.md"
+  mkdir -p "${STATE_DIR}/briefs"
+  {
+    printf 'LOOP-BOT (headless critique turn)\n\n%s\n\n' "$msg"
+    printf -- '---\nYou are re-entering your seat on the same worktree and branch.\n'
+    printf 'Address the above, commit, and re-verdict by printing the whole line:\n\n'
+    printf 'ARCH DONE #%s <new-sha>\n' "$ticket"
+  } > "$brief"
+  if headless_spawn "$seat" "$brief" "$wt" "$kind" >>"${STATE_DIR}/headless-notices.log" 2>&1; then
+    ok "headless: critique turn spawned for $seat — $(basename "$brief")"
+  else
+    warn "headless: critique spawn refused for $seat (still running?) — notice logged"
+    _headless_notice "$msg"
+  fi
+}
+
 harvest_verdicts() {
   local seat out
   for seat in "${EXPECTED_SEATS[@]}"; do
-    out=$(herdr agent read "$seat" 2>/dev/null || true)
+    # HEADLESS-4 read seam: where the output comes from is the ONLY mode
+    # difference — same anchored regexes, same dedupe, same gate below.
+    if _headless_active; then
+      out=$(_headless_seat_output "$seat")
+    else
+      out=$(herdr agent read "$seat" 2>/dev/null || true)
+    fi
     [[ -n "$out" ]] || continue
     # Review lane (REV-5): reviewer seats emit REVIEW VERDICT anchors that
     # drive the review state machine; scanned before ARCH DONE so a pane
@@ -478,7 +569,7 @@ harvest_verdicts() {
       if ! git -C "$REPO_DIR" cat-file -e "${sha}^{commit}" 2>/dev/null; then
         warn "verdict for #$ticket @ ${sha}: commit not found in repo — skipped, human evaluation required"
         echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"skipped\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
-        herdr agent prompt looper "LOOP-BOT: verdict for #$ticket @ ${sha} names a commit absent from the repo — do NOT retire the ticket; human evaluation required." >/dev/null 2>&1 || true
+        looper_notice "LOOP-BOT: verdict for #$ticket @ ${sha} names a commit absent from the repo — do NOT retire the ticket; human evaluation required."
         continue
       fi
       # Gate target resolution (ledger v2): isolated seats gate in their own
@@ -486,7 +577,7 @@ harvest_verdicts() {
       if ! resolve_seat_gate "$seat"; then
         warn "verdict for #$ticket @ ${sha}: seat '$seat' gate unresolvable (isolated worktree missing or wrong branch) — NOT gated"
         echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"unresolvable\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
-        herdr agent prompt looper "LOOP-BOT: verdict for #$ticket @ ${sha} from $seat could not be resolved to a gate directory (worktree missing or on the wrong branch). Do NOT retire the ticket — human evaluation required." >/dev/null 2>&1 || true
+        looper_notice "LOOP-BOT: verdict for #$ticket @ ${sha} from $seat could not be resolved to a gate directory (worktree missing or on the wrong branch). Do NOT retire the ticket — human evaluation required."
         continue
       fi
       local gate_log_dir="${STATE_DIR}/gate-logs"
@@ -496,7 +587,7 @@ harvest_verdicts() {
       if ! gate_tree_matches "$GATE_DIR" "$sha"; then
         warn "verdict for #$ticket @ ${sha}: gate tree is STALE (HEAD moved or dirty/untracked files) — not gating"
         echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"stale\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
-        herdr agent prompt "$seat" "LOOP-BOT: verdict for #$ticket @ ${sha} rejected as STALE — the gate tree does not match that commit (uncommitted or untracked files, or HEAD moved). Commit your changes or remove stray files (no git stash), then re-verdict 'ARCH DONE #$ticket <new sha>'." >/dev/null 2>&1 || true
+        worker_feedback "$seat" "$ticket" "$sha" stale "LOOP-BOT: verdict for #$ticket @ ${sha} rejected as STALE — the gate tree does not match that commit (uncommitted or untracked files, or HEAD moved). Commit your changes or remove stray files (no git stash), then re-verdict 'ARCH DONE #$ticket <new sha>'."
         continue
       fi
       local suite_ok="skipped"
@@ -531,14 +622,14 @@ harvest_verdicts() {
         if ! gate_tree_matches "$GATE_DIR" "$sha"; then
           suite_ok="invalidated"; bad "suite run for #$ticket @ ${sha} INVALIDATED — tree changed during the gate"
           echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
-          herdr agent prompt "$seat" "LOOP-BOT: suite run for #$ticket @ ${sha} was INVALIDATED — the tree changed during the gate. Re-verdict 'ARCH DONE #$ticket <sha>' from a stable tree." >/dev/null 2>&1 || true
+          worker_feedback "$seat" "$ticket" "$sha" invalidated "LOOP-BOT: suite run for #$ticket @ ${sha} was INVALIDATED — the tree changed during the gate. Re-verdict 'ARCH DONE #$ticket <sha>' from a stable tree."
         elif [[ "$gate_rc" -eq 0 ]]; then
           suite_ok="green"; ok "suite gate GREEN for #$ticket @ ${sha} (log: $gate_log)"
           echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
         else
           suite_ok="RED"; bad "suite gate RED for #$ticket @ ${sha} — NOT filed; arch must fix before done (log: $gate_log)"
           echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
-          herdr agent prompt "$seat" "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate log: $gate_log)." >/dev/null 2>&1 || true
+          worker_feedback "$seat" "$ticket" "$sha" red "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate log: $gate_log)."
         fi
       elif [[ "$(ctl_get suite_gate)" == "true" ]]; then
         # No runnable suite for this project — never fake-green, record as skipped
@@ -557,10 +648,10 @@ harvest_verdicts() {
       # fix-and-reverdict. SKIPPED (gate off / no runnable TEST_CMD) is never
       # reported to looper as accepted completion — it escalates to the human.
       if [[ "$suite_ok" == "green" ]]; then
-        herdr agent prompt looper "LOOP-BOT: filed verdict for #$ticket @ ${sha} from $seat's pane (green)." >/dev/null 2>&1 || true
+        looper_notice "LOOP-BOT: filed verdict for #$ticket @ ${sha} from $seat's pane (green)."
       elif [[ "$suite_ok" == "skipped" ]]; then
         bad "verdict for #$ticket @ ${sha} recorded WITHOUT suite verification — HUMAN EVALUATION REQUIRED"
-        herdr agent prompt looper "LOOP-BOT: verdict for #$ticket @ ${sha} from $seat's pane could NOT be suite-verified (gate off or non-runnable TEST_CMD). Do NOT retire the ticket — human evaluation required." >/dev/null 2>&1 || true
+        looper_notice "LOOP-BOT: verdict for #$ticket @ ${sha} from $seat's pane could NOT be suite-verified (gate off or non-runnable TEST_CMD). Do NOT retire the ticket — human evaluation required."
       fi
     done < <(grep -E '^[[:space:]]*ARCH DONE #[A-Za-z0-9_.-]+[[:space:]]+[0-9a-fA-F]{7,40}[[:space:]]*$' <<<"$out" | tail -n 5)
   done
@@ -626,7 +717,7 @@ frontier_drain() {
   now=$(date +%s)
   (( now - last > 1800 )) || return 0
   echo "$now" > "$STATE_DIR/$rate_key"
-  herdr agent prompt looper "LOOP-BOT (frontier drain, auto): next unassigned open ticket is $next — dispatch or park it deliberately." >/dev/null 2>&1 || true
+  looper_notice "LOOP-BOT (frontier drain, auto): next unassigned open ticket is $next — dispatch or park it deliberately."
   ok "frontier drain nudged looper → $next"
 }
 
@@ -725,6 +816,9 @@ lease_release_integrated() {
   done < <(jq -r '.leases[]? | .ticket // empty' "$lp" 2>/dev/null || true)
 }
 
+# cmd_dispatch — looper-driven PTY dispatch (interactive mode). HEADLESS-4
+# boundary: headless QUEUE intake (deterministic iteration over queued
+# tickets via headless_spawn) is a separate slice; this path is unchanged.
 cmd_dispatch() { # dispatch WORKER BRIEF_FILE [TICKET]
   local worker="$1" brief="$2" ticket="${3:-}" nonce out
   [[ -f "$brief" ]] || { bad "brief file not found: $brief"; exit 1; }
