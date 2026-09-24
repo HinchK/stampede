@@ -2,7 +2,7 @@
 id: PROVE-5
 title: "Record the arbiter_drain auto-wire decision in a new ADR"
 type: wayfinder:doc
-status: backlog
+status: resolved
 assignee: agy-docs
 blocked_by: PROVE-4
 owns: docs/adr/,README.md

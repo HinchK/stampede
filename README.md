@@ -212,6 +212,7 @@ To prevent **kickoff race conditions** (where task prompts arrive while an agent
   - [ADR 0011: Multi-Worker Floor Topologies, Worktree Namespacing, and Heterogeneous Concurrency](docs/adr/0011-multi-worker-floor-topologies-and-concurrency.md)
   - [ADR 0012: Task Partitioning, File Disjointness, and Durable Ledger Leases](docs/adr/0012-task-partitioning-and-disjoint-dispatches.md)
   - [ADR 0013: Asynchronous Supervisor Suite Gating, Durable Job Records, and Concurrency Bounding](docs/adr/0013-asynchronous-supervisor-gate-jobs.md)
+  - [ADR 0014: Arbiter Drain Automation and Non-Blocking Supervisor Integration](docs/adr/0014-arbiter-drain-automation.md)
 - **Swarm Orchestration Retrospective**: See [`docs/findings/swarm-orchestration-retrospective.md`](docs/findings/swarm-orchestration-retrospective.md).
 - **Phase 2 Worktree Architecture Blueprint**: See [`docs/worktree-swarm.md`](docs/worktree-swarm.md).
 - **Dogfooding Rehearsal Receipt**: See [`docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md`](docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md).
@@ -250,7 +251,7 @@ stampede/
 │   └── tickets/            # Granular milestone prototype tickets
 └── docs/                   # ADRs, findings & audit archives
     ├── worktree-swarm.md   # Phase 2 Worktree Architecture Blueprint
-    ├── adr/                # Architecture Decision Records (0001–0013)
+    ├── adr/                # Architecture Decision Records (0001–0014)
     │   ├── README.md       # ADR catalog & index
     │   ├── 0001-fail-closed-profile-and-test-gating.md
     │   ├── 0002-exact-sha-supervisor-deduplication.md
@@ -264,7 +265,8 @@ stampede/
     │   ├── 0010-worktree-teardown-lifecycle-and-salvage.md
     │   ├── 0011-multi-worker-floor-topologies-and-concurrency.md
     │   ├── 0012-task-partitioning-and-disjoint-dispatches.md
-    │   └── 0013-asynchronous-supervisor-gate-jobs.md
+    │   ├── 0013-asynchronous-supervisor-gate-jobs.md
+    │   └── 0014-arbiter-drain-automation.md
     ├── findings/           # Empirical semantics, schemas, and retrospective
     │   └── swarm-orchestration-retrospective.md
     └── audits/             # PM reviews, advisory, & dogfooding receipts
