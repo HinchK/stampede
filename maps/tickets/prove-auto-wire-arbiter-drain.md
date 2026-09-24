@@ -2,7 +2,8 @@
 id: PROVE-4
 title: "Auto-wire arbiter_drain after a successful enqueue"
 type: wayfinder:task
-status: backlog
+status: resolved
+commit: 16dd481
 assignee: arch
 owns: loop-bot-herd.sh,lib/arbiter.sh,tests/test_arbiter.sh
 parent: maps/prove-and-reconcile.md

@@ -2,7 +2,8 @@
 id: PROVE-6
 title: "Fix stale suite-count claims in CLAUDE.md and ci.yml"
 type: wayfinder:doc
-status: backlog
+status: resolved
+commit: b02609d
 assignee: arch
 owns: CLAUDE.md,.github/workflows/ci.yml
 parent: maps/prove-and-reconcile.md

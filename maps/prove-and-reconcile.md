@@ -39,14 +39,18 @@ automatically after a successful enqueue (promote to `main` stays the untouchabl
   branch only takes effect once it reaches `main` through the same pipeline the launcher/supervisor read from.
 - **Issue tracker mechanics:** local Markdown, released directly into `maps/tickets/` (not staged) — confirmed with
   the driver 2026-09-23; DOG-16 means a released ticket immediately holds a lease on its `owns:` paths.
+- **PROVE-2 resolved (`d7c3563`):** Reviewer loop and seat enabled in `swarm.config.toml` (`reviewer.loop = true`, `seats.reviewer.enabled = true`; commit `d7c3563`, 18 suites green).
+- **PROVE-6 resolved (`b02609d`):** Fixed stale suite-count claims across `CLAUDE.md`, `.github/workflows/ci.yml`, and `CONTRIBUTING.md` (all 18 suites listed alphabetically; assertion counts dropped to prevent drift; commit `b02609d`).
+- **PROVE-4 resolved (`16dd481`):** Auto-wired `arbiter_drain` after successful `arbiter_enqueue` (`arbiter_enqueue_and_drain` in `lib/arbiter.sh`, background drain pass step in `loop-bot-herd.sh`; commit `16dd481`, 53 assertions passing in `tests/test_arbiter.sh`).
+- **Wave 1 Complete:** All three Wave 1 tickets (PROVE-2, PROVE-6, PROVE-4) resolved and integrated on `swarm/stampede/integration` at merge commit `430aa44`.
 
 ## Active Frontier
 
-**Wave 1 — released, dispatchable now** (no ordering hazard, disjoint `owns:`):
+**Wave 1 — COMPLETE** (all integrated on `swarm/stampede/integration` at `430aa44`):
 
-- [Enable the Reviewer seat](tickets/prove-enable-reviewer-seat.md) (PROVE-2)
-- [Auto-wire arbiter_drain after enqueue](tickets/prove-auto-wire-arbiter-drain.md) (PROVE-4)
-- [Fix stale suite-count claims in CLAUDE.md and ci.yml](tickets/prove-fix-suite-count-drift.md) (PROVE-6)
+- [x] [Enable the Reviewer seat](tickets/prove-enable-reviewer-seat.md) (PROVE-2)
+- [x] [Auto-wire arbiter_drain after enqueue](tickets/prove-auto-wire-arbiter-drain.md) (PROVE-4)
+- [x] [Fix stale suite-count claims in CLAUDE.md and ci.yml](tickets/prove-fix-suite-count-drift.md) (PROVE-6)
 
 **Wave 2 — staged in `maps/tickets-staged/`, released by human `mv` once ready** (sequenced or human-timed; a
 no-`owns:` or `assignee: human` ticket dispatched early would either stall (exclusive lease, DOG-16) or run before

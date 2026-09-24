@@ -2,7 +2,8 @@
 id: PROVE-2
 title: "Enable the Reviewer seat"
 type: wayfinder:task
-status: backlog
+status: resolved
+commit: d7c3563
 assignee: arch
 owns: swarm.config.toml
 parent: maps/prove-and-reconcile.md
