@@ -4,7 +4,6 @@ title: "Unattended safety hardening: re-verdict ceiling, timeouts, dead-letter l
 type: wayfinder:task
 status: backlog
 assignee: arch
-blocked_by: HEADLESS-4
 owns: loop-bot-herd.sh,lib/headless.sh,swarm.config.toml,tests/test_headless.sh
 parent: maps/headless-run-mode.md
 ---
