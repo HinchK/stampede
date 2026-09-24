@@ -90,10 +90,21 @@ Universal Swarm Stateless Workers (Lean, 3k–8k tokens per turn)
    - High-throughput code implementation $\to$ Cost-effective coding models (GLM-5.3 / OpenCode).
    - Structured metadata, documentation, and GitHub operations $\to$ Ultra-fast, low-cost models (Gemini Flash).
 
-### 3.2 The Trust Tax
-While per-turn context size shrinks dramatically, total token spend across the entire herd actually goes **up**, not down. This is the deliberate trade of the architecture: correctness bought with compute. Running independent workers, an asynchronous supervisor re-running test suites on every harvested commit, re-verdict cycles on red verdicts, arbiter integration testing, and specialized audit roles (`pm`, `docs`, `gh`) multiplies total token volume to ensure that no unverified or unreviewed change lands on `main`.
+### 3.2 The Trust Tax & Empirical Telemetry Measurements
+While per-turn context size shrinks through worker isolation, total compute expenditure across the entire herd goes **up**, not down. This is the deliberate trade of the architecture: correctness bought with compute. Running independent workers, an asynchronous supervisor re-running test suites on every harvested commit, re-verdict cycles on red verdicts, arbiter integration testing, and specialized audit roles (`pm`, `docs`, `reviewer`, `gh`) multiplies total verification volume to ensure that no unverified or unreviewed change lands on `main`.
 
-Note that exact per-seat token accounting is not obtainable today because Herdr drives vendor CLIs over a PTY that reports no usage data.
+Per the standing rule established in DOG-4 ([`maps/tickets/token-claim-relabel.md`](../../maps/tickets/token-claim-relabel.md)), the swarm strictly distinguishes modelled estimates from measured empirical reality. Real telemetry traces from the `Prove and Reconcile` epic (`.herdr-swarm/traces/swarm-20260919-114508.jsonl`) were mined in [TRUST-1](../../maps/tickets/trust-1-real-numbers.md) to replace speculative assumptions with concrete operational measurements.
+
+The full empirical analysis is published in [**Trust Tax Telemetry Measurements**](trust-tax-telemetry-measurements.md). The five operational proxies measured from production traces show:
+
+1. **Brief Bytes Delivered**: PTY prompt injection payloads are bounded to **140–220 bytes** via the Nonce Brief Delivery Protocol ([ADR 0003](../adr/0003-dynamic-seating-and-nonce-brief-delivery.md)), achieving an **89% to 97% reduction** in transmitted prompt bytes compared to inlining full ticket markdown (mean 2,722 bytes) or standing briefs (2,027–5,614 bytes), completely eliminating PTY buffer overflow risks.
+2. **Suite-Gate Runs per Retired Ticket**: Retired tickets undergo **2.2 to 3.0 independent test suite gates** prior to sovereign human promotion (1.17 supervisor worktree gates + 1.0 arbiter integration gate + 0.5–1.0 reviewer verification passes).
+3. **Re-Verdict Rate**: **16.7%** (1.17 verdicts per ticket across 7 recorded session verdicts), successfully catching suite drift and configuration errors before integration.
+4. **Dispatches per Integration**: **1.0** under continuous automated drain ([ADR 0014](../adr/0014-arbiter-drain-automation.md)), ensuring every ticket merge into `swarm/stampede/integration` is validated as an isolated, atomic integration step.
+5. **Wall-Clock Duration per Ticket**: Active agent implementation and verification during continuous-session dispatches ranges from **3.9 minutes (`PROVE-6`) to 14.5 minutes (`PROVE-4`)** with a mean of **~8.6 minutes per ticket**. (Multi-hour intervals observed in earlier tickets like `DOG-17` and `DOG-18` represent overnight human operator session boundaries between interactive prompts, not active machine execution or test duration).
+
+#### Structural PTY Accounting Limitation
+As defined in the [Telemetry Event Schema](telemetry-schema.md), **absence is information, never zero and never modelled**. Per-seat token accounting and exact dollar costs remain structurally unmeasurable at the orchestrator layer because Herdr drives vendor agent CLIs (Claude Code, OpenCode, Gemini CLI) over POSIX pseudo-terminals (PTY) that emit formatted ANSI terminal escapes rather than structured billing metadata. Until vendor CLIs expose programmatic usage hooks over standard file descriptors, the five proxy metrics above provide the durable, re-derivable empirical proof of the swarm's verification overhead.
 
 ---
 

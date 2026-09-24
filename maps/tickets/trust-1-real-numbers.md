@@ -2,10 +2,16 @@
 id: TRUST-1
 title: "Publish real trust-tax numbers from telemetry, replacing the modelled 80% claim"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: agy-docs
 owns: docs/findings/,docs/findings/swarm-orchestration-retrospective.md
 parent: maps/universal-herdr-swarm.md
+resolution:
+  findings_file: docs/findings/trust-tax-telemetry-measurements.md
+  retrospective_section: docs/findings/swarm-orchestration-retrospective.md#32-the-trust-tax--empirical-telemetry-measurements
+  trace_dataset: .herdr-swarm/traces/swarm-20260919-114508.jsonl
+  verdicts_dataset: .herdr-swarm/session-verdicts.jsonl
+  integration_dataset: .herdr-swarm/integration.jsonl
 ---
 
 # TRUST-1 — Real trust-tax measurement (from the 9/21 public-readiness review)
