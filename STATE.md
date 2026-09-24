@@ -65,6 +65,7 @@
 - **Python Interpreter Resolver (#DOG-1 / Wave 1):** Resolved in commit `3a9a70d` (ticket marked resolved in `4993d58`). Centralized Python interpreter resolution in `lib/pyenv.sh` (`resolve_python()`), replacing bare `python3` invocations across `Makefile`, supervisor, library scripts, and test suites with a capability probe for `tomllib` ($PYTHON_BIN, python3.14 down to python3) and actionable remediation guidance. Added `tests/test_pyenv.sh` (16 passing assertions).
 - **Single-Command Repo State Summary Script (#DOG-17 / Wave DX-1):** Resolved in commit `f78b0a1` (integrated onto `swarm/stampede/integration`). `scripts/repo-state.sh [dir]` prints branch, last 10 commits, local branches merged to `main`, best-effort CI status (degrading gracefully when `gh` is unavailable), and dirty tree summary. Added hermetic unit test suite in `tests/test_repo_state.sh` (34 passing assertions), 0 shellcheck warnings, documented in `CLAUDE.md`.
 - **Local CI-Parity Wrapper with Shellcheck Pin Check (#DOG-18 / Wave DX-1):** Resolved in commit `4025f4b` (integrated onto `swarm/stampede/integration`). `scripts/ci-local.sh` wraps `make check` with exit code propagation and verifies local `shellcheck --version` matches CI's pinned `SC_VERSION` (v0.11.0), with `--strict` mode. Added hermetic test suite in `tests/test_ci_local.sh` (17 passing assertions), 0 shellcheck warnings, documented in `CLAUDE.md`.
+- **Auto-Drain Process PID & Stale Lock Eviction (#PROVE-7):** Resolved in commit `c3f3c86` (integrated onto `swarm/stampede/integration`). `arbiter_auto_drain()` spawns `bash "$SCRIPT_DIR/lib/arbiter.sh" drain` as an independent child process (tracked via `$!`), ensuring `$$` records the drain's own PID rather than the supervisor's across bash 3.2+. Liveness pre-check verifies `$lk/pid` via `kill -0`, evicts stale dead-holder locks, and continues; covered by stress crash-and-evict tests in `tests/test_arbiter.sh` (57 assertions passing). Reviewed and approved with PASS verdict by Autonomous Reviewer Loop.
 - **Dogfood Plan Deviation & Public Readiness Records:** Documented in `docs/audits/2026-09-21-public-readiness-review.md` and `docs/dogfood/`; the planned two-clone dogfooding run was superseded by direct in-repo execution.
 
 ---
@@ -93,16 +94,18 @@
   - **PROVE-5 Complete:** `7419b78`: Authored ADR 0014 (`docs/adr/0014-arbiter-drain-automation.md`) capturing the auto-wire decision and safety invariants; indexed in `docs/adr/README.md` and `README.md`.
   - **PROVE-3 Complete:** Proved Autonomous Reviewer Loop live on real implementation ticket PROVE-4 (`16dd481`) with genuine PASS verdict and durable findings in `.herdr-swarm/reviews/PROVE-4-16dd48121c78780f36440a3181bf2b2ba54db3c6.md` and recorded in `.herdr-swarm/reviews.json`.
   - Wayfinder Map `maps/prove-and-reconcile.md` destination fully achieved.
+- **Prove and Reconcile Hardening (COMPLETE — Integrated on `swarm/stampede/integration` at `c3f3c86`):**
+  - **PROVE-7 Complete:** `c3f3c86`: Auto-drain separate process PID logging and stale lock eviction. Reviewer PASS verdict (`.herdr-swarm/reviews/PROVE-7-c3f3c865d70fbd3250c3cc50e0b62e8782f5c677.md`).
 - **Standing Guardrails:**
   - Arch briefs enforce Single-Ticket Scope Guardrail: workers halt and await looper dispatch after reporting completion.
   - Base branch promotion remains human-only (DOG-12), with explicit user command authorization for arbiter promote runs.
-- **Total Test Suite Health:** **494 passed, 0 failed** across 18 suites on integration (53 arbiter, 43 review loop, 42 worktree, 39 partition, 34 repo_state, 33 async gate, 33 config, 32 cli_status, 28 quota, 27 gh_sync, 24 cli_init, 18 profile, 17 ci_local, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 13 telemetry); `make check` green (lint 0 warnings).
+- **Total Test Suite Health:** **498 passed, 0 failed** across 18 suites on integration (57 arbiter, 43 review loop, 42 worktree, 39 partition, 34 repo_state, 33 async gate, 33 config, 32 cli_status, 28 quota, 27 gh_sync, 24 cli_init, 18 profile, 17 ci_local, 16 pyenv, 15 cli, 14 cli_doctor, 13 providers, 13 telemetry); `make check` green (lint 0 warnings).
 
 ---
 
 ## 3. Immediate Next Step
 
-- Milestone Complete: Prove and Reconcile Wayfinder Map (`maps/prove-and-reconcile.md`) is fully complete, all tickets resolved, base reconciled, and reviewer loop proven live.
+- **Human Promote**: Promote `swarm/stampede/integration` (commit `c3f3c86`, carrying PROVE-7 fix) into `main` via `bin/stampede promote` / `lib/arbiter.sh promote --confirm` and push to `origin/main`.
 - Stand by for human driver instructions or next milestone roadmap.
 
 
