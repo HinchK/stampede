@@ -4,7 +4,6 @@ title: "Wire headless verdict harvesting into the supervisor"
 type: wayfinder:task
 status: backlog
 assignee: arch
-blocked_by: HEADLESS-3
 owns: loop-bot-herd.sh,tests/test_async_gate.sh
 parent: maps/headless-run-mode.md
 ---

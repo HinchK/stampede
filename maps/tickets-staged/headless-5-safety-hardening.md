@@ -5,7 +5,7 @@ type: wayfinder:task
 status: backlog
 assignee: arch
 blocked_by: HEADLESS-4
-owns: loop-bot-herd.sh,lib/headless.sh,tests/test_headless.sh
+owns: loop-bot-herd.sh,lib/headless.sh,swarm.config.toml,tests/test_headless.sh
 parent: maps/headless-run-mode.md
 ---
 
@@ -18,8 +18,10 @@ harvesting loop existing to hook into.
 
 The three hazards the design doc identified as specific to unattended operation are closed:
 
-1. **Runaway re-verdict/cost loops**: a per-ticket re-verdict ceiling (`MAX_VERDICT_ATTEMPTS`, default 2). On
-   reaching it, the ticket transitions to `DEAD_LETTER` and its lease releases — it does not retry forever.
+1. **Runaway re-verdict/cost loops**: a per-ticket re-verdict ceiling, **configurable via `[headless]
+   max_verdict_attempts` in `swarm.config.toml`** (default 2) — not a hardcoded shell constant, matching the
+   precedent `[reviewer].max_rounds` already set for exactly this kind of bounded-retry knob. On reaching it, the
+   ticket transitions to `DEAD_LETTER` and its lease releases — it does not retry forever.
 2. **Hanging processes / lease starvation**: every headless subprocess runs under a hard wall-clock timeout
    (`timeout <N>s ...`, reusing the `resolve_timeout` pattern already in this repo per `CLAUDE.md`'s CI notes). A
    subprocess that dies without releasing its lease is evicted via PID-liveness check (`kill -0`), the same pattern
@@ -30,7 +32,9 @@ The three hazards the design doc identified as specific to unattended operation 
 
 ## Done-Criteria
 
-1. `MAX_VERDICT_ATTEMPTS` enforced, `DEAD_LETTER` status implemented and releases its lease.
+1. `[headless] max_verdict_attempts` read from `swarm.config.toml` (default 2 when the section/key is absent, same
+   optional-with-default pattern `[reviewer]` uses), enforced; `DEAD_LETTER` status implemented and releases its
+   lease.
 2. Every `headless_spawn`-started subprocess is timeout-wrapped; a killed-for-timeout subprocess's stale
    PID/lease is evicted on the next pass, not left dangling.
 3. `.herdr-swarm/dead-letter.jsonl` gets a record for every `DEAD_LETTER`/`ALERT_BLOCKED` outcome; the headless
