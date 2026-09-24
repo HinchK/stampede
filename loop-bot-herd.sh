@@ -743,26 +743,52 @@ cmd_dispatch() { # dispatch WORKER BRIEF_FILE [TICKET]
 # path) must not sit in integration.jsonl until an operator runs
 # `lib/arbiter.sh drain`. The drain runs in the same supervisor pass as the
 # enqueue — but never inline: it gates inside its own lock and is slow
-# (P3-3 §2.2), so it spawns as a single background job. arbiter_lock
-# serializes any overlap into a no-op (the loser exits after a bounded
-# wait), and a lock held by a live drain means this pass spawns nothing —
-# the worst case is a wasted process, never corruption. Conflicts still
+# (P3-3 §2.2), so it spawns as a single background job. Conflicts still
 # abort back to the worker; main still moves only by human promote.
+#
+# PROVE-7: the drain MUST be its own process, not a forked subshell. bash's
+# $$ does not change inside a backgrounded block (and $BASHPID is unavailable
+# at the bash 3.2 floor), so a subshell drain made arbiter_lock record the
+# supervisor's pid as holder — a crashed drain then left a lock that never
+# went stale while the supervisor lived, blocking every later drain. As a
+# separate `bash lib/arbiter.sh drain` process, the lock's pid IS the drain
+# job's, so dead holders are evictable below (and by arbiter_lock itself).
 arbiter_auto_drain() {
-  local queued
+  local queued lk="${STATE_DIR}/arbiter.lock" pid drain_pid
   queued=$(arbiter_queued_count 2>/dev/null || printf '0')
   [[ "$queued" =~ ^[0-9]+$ ]] || queued=0
   (( queued > 0 )) || return 0
-  if [[ -d "${STATE_DIR}/arbiter.lock" ]]; then
-    note "arbiter drain already running — ${queued} queued record(s) left to it"
-    return 0
+  if [[ -d "$lk" ]]; then
+    pid=""
+    [[ -f "$lk/pid" ]] && pid=$(cat "$lk/pid" 2>/dev/null || true)
+    if [[ -z "$pid" ]]; then
+      # No pid yet: a drain may be mid-start (mkdir → pid write). Skip —
+      # same conservative read as arbiter_lock's own loop.
+      note "arbiter lock exists without a pid — assuming a drain is starting; ${queued} queued record(s) wait"
+      return 0
+    fi
+    if kill -0 "$pid" 2>/dev/null; then
+      note "arbiter drain already running (pid ${pid}) — ${queued} queued record(s) left to it"
+      return 0
+    fi
+    # Stale holder: the drain process died without unlocking. Evict here so
+    # this pass can spawn a replacement immediately (arbiter_lock would
+    # evict it too, but only after its full bounded wait).
+    warn "arbiter lock held by dead pid ${pid} — evicting stale lock and draining"
+    rm -rf "$lk"
   fi
   mkdir -p "${STATE_DIR}/gate-logs"
-  note "arbiter auto-drain: ${queued} queued record(s) — drain spawned (log: ${STATE_DIR}/gate-logs/arbiter-drain.log)"
-  {
-    printf '\n[%s] auto-drain pass (supervisor pid %s)\n' "$(date '+%H:%M:%S')" "$$"
-    arbiter_drain
-  } >> "${STATE_DIR}/gate-logs/arbiter-drain.log" 2>&1 &
+  printf '\n[%s] auto-drain pass (supervisor pid %s)\n' "$(date '+%H:%M:%S')" "$$" \
+    >> "${STATE_DIR}/gate-logs/arbiter-drain.log"
+  # Explicit env: a separate process does not inherit the supervisor's
+  # unexported shell bindings, and the arbiter must come from the
+  # orchestrator (SCRIPT_DIR), never the target tree (DOG-13).
+  REPO_DIR="$REPO_DIR" STATE_DIR="$STATE_DIR" PROJECT_SLUG="$PROJECT_SLUG" \
+    BASE_BRANCH="${BASE_BRANCH:-}" TEST_CMD="$TEST_CMD" SUITE_TIMEOUT_S="$SUITE_TIMEOUT_S" \
+    bash "$SCRIPT_DIR/lib/arbiter.sh" drain \
+    >> "${STATE_DIR}/gate-logs/arbiter-drain.log" 2>&1 &
+  drain_pid=$!
+  note "arbiter auto-drain: ${queued} queued record(s) — drain spawned (pid ${drain_pid}, log: ${STATE_DIR}/gate-logs/arbiter-drain.log)"
 }
 
 cmd_once() {

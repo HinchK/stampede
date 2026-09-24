@@ -313,6 +313,34 @@ rm -rf "$REPO/.herdr-swarm/arbiter.lock"
 arbiter_drain 2>/dev/null
 ck 212 integrated "deferred record integrates once the lock frees"
 
+# ── 11. killed drain process does not block later drains (PROVE-7) ─────────
+# PROVE-4's auto-drain originally ran `arbiter_drain` inside a forked
+# subshell, where bash's $$ still reports the parent — so arbiter_lock
+# recorded the supervisor's pid as holder, and a drain killed mid-gate left
+# a lock that never went stale. The drain must run as its own process
+# (lock pid == the drain job's pid), and a dead holder must be evictable.
+ARB_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/arbiter.sh"
+git -C "$REPO" branch "swarm/ptest/seat-k" main
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wk" "swarm/ptest/seat-k"
+printf 'kilo\n' > "$TEST_DIR/wk/kilo.txt"
+SHA_K=$(commit_at "$TEST_DIR/wk" "seat-k work")
+arbiter_enqueue 213 seat-k "$SHA_K" >/dev/null 2>&1
+# spawn a real drain process whose gate sleeps, so it holds arbiter.lock
+TEST_CMD="sleep 5" bash "$ARB_LIB" drain >>"$TEST_DIR/drain-killed.log" 2>&1 &
+KILLED_PID=$!
+n=0
+until [[ -f "$REPO/.herdr-swarm/arbiter.lock/pid" ]] || (( n >= 50 )); do sleep 0.1; n=$((n + 1)); done
+check "separate-process drain records its OWN pid in the lock" \
+  '[[ "$(cat "$REPO/.herdr-swarm/arbiter.lock/pid" 2>/dev/null)" == "$KILLED_PID" ]]'
+kill -9 "$KILLED_PID" 2>/dev/null || true
+wait "$KILLED_PID" 2>/dev/null || true
+check "killed drain leaves the lock behind (stale holder)" \
+  '[[ -d "$REPO/.herdr-swarm/arbiter.lock" ]]'
+arbiter_enqueue_and_drain 213 seat-k "$SHA_K" 2>/dev/null
+ck 213 integrated "stale lock evicted — killed drain does not block later drains"
+check "recovering drain acquires and releases the lock cleanly" \
+  '[[ ! -d "$REPO/.herdr-swarm/arbiter.lock" ]]'
+
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))
