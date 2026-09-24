@@ -176,6 +176,16 @@ Asserts that every agent defined in `.herdr-swarm/seats.json` is alive, responsi
 - Exits `0` if all seats reach `idle` or `done` within `timeout_ms` (default: 30,000 ms).
 - Exits non-zero (`1`) if any agent times out, crashes, or is missing.
 
+### 5. `headless` — Unattended Batch Ticket Drain
+Drains `backlog` tickets from `maps/tickets/` without opening Herdr panes or requiring a display, spawning worker CLIs as direct background subprocesses ([ADR 0015](docs/adr/0015-headless-batch-drain-mode.md)):
+
+```bash
+bin/stampede headless [dir] [--max-tickets N] [--timeout M]
+```
+- Dispatches tickets sequentially into isolated worktrees with partition and lease checks.
+- Bounded by `--max-tickets` (default: 5) and whole-batch `--timeout` in seconds (default: 1800).
+- Exits non-zero (`1` on dead-letters, `3` on batch timeout) for automated CI failure detection.
+
 ---
 
 ## Seat Verification and Fail-Closed Guarantees
@@ -213,6 +223,7 @@ To prevent **kickoff race conditions** (where task prompts arrive while an agent
   - [ADR 0012: Task Partitioning, File Disjointness, and Durable Ledger Leases](docs/adr/0012-task-partitioning-and-disjoint-dispatches.md)
   - [ADR 0013: Asynchronous Supervisor Suite Gating, Durable Job Records, and Concurrency Bounding](docs/adr/0013-asynchronous-supervisor-gate-jobs.md)
   - [ADR 0014: Arbiter Drain Automation and Non-Blocking Supervisor Integration](docs/adr/0014-arbiter-drain-automation.md)
+  - [ADR 0015: Headless Batch Drain Mode and Unattended Safety Invariants](docs/adr/0015-headless-batch-drain-mode.md)
 - **Swarm Orchestration Retrospective**: See [`docs/findings/swarm-orchestration-retrospective.md`](docs/findings/swarm-orchestration-retrospective.md).
 - **Phase 2 Worktree Architecture Blueprint**: See [`docs/worktree-swarm.md`](docs/worktree-swarm.md).
 - **Dogfooding Rehearsal Receipt**: See [`docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md`](docs/audits/2026-09-19-dogfooding-rehearsal-receipt.md).

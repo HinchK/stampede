@@ -2,7 +2,7 @@
 id: HEADLESS-7
 title: "ADR: Headless Batch Drain Mode"
 type: wayfinder:doc
-status: backlog
+status: resolved
 assignee: agy-docs
 blocked_by: HEADLESS-6
 owns: docs/adr/
@@ -29,3 +29,13 @@ original research doc's proposal.
 ## Verification Step
 
 Human/pm review — no test suite applies to a research/doc ticket.
+
+## Resolution
+
+- **ADR Created**: [`docs/adr/0015-headless-batch-drain-mode.md`](file:///Users/hinchk/Fun/stampede/docs/adr/0015-headless-batch-drain-mode.md) (Status: Accepted)
+- **Decisions Captured**:
+  - Additive destination: `stampede headless` batch drainer permanently preserves interactive `stampede up` mode.
+  - Mechanism decision: Option A (direct subprocess supervisor via `lib/headless.sh`) chosen over Option B (detached Herdr session) due to absence of Herdr daemon and display in CI environments.
+  - Three unattended safety hazards and closures (HEADLESS-5): re-verdict ceilings (`[headless] max_verdict_attempts`), process timeouts (`resolve_timeout`) + stale pidfile reap (`headless_reap`), and dead-letter records (`.herdr-swarm/dead-letter.jsonl`) with non-zero CI exit codes.
+  - User-facing CLI entrypoint (`bin/stampede headless` from HEADLESS-6): convention dispatch, deterministic queue intake, partition leases, worktree isolation (`worktree_provision`), supervisor function sourcing, and reviewer loop disabled in batch (`CONFIG_REVIEW_LOOP=0`).
+- **Indexes Updated**: `docs/adr/README.md` and `README.md`.
