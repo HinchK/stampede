@@ -2,10 +2,17 @@
 id: PROVE-7
 title: "arbiter_auto_drain records the wrong PID via $$ inside a backgrounded subshell"
 type: wayfinder:defect
-status: backlog
+status: resolved
+commit: c3f3c865d70fbd3250c3cc50e0b62e8782f5c677
 assignee: arch
 owns: loop-bot-herd.sh,lib/arbiter.sh,tests/test_arbiter.sh
 parent: maps/prove-and-reconcile.md
+resolution:
+  commit: c3f3c865d70fbd3250c3cc50e0b62e8782f5c677
+  integrated_at: c3f3c86
+  integration_ref: swarm/stampede/integration
+  reviewer_verdict: PASS
+  review_file: .herdr-swarm/reviews/PROVE-7-c3f3c865d70fbd3250c3cc50e0b62e8782f5c677.md
 ---
 
 # PROVE-7 — auto-drain PID/lock staleness defect

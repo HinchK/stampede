@@ -47,6 +47,7 @@ automatically after a successful enqueue (promote to `main` stays the untouchabl
 - **PROVE-5 resolved (`7419b78`):** Authored ADR 0014 (`docs/adr/0014-arbiter-drain-automation.md`) documenting `arbiter_drain` auto-wire decision and safety invariants; indexed in `docs/adr/README.md` and `README.md`.
 - **PROVE-3 resolved:** Reviewer Loop proved live on PROVE-4 @ `16dd481` with PASS verdict and durable findings in `.herdr-swarm/reviews/PROVE-4-16dd48121c78780f36440a3181bf2b2ba54db3c6.md` and recorded in `.herdr-swarm/reviews.json`.
 - **Wave 2 Complete:** All Wave 2 tickets (PROVE-1, PROVE-3, PROVE-5) resolved and verified. Map destination fully achieved.
+- **PROVE-7 resolved (`c3f3c86`):** Auto-drain PID and lock staleness defect resolved in `loop-bot-herd.sh` and `lib/arbiter.sh`. Background drain executes as independent child process with correct `$!` PID logging and holder liveness checking/eviction; verified by section 11 in `tests/test_arbiter.sh` (57 assertions green), reviewer PASS verdict (`.herdr-swarm/reviews/PROVE-7-c3f3c865d70fbd3250c3cc50e0b62e8782f5c677.md`), integrated on `swarm/stampede/integration` at `c3f3c86`.
 
 ## Active Frontier
 
@@ -64,7 +65,7 @@ automatically after a successful enqueue (promote to `main` stays the untouchabl
 
 **Follow-up Hardening (surfaced by PROVE-3 Reviewer Loop on PROVE-4):**
 
-- [ ] [Fix auto-drain PID and lock staleness](tickets/prove-fix-auto-drain-pid.md) (PROVE-7) — separate background process + staleness eviction
+- [x] [Fix auto-drain PID and lock staleness](tickets/prove-fix-auto-drain-pid.md) (PROVE-7) — separate background process + staleness eviction
 
 
 ## Not yet specified
