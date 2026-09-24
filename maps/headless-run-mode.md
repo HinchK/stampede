@@ -49,8 +49,8 @@ daemon or display is available at all.
 ## Active Frontier
 
 - [Headless subprocess harness](tickets/headless-3-subprocess-harness.md) (HEADLESS-3) — resolved, integrated @ b157772.
-- [Wire headless verdict harvesting into the supervisor](tickets-staged/headless-4-harvest-wiring.md) (HEADLESS-4)
-  — staged, blocker cleared.
+- [Wire headless verdict harvesting into the supervisor](tickets/headless-4-harvest-wiring.md) (HEADLESS-4)
+  — released, in progress.
 - [Unattended safety hardening](tickets-staged/headless-5-safety-hardening.md) (HEADLESS-5) — staged, blocked by
   HEADLESS-4.
 - [`stampede headless` CLI entrypoint](tickets-staged/headless-6-cli-entrypoint.md) (HEADLESS-6) — staged,
