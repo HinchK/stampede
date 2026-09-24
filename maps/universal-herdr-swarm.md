@@ -69,13 +69,28 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - PM Branch Reconciliation: First real arbiter run end to end — `P3-4` spec and `PM-PLAN-EVIDENCE` enqueued, gated, integrated (`97d31e2`, `d50c128`), and promoted ff-only to `main`; eleven superseded pm branches deleted with per-branch evidence (#PM-BRANCH-RECON).
 - **[Stampede Public Readiness](public-readiness.md):** complete. DOG-1 through DOG-18 (Python interpreter resolver, LICENSE, CI, kultivait-optional, partition/lease dispatch wiring, `repo-state.sh`, `ci-local.sh`, and more) — see that map's own Decisions so far for the full index.
 - **[Stampede Public Multi-Provider](public-multi-provider.md):** complete. PUB-1 through PUB-11 (provider registry, fallback chains, `stampede init`/`quota`/`status --rich`, cross-provider review lane) — see that map.
-- **[Autonomous Reviewer Loop](autonomous-reviewer-loop.md):** complete, REV-1 through REV-5, all promoted — see that map. **Caveat (2026-09-23 PM audit):** shipped and unit-tested, but never exercised on a real ticket; see `docs/audits/2026-09-23-promote-blocker-and-unproven-reviewer-loop.md`.
+- **[Autonomous Reviewer Loop](autonomous-reviewer-loop.md):** complete, REV-1 through REV-5, all promoted — see that map. **Resolved same day:** proven for real by PROVE-3 (below), which found two genuine concerns on its first live review.
+- **[Prove and Reconcile](prove-and-reconcile.md):** complete, PROVE-1 through PROVE-7, all promoted — closed the
+  gap between "shipped" and "proven" surfaced by the 2026-09-23 PM audit
+  (`docs/audits/2026-09-23-promote-blocker-and-unproven-reviewer-loop.md`): the DOG-17/18 promote, the Reviewer
+  Loop proof-run (PROVE-3, which found and PROVE-7 fixed a real `arbiter_drain` PID/lock-staleness defect), and
+  `arbiter_drain` automation.
+- **TRUST-1** (`maps/tickets/trust-1-real-numbers.md`, resolved): published real trust-tax numbers from telemetry
+  (`docs/findings/trust-tax-telemetry-measurements.md`), replacing reliance on the retrospective's modelled 80%
+  claim.
+- **HEADLESS-1/2** (resolved): HEADLESS-1 disproved its own premise — this installed `herdr` (0.9.1) has no
+  `--no-focus` option on `agent prompt` and prompting an idle agent doesn't steal focus, documented in
+  `docs/findings/herdr-semantics.md`. HEADLESS-2 produced `docs/findings/headless-mode-design.md`, a research doc
+  on what a true headless run mode would require — explicitly not yet chartered into implementation, destination
+  unconfirmed with the driver.
 
 ## Active Frontier
 
-- **[Prove and Reconcile](prove-and-reconcile.md):** closes the gap between "shipped" and "proven" surfaced by the
-  2026-09-23 PM audit (`docs/audits/2026-09-23-promote-blocker-and-unproven-reviewer-loop.md`) — the DOG-17/18
-  promote, the unproven Autonomous Reviewer Loop, and `arbiter_drain` automation.
+- **GATE-1 / GATE-2** (`docs/audits/2026-09-23-harden-the-promote-gate.md`): hardens `arbiter_promote()` with a
+  fail-closed pane-identity check, after an agent (`looper`) ran promote+push itself on a direct human instruction
+  this session, despite its own brief forbidding it. Explicitly a local, non-airtight hardening — GitHub branch
+  protection is unavailable on this repo's current plan (`gh api` 403), and real enforcement needs credential
+  separation, named as follow-up pending a driver decision.
 
 ## Not yet specified
 
