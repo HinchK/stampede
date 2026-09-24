@@ -2,10 +2,19 @@
 id: HEADLESS-4
 title: "Wire headless verdict harvesting into the supervisor"
 type: wayfinder:task
-status: backlog
+status: resolved
+commit: 85b27585a25d2b0e57f02bf76aeb7cb756b80c0f
 assignee: arch
 owns: loop-bot-herd.sh,tests/test_async_gate.sh
 parent: maps/headless-run-mode.md
+resolution:
+  commit: 85b27585a25d2b0e57f02bf76aeb7cb756b80c0f
+  status: resolved
+  integrated_at: 85b2758
+  integration_ref: swarm/stampede/integration
+  reviewer_verdict: PASS
+  review_file: .herdr-swarm/reviews/HEADLESS-4-85b27585a25d2b0e57f02bf76aeb7cb756b80c0f.md
+  channel_report: .herdr-swarm/channel/arch-1-hinchk-stampede-1790234776-31332.md
 ---
 
 # HEADLESS-4 — harvest wiring (Slice 3b)
