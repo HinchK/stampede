@@ -168,7 +168,7 @@ When an autonomous multi-agent system runs unattended without a human observing 
 |---|---|---|---|
 | **Suite Gate** (No false greens) | Executes real `TEST_CMD` inside isolated worktree; invalidates on tree drift | [`loop-bot-herd.sh:503-538`](file:///Users/hinchk/Fun/stampede/loop-bot-herd.sh#L503-L538), [`lib/profile.sh:test_cmd_is_runnable`](file:///Users/hinchk/Fun/stampede/lib/profile.sh) | **100% Robust**. Pure machine evaluation; requires zero human visual oversight. |
 | **Partition / Lease Gate** (Disjoint paths) | Verifies `owns:` frontmatter and locks `.herdr-swarm/leases.json` before dispatch | [`lib/partition.sh`](file:///Users/hinchk/Fun/stampede/lib/partition.sh), [`loop-bot-herd.sh:676`](file:///Users/hinchk/Fun/stampede/loop-bot-herd.sh#L676) | **100% Robust**. Algorithmic file path overlap check; blocks collision before dispatch. |
-| **Reviewer Loop Gate** (Adversarial review) | Durable `reviews.json` state machine with hard `max_rounds` budget cap | [`lib/review.sh`](file:///Users/hinchk/Fun/stampede/lib/review.sh), [`tests/test_review_loop.sh`](file:///Users/hinchk/Fun/stampede/tests/test_review_loop.sh) | **100% Robust**. Transitions to `ALERT_BLOCKED` and halts enqueue if critique is not resolved. |
+| **Reviewer Loop Gate** (Adversarial review) | Durable `reviews.json` state machine with hard `max_rounds` budget cap | [`lib/lifecycle.sh`](file:///Users/hinchk/Fun/stampede/lib/lifecycle.sh), [`tests/test_review_loop.sh`](file:///Users/hinchk/Fun/stampede/tests/test_review_loop.sh) | **100% Robust**. Transitions to `ALERT_BLOCKED` and halts enqueue if critique is not resolved. |
 | **Sovereign Human Promote Gate** (Base protection) | `arbiter_drain` merges strictly to `swarm/<slug>/integration`; base branch advance requires human promote | [`lib/arbiter.sh:312-323`](file:///Users/hinchk/Fun/stampede/lib/arbiter.sh#L312-L323), [ADR 0009](file:///Users/hinchk/Fun/stampede/docs/adr/0009-arbiter-branch-integration-and-cas-merge.md), [ADR 0014](file:///Users/hinchk/Fun/stampede/docs/adr/0014-arbiter-drain-automation.md) | **100% Robust**. Machine code actively refuses to move `main` without explicit human invocation (`promote --confirm`). |
 
 ### ⚠️ New Blast Radius Hazards in Headless Mode
@@ -201,13 +201,13 @@ While core correctness gates are machine-enforced, operating without human eyes 
 
 ## 6. Architectural Alternatives Comparison
 
-| Dimension | Option A: Direct Subprocess Supervisor | Option B: Detached Virtual Herdr Session | Option C: Status Quo with Focus Fix (HEADLESS-1) |
+| Dimension | Option A: Direct Subprocess Supervisor | Option B: Detached Virtual Herdr Session | Option C: Status Quo Focus Audit (HEADLESS-1, Resolved) |
 |---|---|---|---|
-| **Underlying Mechanism** | Spawns vendor CLIs directly via background subprocesses | Runs Herdr daemon in detached/virtual tmux/session | Uses existing Herdr panes, adds `--no-focus` to prompts |
+| **Underlying Mechanism** | Spawns vendor CLIs directly via background subprocesses | Runs Herdr daemon in detached/virtual tmux/session | Uses existing Herdr panes; premise of prompt focus-theft disproven |
 | **Herdr Daemon Dependency** | **None** (Bypasses daemon completely) | **High** (Requires running Herdr daemon) | **High** (Runs inside active Herdr session) |
 | **CI / Headless Server Support** | **Full** (Native POSIX bash & CLI tools) | **Partial** (Requires headless terminal support) | **None** (Requires interactive desktop GUI / terminal) |
-| **Supervisor Changes** | Medium (Replaces `herdr agent read` with log/channel reader) | Minimal (Reuses existing `herdr agent read`) | None (Changes dispatch prompt call sites only) |
-| **Implementation Complexity** | Moderate (Requires process supervisor & timeout harness) | High (Dealing with detached session lifecycle & state) | Very Low (Audit existing `herdr agent prompt` flags) |
+| **Supervisor Changes** | Medium (Replaces `herdr agent read` with log/channel reader) | Minimal (Reuses existing `herdr agent read`) | None (Empirical audit showed no code fix needed or possible) |
+| **Implementation Complexity** | Moderate (Requires process supervisor & timeout harness) | High (Dealing with detached session lifecycle & state) | Resolved (Herdr 0.9.1 `prompt` has no `--no-focus`; panes already split `--no-focus`) |
 
 ---
 
@@ -218,9 +218,9 @@ This research document produces an architectural foundation for driver evaluatio
 ### Recommendation: Sequence via a Dedicated Wayfinder Map
 Rather than jumping directly to implementation, author a dedicated Wayfinder Map (`maps/headless-run-mode.md`) structuring work into discrete, verifiable slices:
 
-1. **Slice 1: Low-Hanging Focus Fix ([HEADLESS-1](file:///Users/hinchk/Fun/stampede/maps/tickets/headless-1-no-focus-dispatch.md))**:
-   - Audit all `herdr agent prompt` invocations across `loop-bot-herd.sh`, `herdr-loop-swarm.sh`, and `briefs/*.in.md` to pass `--no-focus`.
-   - Immediately stops focus-stealing in interactive mode without altering core architecture.
+1. **Slice 1: Low-Hanging Focus Fix ([HEADLESS-1](file:///Users/hinchk/Fun/stampede/maps/tickets/headless-1-no-focus-dispatch.md) — Resolved)**:
+   - Already resolved and complete (`HEADLESS-1` closed in commit `c8fbad2`).
+   - Empirical investigation showed `herdr 0.9.1` `agent prompt` has no `--no-focus` option, live probing demonstrated that prompts do not steal window or OS focus, and `split_pane` in `lib/layout_engine.sh:16` already passes `--no-focus`. No code fix was needed or possible.
 2. **Slice 2: Driver Alignment on Headless Destination**:
    - Confirm whether headless mode is:
      - (A) Additive batch queue drainer (`stampede drain --headless`), or
