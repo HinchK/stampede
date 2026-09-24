@@ -62,6 +62,11 @@ automatically after a successful enqueue (promote to `main` stays the untouchabl
 - [x] [Prove the Reviewer Loop on a real ticket](tickets/prove-reviewer-loop-real-verdict.md) (PROVE-3) — proved live on PROVE-4 @ `16dd481`
 - [x] [Record the arbiter_drain decision in a new ADR](tickets/prove-drain-adr.md) (PROVE-5) — ADR 0014 authored in `7419b78`
 
+**Follow-up Hardening (surfaced by PROVE-3 Reviewer Loop on PROVE-4):**
+
+- [ ] [Fix auto-drain PID and lock staleness](tickets/prove-fix-auto-drain-pid.md) (PROVE-7) — separate background process + staleness eviction
+
+
 ## Not yet specified
 
 - Headless mode (no panes, no focus calls) — flagged in the 9/21 public-readiness review as the capability that
