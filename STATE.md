@@ -108,7 +108,8 @@
   - **HEADLESS-1 Complete:** `c8fbad2`: Focus semantics audit resolved as premise-disproven on herdr 0.9.1 (`agent prompt` has no `--no-focus` and does not steal focus; `pane split` already passes it). Receipts in `docs/findings/herdr-semantics.md` §F/§G; reviewer PASS verdict (`.herdr-swarm/reviews/HEADLESS-1-c8fbad2980971cc6b331f5cb1e7ae8f3275dd326.md`); integrated on `swarm/stampede/integration`.
   - **HEADLESS-2 Complete:** `aad1b88`: Comprehensive design research document authored in `docs/findings/headless-mode-design.md` addressing harvesting, seat scoping, brief delivery, and safety invariants; corrected citations and status (`7d86509`). Settled with driver on additive batch drainer (`stampede headless`), direct subprocess management (Option A).
   - **HEADLESS-3 Complete:** `b157772`: `lib/headless.sh` subprocess harness for pane-less workers (`headless_spawn`, `headless_status`, `headless_kill`). Passed through a genuine critique round where reviewer found orphaned vendor child defect on kill; implementer added signal forwarding traps (`_hl_signal`), child process sweep (`pkill -P`), path normalization, and robust marker parsing. Hermetic suite `tests/test_headless.sh` (30/30 passed). Reviewer PASS on Round 2/2; auto-drained and integrated on `swarm/stampede/integration` at `b157772`.
-  - **HEADLESS-4 Dispatched:** Released to `maps/tickets/headless-4-harvest-wiring.md`, partition checked and leased to `arch-1-hinchk-stampede`, actively implementing supervisor log harvesting.
+  - **HEADLESS-4 Complete:** `85b2758`: Supervisor harvest wiring in `loop-bot-herd.sh` under `HEADLESS_MODE=1` (`_headless_seat_output`, critique briefs + spawn turns via `worker_feedback`, and durable notice logging to `.herdr-swarm/headless-notices.log`). Added Section 14 to `tests/test_async_gate.sh` (45/45 assertions pass). Reviewed and passed by Autonomous Reviewer Loop; auto-drained and integrated on `swarm/stampede/integration` at `85b2758`.
+  - **HEADLESS-5 Dispatched:** Released to `maps/tickets/headless-5-safety-hardening.md`, partition checked and leased to `arch-1-hinchk-stampede`, actively implementing unattended safety hardening: config-driven `[headless] max_verdict_attempts`, hard subprocess timeouts with stale PID eviction, and `.herdr-swarm/dead-letter.jsonl` logging.
 - **Standing Guardrails:**
   - Arch briefs enforce Single-Ticket Scope Guardrail: workers halt and await looper dispatch after reporting completion.
   - Base branch promotion remains human-only (DOG-12), reinforced by `_arb_promote_pane_check()` against in-pane execution.
@@ -118,10 +119,11 @@
 
 ## 3. Immediate Next Step
 
-1. **Monitor HEADLESS-4**: Oversee `arch-1` implementation of `loop-bot-herd.sh` `--headless` log harvesting and `tests/test_async_gate.sh`.
-2. **Review & Integrate HEADLESS-4**: Harvest verdict, run through Autonomous Reviewer Loop, integrate via Arbiter, and release lease.
-3. **Sequence HEADLESS-5 through HEADLESS-7**: Advance through unattended safety hardening (`HEADLESS-5`), CLI entrypoint `stampede headless` (`HEADLESS-6`), and ADR (`HEADLESS-7`).
+1. **Monitor HEADLESS-5**: Oversee `arch-1` implementation of safety hardening (`loop-bot-herd.sh`, `lib/headless.sh`, `swarm.config.toml`, `tests/test_headless.sh`).
+2. **Review & Integrate HEADLESS-5**: Harvest verdict, run through Autonomous Reviewer Loop, integrate via Arbiter, and release lease.
+3. **Sequence HEADLESS-6 through HEADLESS-7**: Advance through CLI entrypoint `stampede headless` (`HEADLESS-6`), and ADR (`HEADLESS-7`).
 4. **Final Reconciliation & Human Promote Hand-off**: Merge `main` into `swarm/stampede/integration`, run full `make check`, and hand off `bash lib/arbiter.sh promote --confirm && git push origin main` to the human driver.
+
 
 
 
