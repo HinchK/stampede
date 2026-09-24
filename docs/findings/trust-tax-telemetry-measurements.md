@@ -171,12 +171,13 @@ Events traced from `.herdr-swarm/traces/swarm-20260919-114508.jsonl`:
 4. **`PROVE-7` (Fix Auto-Drain PID Leak)**:
    - `suite.verdict`: `2026-09-24T00:52:35Z` (ts `1790211155.194741`)
    - `lease.released`: `2026-09-24T00:56:04Z` (ts `1790211364.713650`)
-   - Arbiter drain + reviewer pass + integration: **209.5 seconds (~3 min 30 sec)**.
+   - Post-verdict integration pipeline duration: **209.5 seconds (~3 min 30 sec)** covering arbiter drain + reviewer pass + integration.
+   - **Absence Note**: PROVE-7's `lease.acquired` event is absent from the trace; its implementation + gate duration is therefore genuinely unmeasured (not zero, not estimated). Its listed 209.5s figure measures a different interval (post-verdict integration pipeline: `suite.verdict` to `lease.released`) and is excluded from the continuous implementation mean.
 
 #### Continuous-Session Summary:
 - **Fastest Implementation + Verification**: 3 min 53 sec (`PROVE-6`).
 - **Heaviest Implementation + Verification**: 14 min 30 sec (`PROVE-4`).
-- **Mean Continuous Wall-Clock Duration**: **~8.6 minutes per ticket**.
+- **Mean Continuous Wall-Clock Duration**: **~8.6 minutes per ticket** (derived from `PROVE-2`, `PROVE-6`, and `PROVE-4`; excludes `PROVE-7` due to unmeasured implementation start).
 
 #### B. Inter-Session Operator Idle Gaps (Caveat)
 - `DOG-17`:
