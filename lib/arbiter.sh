@@ -298,8 +298,44 @@ arbiter_pr_body() { # OUT_FILE
   } > "$1"
 }
 
+# _arb_promote_pane_check — GATE-1 fail-closed agent-pane guard.
+# Local, non-airtight hardening (spec docs/audits/2026-09-23-harden-the-promote-gate.md §3):
+# an agent instructed — even by the human, in its own pane — to run the promote
+# must be stopped by more than its brief. Herdr injects $HERDR_PANE_ID into
+# every pane it manages, so:
+#   - unset            → allow (no Herdr context at all; a plain human shell)
+#   - set, query fails → refuse (ambiguous state is not safe state — a stale
+#                        workspace identity must never read as "safe")
+#   - set, live agent in that pane → refuse, naming the pane
+#   - set, managed but agentless   → allow (the human's own raw shell pane)
+# This does NOT stop a deliberate bypass (same OS user, same credentials —
+# spec §1); it closes the observed failure mode only. No env bypass exists.
+_arb_promote_pane_check() {
+  if [[ -z "${HERDR_PANE_ID:-}" ]]; then
+    return 0
+  fi
+  local agents
+  if ! agents=$(herdr agent list 2>/dev/null); then
+    printf 'arbiter: promote refused -- could not query herdr agent state to confirm this pane is not agent-controlled\n' >&2
+    return 1
+  fi
+  if printf '%s' "$agents" | jq -e --arg pid "$HERDR_PANE_ID" \
+      '.result.agents[]? | select(.pane_id == $pid)' >/dev/null 2>&1; then
+    printf 'arbiter: promote refused -- pane %s is occupied by a recognized agent; run this yourself from a plain shell\n' "$HERDR_PANE_ID" >&2
+    return 1
+  fi
+  return 0
+}
+
 # arbiter_promote [--pr] [--confirm]  (or env PROMOTE_CONFIRM=1)
 arbiter_promote() {
+  # GATE-1: agent-pane guard fires before the --confirm gate and before the
+  # --pr/local dispatch — a PR promote still pushes the integration branch,
+  # which the Push Guardrail forbids agents just as much as a local ff-merge.
+  if ! _arb_promote_pane_check; then
+    return 1
+  fi
+
   _arb_cfg
   local mode="local" confirmed=0 arg
   for arg in "$@"; do

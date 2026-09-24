@@ -6,6 +6,14 @@
 # shellcheck disable=SC2034  # vars are consumed inside those eval strings
 set -euo pipefail
 
+# GATE-1 hygiene: $HERDR_PANE_ID is exported into every Herdr-managed pane
+# (agent seats AND the supervisor's gate pane), and arbiter_promote now
+# refuses when it finds a live agent in the calling pane. The suite is
+# hermetic by design, so scrub the ambient identity here — promote tests
+# then run the "unset → allow" branch deterministically no matter which
+# pane launched them.
+unset HERDR_PANE_ID
+
 TEST_DIR=$(mktemp -d /tmp/test-arb-$$-XXXX)
 TEST_DIR=$(cd "$TEST_DIR" && pwd -P)
 REPO="$TEST_DIR/repo"
@@ -221,6 +229,71 @@ check "root tree clean after promote" \
   '[[ -z "$(git -C "$REPO" status --porcelain)" ]]'
 check "integrated records marked promoted" \
   '[[ $(jq -s "[.[] | select(.status == \"promoted\")] | length" "$Q") -ge 2 ]]'
+
+# ── 7d. promote pane-identity gate (GATE-1) — fail-closed ──────────────────
+# The gate's own logic runs against a stubbed `herdr` with HERDR_PANE_ID set
+# per-command; the wiring is proven by REDEFINING _arb_promote_pane_check
+# after sourcing (spec §4) — there is deliberately no env bypass to toggle.
+PANE_ERR="$TEST_DIR/pane-check.txt"
+MAIN_7D=$(git -C "$REPO" rev-parse main)
+
+herdr() { # stub: one recognized agent parked in pane wT:p9
+  [[ "${1:-}" == "agent" && "${2:-}" == "list" ]] \
+    && printf '{"result":{"agents":[{"name":"stub-agent","pane_id":"wT:p9"}]}}\n' \
+    || return 1
+}
+
+# (a) pane occupied by a recognized agent: refuse, naming the pane, move nothing
+if HERDR_PANE_ID="wT:p9" arbiter_promote --confirm >/dev/null 2>"$PANE_ERR"; then
+  bad "agent-occupied pane: promote refused"
+else
+  ok "agent-occupied pane: promote refused"
+fi
+grep -q "occupied by a recognized agent" "$PANE_ERR" && grep -q "wT:p9" "$PANE_ERR" \
+  && ok "agent-pane refusal names pane + reason" \
+  || bad "agent-pane refusal names pane + reason"
+check "agent-pane refusal moved no ref" \
+  '[[ $(git -C "$REPO" rev-parse main) == "$MAIN_7D" ]]'
+
+# (b) herdr query fails: refuse (ambiguous state is not safe state)
+herdr() { return 1; }
+if HERDR_PANE_ID="wT:p9" arbiter_promote --confirm >/dev/null 2>"$PANE_ERR"; then
+  bad "unqueryable pane: promote refused"
+else
+  ok "unqueryable pane: promote refused"
+fi
+grep -q "could not query herdr agent state" "$PANE_ERR" \
+  && ok "query-failure refusal explains itself" \
+  || bad "query-failure refusal explains itself"
+
+# (c) Herdr-managed pane with no agent attached: allow (ff no-op completes)
+herdr() { # stub: agent exists, but in some other pane
+  [[ "${1:-}" == "agent" && "${2:-}" == "list" ]] \
+    && printf '{"result":{"agents":[{"name":"stub-agent","pane_id":"wT:p1"}]}}\n' \
+    || return 1
+}
+if HERDR_PANE_ID="wT:p9" arbiter_promote --confirm >/dev/null 2>&1; then
+  ok "agentless managed pane: promote allowed"
+else
+  bad "agentless managed pane: promote allowed"
+fi
+
+# (d) wiring: a refusing pane check gates BOTH the local and --pr paths
+saved_check=$(declare -f _arb_promote_pane_check)
+_arb_promote_pane_check() { return 1; }
+arbiter_promote --confirm >/dev/null 2>&1 \
+  && bad "wiring: local promote gated by pane check" \
+  || ok "wiring: local promote gated by pane check"
+arbiter_promote --pr --confirm >/dev/null 2>&1 \
+  && bad "wiring: --pr promote gated by pane check" \
+  || ok "wiring: --pr promote gated by pane check"
+eval "$saved_check"
+
+# (e) unstubbed check, no Herdr context: the hermetic allow path (as 7b/7c)
+unset -f herdr
+arbiter_promote --confirm >/dev/null 2>&1 \
+  && ok "no pane context: unstubbed check allows" \
+  || bad "no pane context: unstubbed check allows"
 
 # ── 8. PR body generation (no network) ─────────────────────────────────────
 arbiter_pr_body "$REPO/.herdr-swarm/pr-body.md"
