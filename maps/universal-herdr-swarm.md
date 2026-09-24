@@ -81,16 +81,18 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - **HEADLESS-1/2** (resolved): HEADLESS-1 disproved its own premise — this installed `herdr` (0.9.1) has no
   `--no-focus` option on `agent prompt` and prompting an idle agent doesn't steal focus, documented in
   `docs/findings/herdr-semantics.md`. HEADLESS-2 produced `docs/findings/headless-mode-design.md`, a research doc
-  on what a true headless run mode would require — explicitly not yet chartered into implementation, destination
-  unconfirmed with the driver.
+  on what a true headless run mode would require, corrected during PM review (a fabricated file citation, a stale
+  reference to HEADLESS-1) — see [Headless Run Mode](headless-run-mode.md) for the resulting implementation map.
+- **GATE-1/2** (resolved, `docs/audits/2026-09-23-harden-the-promote-gate.md`): `arbiter_promote()` now refuses to
+  run from a Herdr-recognized agent pane, fail-closed on unresolvable pane identity, after an agent ran promote and
+  push itself this session on a direct human instruction. Documented as a local, non-airtight hardening — real
+  enforcement (GitHub branch protection, blocked on this repo's current plan; credential separation) is named as
+  follow-up pending a driver decision.
 
 ## Active Frontier
 
-- **GATE-1 / GATE-2** (`docs/audits/2026-09-23-harden-the-promote-gate.md`): hardens `arbiter_promote()` with a
-  fail-closed pane-identity check, after an agent (`looper`) ran promote+push itself on a direct human instruction
-  this session, despite its own brief forbidding it. Explicitly a local, non-airtight hardening — GitHub branch
-  protection is unavailable on this repo's current plan (`gh api` 403), and real enforcement needs credential
-  separation, named as follow-up pending a driver decision.
+- **[Headless Run Mode](headless-run-mode.md):** additive `stampede drain --headless` batch queue drainer,
+  confirmed with the driver 2026-09-24 — HEADLESS-3 through HEADLESS-7.
 
 ## Not yet specified
 
