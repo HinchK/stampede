@@ -22,6 +22,7 @@ ADRs capture significant architectural and design choices, along with the contex
 | [0012](0012-task-partitioning-and-disjoint-dispatches.md) | Task Partitioning, File Disjointness, and Durable Ledger Leases | Accepted | 2026-09-19 | `lib/partition.sh`, `.herdr-swarm/leases.json`, [P3-2 Spec](../audits/2026-09-19-p3-2-task-partition-check-spec.md), [T-P3-2](../../maps/tickets/task-intake-partition-checking.md) |
 | [0013](0013-asynchronous-supervisor-gate-jobs.md) | Asynchronous Supervisor Suite Gating, Durable Job Records, and Concurrency Bounding | Accepted | 2026-09-19 | `loop-bot-herd.sh`, `.herdr-swarm/gates/`, [Fan-Out Roadmap §1.3](../audits/2026-09-19-phase3-concurrent-fanout-roadmap.md), [T-P3-3](../../maps/tickets/async-supervisor-harvesting.md) |
 | [0014](0014-arbiter-drain-automation.md) | Arbiter Drain Automation and Non-Blocking Supervisor Integration | Accepted | 2026-09-23 | `lib/arbiter.sh`, `loop-bot-herd.sh`, [PROVE-4](../../maps/tickets/prove-auto-wire-arbiter-drain.md), [PROVE-5](../../maps/tickets/prove-drain-adr.md) |
+| [0015](0015-headless-batch-drain-mode.md) | Headless Batch Drain Mode and Unattended Safety Invariants | Accepted | 2026-09-24 | `lib/headless.sh`, `lib/cli/stampede-headless.sh`, [HEADLESS-2](../findings/headless-mode-design.md), [HEADLESS-7](../../maps/tickets/headless-7-adr.md) |
 
 ## Related Documentation
 

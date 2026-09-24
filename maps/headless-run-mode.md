@@ -45,6 +45,10 @@ daemon or display is available at all.
   completely different operation from draining the ticket backlog unattended.
 - **Re-verdict ceiling is config-driven, not hardcoded (2026-09-24 guidance):** `[headless] max_verdict_attempts`
   in `swarm.config.toml`, matching the `[reviewer].max_rounds` precedent, not a shell constant.
+- [ADR: Headless Batch Drain Mode](tickets/headless-7-adr.md) (HEADLESS-7, resolved): authored ADR 0015
+  (`docs/adr/0015-headless-batch-drain-mode.md`) capturing additive batch drain destination, direct subprocess
+  mechanism (Option A), three unattended safety hazard closures (re-verdict ceiling, process timeouts, dead-letter
+  logging with non-zero exit), isolated worktree arbiter integration, and reviewer loop disabled in batch mode.
 
 ## Active Frontier
 
@@ -53,10 +57,9 @@ daemon or display is available at all.
   — resolved, integrated @ 85b2758.
 - [Unattended safety hardening](tickets/headless-5-safety-hardening.md) (HEADLESS-5) — resolved,
   integrated @ 7f97e6e.
-- [`stampede headless` CLI entrypoint](tickets/headless-6-cli-entrypoint.md) (HEADLESS-6) — released,
-  in progress.
-- [ADR: Headless Batch Drain Mode](tickets-staged/headless-7-adr.md) (HEADLESS-7) — staged, blocked by HEADLESS-6,
-  written against what actually got built.
+- [`stampede headless` CLI entrypoint](tickets/headless-6-cli-entrypoint.md) (HEADLESS-6) — resolved,
+  integrated @ 155f3e4.
+- [ADR: Headless Batch Drain Mode](tickets/headless-7-adr.md) (HEADLESS-7) — resolved, ADR 0015 authored.
 
 ## Not yet specified
 
