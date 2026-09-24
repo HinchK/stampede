@@ -2,7 +2,7 @@
 id: GATE-1
 title: "Harden arbiter_promote against agent execution with a fail-closed pane-identity check"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: lib/arbiter.sh,tests/test_arbiter.sh
 parent: maps/universal-herdr-swarm.md
@@ -52,3 +52,14 @@ Do not attempt GitHub branch protection, PR-based promote-by-default, or any for
 of this ticket — all three are explicitly out of scope (spec §5), blocked on driver decisions this ticket doesn't
 make. This is a local hardening only, and the spec is explicit that it is not airtight against a deliberate bypass
 — don't oversell it in the implementation or its test names.
+
+## Resolution
+
+- **Implemented By**: `arch-1-hinchk-stampede` in commit `e86f79069fce1f3cca472fb034e33eb8c8079740`.
+- **Implementation**:
+  - Implemented `_arb_promote_pane_check()` in `lib/arbiter.sh:312-327` handling unset pane IDs (allowed), query failures (refused fail-closed), live agent in pane (refused with pane name and plain shell remedy), and agentless managed panes (allowed).
+  - Wired at top of `arbiter_promote()` before `--confirm` and mode dispatch, protecting both local fast-forward and `--pr` branches.
+  - Added hermetic unit tests in `tests/test_arbiter.sh:233-298` (§7d) with 66/66 assertions passing; unsets ambient `$HERDR_PANE_ID` at top of suite.
+- **Review**: Autonomous reviewer round 1 passed with PASS verdict (`.herdr-swarm/reviews/GATE-1-e86f79069fce1f3cca472fb034e33eb8c8079740.md`).
+- **Integration**: Integrated onto `swarm/stampede/integration` at `e86f790` via arbiter drain.
+

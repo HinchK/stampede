@@ -4,7 +4,6 @@ title: "Amend ADR 0009 with the promote pane-check mechanism and its limitations
 type: wayfinder:doc
 status: backlog
 assignee: agy-docs
-blocked_by: GATE-1
 owns: docs/adr/0009-arbiter-branch-integration-and-cas-merge.md,docs/adr/README.md
 parent: maps/universal-herdr-swarm.md
 ---
