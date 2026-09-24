@@ -51,10 +51,10 @@ daemon or display is available at all.
 - [Headless subprocess harness](tickets/headless-3-subprocess-harness.md) (HEADLESS-3) — resolved, integrated @ b157772.
 - [Wire headless verdict harvesting into the supervisor](tickets/headless-4-harvest-wiring.md) (HEADLESS-4)
   — resolved, integrated @ 85b2758.
-- [Unattended safety hardening](tickets/headless-5-safety-hardening.md) (HEADLESS-5) — released,
+- [Unattended safety hardening](tickets/headless-5-safety-hardening.md) (HEADLESS-5) — resolved,
+  integrated @ 7f97e6e.
+- [`stampede headless` CLI entrypoint](tickets/headless-6-cli-entrypoint.md) (HEADLESS-6) — released,
   in progress.
-- [`stampede headless` CLI entrypoint](tickets-staged/headless-6-cli-entrypoint.md) (HEADLESS-6) — staged,
-  blocked by HEADLESS-5.
 - [ADR: Headless Batch Drain Mode](tickets-staged/headless-7-adr.md) (HEADLESS-7) — staged, blocked by HEADLESS-6,
   written against what actually got built.
 

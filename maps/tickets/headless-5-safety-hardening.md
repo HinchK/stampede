@@ -2,10 +2,19 @@
 id: HEADLESS-5
 title: "Unattended safety hardening: re-verdict ceiling, timeouts, dead-letter logging"
 type: wayfinder:task
-status: backlog
+status: resolved
+commit: 7f97e6ec1eb5e2c0b4f0c58a6a6248e116eda653
 assignee: arch
 owns: loop-bot-herd.sh,lib/headless.sh,swarm.config.toml,tests/test_headless.sh
 parent: maps/headless-run-mode.md
+resolution:
+  commit: 7f97e6ec1eb5e2c0b4f0c58a6a6248e116eda653
+  status: resolved
+  integrated_at: 7f97e6e
+  integration_ref: swarm/stampede/integration
+  reviewer_verdict: PASS
+  review_file: .herdr-swarm/reviews/HEADLESS-5-7f97e6ec1eb5e2c0b4f0c58a6a6248e116eda653.md
+  channel_report: .herdr-swarm/channel/arch-1-hinchk-stampede-1790235693-27393.md
 ---
 
 # HEADLESS-5 — safety hardening (Slice 4)
