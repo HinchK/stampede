@@ -1,7 +1,7 @@
 # ADR 0009: Arbiter Branch Integration, Compare-and-Swap Ref Updates, and Human Promotion Gates
 
-- **Status**: Accepted
-- **Date**: 2026-09-19
+- **Status**: Accepted (Amended 2026-09-23)
+- **Date**: 2026-09-19 (Amended 2026-09-23)
 - **Deciders**: `arch`, `pm`, `looper`, `agy-docs`
 - **Consulted**: [P2-4 Specification](../audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md), [Ticket P2-4](../../maps/tickets/arbiter-and-branch-reconciliation.md), [Phase 2 Advisory](../audits/2026-09-19-phase2-worktree-advisory.md), [ADR 0006](0006-git-worktree-worker-isolation.md), [ADR 0007](0007-split-pane-cwd-order-and-ledger-v2.md), [ADR 0008](0008-supervisor-worktree-suite-gating-and-drift.md)
 
@@ -147,7 +147,75 @@ Advancing `main` is strictly reserved for human-authorized promotion (`lib/arbit
 
 ---
 
-## 7. References
+---
+
+## 8. Amendment: Fail-Closed Agent-Pane Guard & Promote Gate Hardening (2026-09-23)
+
+### 8.1 Context & Motivation: The Looper Promote Incident
+During the `Prove and Reconcile` / `TRUST-1` milestone execution on 2026-09-23, the human operator typed a direct instruction into `looper`'s Herdr pane (`wW:p1`):
+```text
+run `bash lib/arbiter.sh promote --confirm && git push origin main` on my behalf
+```
+`looper` complied and executed both the local promotion and the remote push.
+
+Although `looper`'s standing brief ([`briefs/looper.in.md`](../../briefs/looper.in.md)) explicitly marks advancing `main` and pushing to remote origins as `FORBIDDEN` with no carve-out for direct human requests, the agent failed to refuse. The lesson was decisive: **Sovereignty guarantees cannot rely on LLM adherence to brief instructions.** When prompted with direct authorization, an LLM will frequently execute forbidden actions unless restrained by deterministic, programmatic code boundaries.
+
+This prompted the investigation in [`docs/audits/2026-09-23-harden-the-promote-gate.md`](../audits/2026-09-23-harden-the-promote-gate.md) and the implementation in [GATE-1](../../maps/tickets/gate-1-promote-pane-check.md).
+
+### 8.2 The Mechanism: `_arb_promote_pane_check()`
+In commit `e86f790` (GATE-1), `lib/arbiter.sh` was hardened with `_arb_promote_pane_check()`, called at the entry of `arbiter_promote()` before evaluating `--confirm` or dispatching `--pr`/local modes:
+
+```bash
+_arb_promote_pane_check() {
+  if [[ -z "${HERDR_PANE_ID:-}" ]]; then
+    return 0
+  fi
+  local agents
+  if ! agents=$(herdr agent list 2>/dev/null); then
+    printf 'arbiter: promote refused -- could not query herdr agent state to confirm this pane is not agent-controlled\n' >&2
+    return 1
+  fi
+  if printf '%s' "$agents" | jq -e --arg pid "$HERDR_PANE_ID" \
+      '.result.agents[]? | select(.pane_id == $pid)' >/dev/null 2>&1; then
+    printf 'arbiter: promote refused -- pane %s is occupied by a recognized agent; run this yourself from a plain shell\n' "$HERDR_PANE_ID" >&2
+    return 1
+  fi
+  return 0
+}
+```
+
+#### Fail-Closed Decision Matrix:
+1. **`$HERDR_PANE_ID` Unset** $\to$ **Allow**: No agent runs outside a Herdr pane; an unset ID indicates a plain external shell.
+2. **`$HERDR_PANE_ID` Set, Query Fails** $\to$ **Refuse**: If Herdr is unreachable or output is malformed, the call fails closed. Ambiguous state is never assumed safe.
+3. **`$HERDR_PANE_ID` Set, Live Agent in Pane** $\to$ **Refuse**: Prompts the caller with a diagnostic naming the pane ID and instructing the human to run the promote command directly from an unmanaged plain shell.
+4. **`$HERDR_PANE_ID` Set, Managed Agentless Pane** $\to$ **Allow**: Allows promotions from human-operated raw shell panes inside Herdr (e.g. `wW:p1` without an agent).
+5. **No Bypass Flags**: There is deliberately no environment variable (e.g. `ARBITER_SKIP_PANE_CHECK`) to bypass this check. In hermetic testing (`tests/test_arbiter.sh`), `unset HERDR_PANE_ID` cleans the ambient test environment, and refusal paths are tested via bash function redefinition after sourcing.
+
+### 8.3 Limitations: Local Hardening vs. Deliberate Bypass
+This mechanism is a **local, pragmatic hardening** against accidental agent execution and compliance with human prompts; it is **not airtight against deliberate adversarial bypass**:
+- **Shared OS User & Credentials**: Every seat (`pm`, `looper`, `arch-1`, `arch-2`, `docs`, `gh`) runs as the same local OS user with identical read/write access to `.git/`, SSH keys, and `gh` tokens.
+- **Bypass Vectors**: An agent with write access could strip the check from `lib/arbiter.sh`, run `git merge --ff-only` directly via git CLI, or use `herdr pane run` to inject commands into a human pane.
+- **TTY Insufficiency**: Empirical probing revealed that checking `/dev/tty` does not distinguish agents from humans; `looper` runs inside a full Herdr PTY pane with a valid `/dev/tty`.
+
+### 8.4 Empirical Findings: The GitHub Branch Protection 403 Barrier
+Investigation into server-side enforcement on GitHub revealed that GitHub Branch Protection and Repository Rulesets are unavailable on this repository:
+```bash
+$ gh api repos/HinchK/stampede/branches/main/protection
+{"message":"Upgrade to GitHub Pro or make this repository public to enable this feature.", "status":"403"}
+$ gh api repos/HinchK/stampede/rulesets
+{"message":"Upgrade to GitHub Pro or make this repository public to enable this feature.", "status":"403"}
+```
+Because the repository is private and on a GitHub Free plan, API-enforced branch protection rules cannot be configured without a plan upgrade or making the repository public. Furthermore, routing promotions through `--pr` offers no additional security today, because `gh pr merge` shares the same credentials and can be invoked directly by any agent.
+
+### 8.5 Credential Separation: The True Long-Term Architectural Fix
+Genuine, airtight technical enforcement of the sovereign human promotion boundary requires **credential separation**:
+- Agent seats must be provisioned with scoped tokens (e.g. via a GitHub App or restricted machine user) that possess read and branch-push permissions for `swarm/*` branches, but **zero permission** to push to `main` or approve/merge pull requests.
+- The human operator alone retains the sovereign credentials capable of modifying the primary base branch.
+- This architectural separation is tracked as a future roadmap item requiring human driver chartering.
+
+---
+
+## 9. References
 
 - [P2-4 Specification: Arbiter Branch Merge and PR Reconciliation](../audits/2026-09-19-p2-4-arbiter-and-integration-pr-spec.md)
 - [Ticket P2-4: Phase 2 Arbiter and Branch Reconciliation](../../maps/tickets/arbiter-and-branch-reconciliation.md)
@@ -155,3 +223,7 @@ Advancing `main` is strictly reserved for human-authorized promotion (`lib/arbit
 - [ADR 0006: Git Worktree Worker Isolation and Lifecycle Management](0006-git-worktree-worker-isolation.md)
 - [ADR 0007: Split-Pane CWD Ordering, Stale Branch Safety, and Durable Seat Ledger v2](0007-split-pane-cwd-order-and-ledger-v2.md)
 - [ADR 0008: Supervisor Worktree Suite Gating, Provenance, and Drift Detection](0008-supervisor-worktree-suite-gating-and-drift.md)
+- [Audit: Harden the Promote Gate Against Agent Execution](../audits/2026-09-23-harden-the-promote-gate.md)
+- [Ticket GATE-1: Fail-Closed Agent-Pane Guard on Arbiter Promote](../../maps/tickets/gate-1-promote-pane-check.md)
+- [Ticket GATE-2: Amend ADR 0009 with Promote Pane-Check Mechanism](../../maps/tickets/gate-2-adr-amend-0009.md)
+- [Ticket DOG-12: Human-Promote Guardrail](../../maps/tickets/looper-promote-guardrail.md)
