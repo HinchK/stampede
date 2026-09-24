@@ -66,6 +66,7 @@
 - **Single-Command Repo State Summary Script (#DOG-17 / Wave DX-1):** Resolved in commit `f78b0a1` (integrated onto `swarm/stampede/integration`). `scripts/repo-state.sh [dir]` prints branch, last 10 commits, local branches merged to `main`, best-effort CI status (degrading gracefully when `gh` is unavailable), and dirty tree summary. Added hermetic unit test suite in `tests/test_repo_state.sh` (34 passing assertions), 0 shellcheck warnings, documented in `CLAUDE.md`.
 - **Local CI-Parity Wrapper with Shellcheck Pin Check (#DOG-18 / Wave DX-1):** Resolved in commit `4025f4b` (integrated onto `swarm/stampede/integration`). `scripts/ci-local.sh` wraps `make check` with exit code propagation and verifies local `shellcheck --version` matches CI's pinned `SC_VERSION` (v0.11.0), with `--strict` mode. Added hermetic test suite in `tests/test_ci_local.sh` (17 passing assertions), 0 shellcheck warnings, documented in `CLAUDE.md`.
 - **Auto-Drain Process PID & Stale Lock Eviction (#PROVE-7):** Resolved in commit `c3f3c86` (integrated onto `swarm/stampede/integration`). `arbiter_auto_drain()` spawns `bash "$SCRIPT_DIR/lib/arbiter.sh" drain` as an independent child process (tracked via `$!`), ensuring `$$` records the drain's own PID rather than the supervisor's across bash 3.2+. Liveness pre-check verifies `$lk/pid` via `kill -0`, evicts stale dead-holder locks, and continues; covered by stress crash-and-evict tests in `tests/test_arbiter.sh` (57 assertions passing). Reviewed and approved with PASS verdict by Autonomous Reviewer Loop.
+- **Real Trust-Tax Telemetry Measurements (#TRUST-1):** Resolved in commit `c8e78fc` (clarified in `736065c`). Mined real telemetry traces (`.herdr-swarm/traces/swarm-20260919-114508.jsonl`) and supervisor ledgers (`session-verdicts.jsonl`, `integration.jsonl`, `reviews/`) to publish empirical measurements for the 5 trust-tax proxies in `docs/findings/trust-tax-telemetry-measurements.md`: (1) 140–220 byte prompt pointers (89–97% byte reduction, eliminating PTY buffer overflow risks), (2) 2.2 to 3.0 test suite gates per retired ticket, (3) 16.7% re-verdict rate (1.17 verdicts/ticket), (4) 1.0 dispatch per integration under automated drain, and (5) continuous-session wall-clock duration of 3.9m to 14.5m (mean ~8.6m, isolating human inter-session idle gaps and noting PROVE-7's distinct post-verdict integration interval). Updated `docs/findings/swarm-orchestration-retrospective.md` §3.2 to cite empirical findings and clearly document the structural PTY token tracking limitation.
 - **Dogfood Plan Deviation & Public Readiness Records:** Documented in `docs/audits/2026-09-21-public-readiness-review.md` and `docs/dogfood/`; the planned two-clone dogfooding run was superseded by direct in-repo execution.
 
 ---
@@ -94,8 +95,11 @@
   - **PROVE-5 Complete:** `7419b78`: Authored ADR 0014 (`docs/adr/0014-arbiter-drain-automation.md`) capturing the auto-wire decision and safety invariants; indexed in `docs/adr/README.md` and `README.md`.
   - **PROVE-3 Complete:** Proved Autonomous Reviewer Loop live on real implementation ticket PROVE-4 (`16dd481`) with genuine PASS verdict and durable findings in `.herdr-swarm/reviews/PROVE-4-16dd48121c78780f36440a3181bf2b2ba54db3c6.md` and recorded in `.herdr-swarm/reviews.json`.
   - Wayfinder Map `maps/prove-and-reconcile.md` destination fully achieved.
-- **Prove and Reconcile Hardening (COMPLETE — Integrated on `swarm/stampede/integration` at `c3f3c86`):**
-  - **PROVE-7 Complete:** `c3f3c86`: Auto-drain separate process PID logging and stale lock eviction. Reviewer PASS verdict (`.herdr-swarm/reviews/PROVE-7-c3f3c865d70fbd3250c3cc50e0b62e8782f5c677.md`).
+- **Prove and Reconcile Hardening (COMPLETE — Promoted to `main` and `origin/main` at `736065c`):**
+  - **PROVE-7 Complete:** `c3f3c86`: Auto-drain separate process PID logging and stale lock eviction. Reviewer PASS verdict (`.herdr-swarm/reviews/PROVE-7-c3f3c865d70fbd3250c3cc50e0b62e8782f5c677.md`). Fully reconciled and promoted to `main` and `origin/main`.
+- **Trust Tax Telemetry Milestone (#TRUST-1 — COMPLETE — Published & Promoted):**
+  - **TRUST-1 Complete:** `c8e78fc` / `736065c`: Published empirical trust-tax telemetry measurements in `docs/findings/trust-tax-telemetry-measurements.md`, updated `docs/findings/swarm-orchestration-retrospective.md` §3.2, clarified `PROVE-7` interval metrics, and flipped `maps/tickets/trust-1-real-numbers.md` to resolved.
+  - **Full Branch Synchronization:** All branches (`main`, `origin/main`, `swarm/stampede/integration`) are fully reconciled and promoted at commit `736065c`.
 - **Standing Guardrails:**
   - Arch briefs enforce Single-Ticket Scope Guardrail: workers halt and await looper dispatch after reporting completion.
   - Base branch promotion remains human-only (DOG-12), with explicit user command authorization for arbiter promote runs.
@@ -105,8 +109,8 @@
 
 ## 3. Immediate Next Step
 
-- **Human Promote**: Promote `swarm/stampede/integration` (commit `c3f3c86`, carrying PROVE-7 fix) into `main` via `bin/stampede promote` / `lib/arbiter.sh promote --confirm` and push to `origin/main`.
-- Stand by for human driver instructions or next milestone roadmap.
+- **Milestones Complete**: Both `Prove and Reconcile` and `TRUST-1` milestones are complete, verified, and synchronized across `main`, `origin/main`, and `swarm/stampede/integration` at `736065c`.
+- **Standby for Milestone Chartering**: The herd stands by in headless mode for PM / human driver milestone chartering and roadmap directives.
 
 
 
