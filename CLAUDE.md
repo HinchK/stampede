@@ -58,6 +58,9 @@ bash -n herdr-loop-swarm.sh              # syntax-only check
 # One-call repo state (read-only) — prefer this over ad-hoc git log/gh probe sequences (DOG-17)
 scripts/repo-state.sh [dir]                        # branch, last 10 commits, merged-to-main branches, best-effort CI, dirty tree
 
+# Unattended batch (HEADLESS-6) — backlog tickets in/out, no Herdr panes; reviewer loop off in batch mode
+bin/stampede headless [dir] [--max-tickets N] [--timeout M]   # dispatch→gate→enqueue per ticket; dead-letter + non-zero exit on failures
+
 # Supervisor daemon
 ./loop-bot-herd.sh status          # control flags, verdict count, channel files
 ./loop-bot-herd.sh once            # one pass: health, verdict harvest, suite gate

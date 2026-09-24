@@ -93,5 +93,98 @@ EOF
 out=$("$REPO_ROOT/bin/stampede" -h 2>&1); rc=$?
 [[ "$rc" == 0 && "$out" == *"Usage:"* ]] && ok "real entrypoint help works" || bad "real help rc=$rc"
 
+# [8] headless subcommand: module, parsing, dispatch (HEADLESS-6)
+[[ -f "$REPO_ROOT/lib/cli/stampede-headless.sh" ]] \
+  && ok "headless module at convention path" || bad "module lib/cli/stampede-headless.sh missing"
+out=$("$REPO_ROOT/bin/stampede" headless --help 2>&1); rc=$?
+[[ "$rc" == 0 && "$out" == *"--max-tickets"* && "$out" == *"--timeout"* ]] \
+  && ok "headless --help rc=0, documents both flags" || bad "headless --help rc=$rc: $out"
+"$REPO_ROOT/bin/stampede" headless --bogus-flag >/dev/null 2>&1; rc=$?
+[[ "$rc" != 0 ]] && ok "headless unknown flag rejected" || bad "bogus flag rc=$rc"
+"$REPO_ROOT/bin/stampede" headless --max-tickets abc /tmp >/dev/null 2>&1; rc=$?
+[[ "$rc" != 0 ]] && ok "headless non-numeric max rejected" || bad "abc max rc=$rc"
+out=$("$REPO_ROOT/bin/stampede" help 2>&1)
+[[ "$out" == *"headless"* ]] && ok "help lists headless" || bad "help missing headless"
+
+# [9] headless end-to-end: scratch repo, stub vendor, NO herdr on PATH
+HB_BIN=$(mktemp -d "$SCRATCH/hb-bin.XXXXXX")
+cat > "$HB_BIN/opencode" <<'EOF'
+#!/bin/sh
+brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
+tid=$(sed -nE 's/^id:[[:space:]]*//p' "$brief" 2>/dev/null | head -n1 | tr -d '[:space:]')
+sha=$(git rev-parse HEAD 2>/dev/null || printf 0000000000000000000000000000000000000000)
+reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete response to ([^ ]+) and.*/\1/p')
+[ -n "$reply" ] && printf 'worker reply for %s\n' "${tid:-unknown}" > "$reply"
+printf 'ARCH DONE #%s %s\n' "${tid:-unknown}" "$sha"
+EOF
+chmod +x "$HB_BIN/opencode"
+# timeout(1) is required by the harness (fail-closed otherwise); reuse the
+# machine's own if present, else the e2e degrades to the skip note below.
+if command -v gtimeout >/dev/null 2>&1; then ln -s "$(command -v gtimeout)" "$HB_BIN/timeout"
+elif command -v timeout >/dev/null 2>&1; then ln -s "$(command -v timeout)" "$HB_BIN/timeout"; fi
+# The supervisor source-time needs a tomllib-capable interpreter (DOG-1) —
+# the stripped PATH must carry the one this repo resolves.
+HB_PY=$(bash "$REPO_ROOT/lib/pyenv.sh" 2>/dev/null || true)
+HB_PATH="$HB_BIN:/usr/bin:/bin"
+[[ -n "$HB_PY" ]] && HB_PATH="$HB_BIN:$(dirname "$HB_PY"):/usr/bin:/bin"
+HR_REPO=$(mktemp -d "$SCRATCH/hr-repo.XXXXXX")
+git -C "$HR_REPO" init -q -b main
+git -C "$HR_REPO" config user.email t@t; git -C "$HR_REPO" config user.name t
+git -C "$HR_REPO" remote add origin https://github.com/t/scratch.git
+printf '.herdr-swarm/\n' > "$HR_REPO/.gitignore"
+printf 'test:\n\t@true\n' > "$HR_REPO/Makefile"
+mkdir -p "$HR_REPO/maps/tickets"
+printf 'x\n' > "$HR_REPO/f.txt"; git -C "$HR_REPO" add -A; git -C "$HR_REPO" commit -qm base
+printf -- '---\nid: T-RESOLVED\nstatus: resolved\nowns: f.txt\n---\nbody\n' > "$HR_REPO/maps/tickets/t0.md"
+printf -- '---\nid: T-1\nstatus: backlog\nowns: f.txt\n---\nbody one\n' > "$HR_REPO/maps/tickets/t1.md"
+printf -- '---\nid: T-2\nstatus: backlog\n---\nbody two\n' > "$HR_REPO/maps/tickets/t2.md"
+git -C "$HR_REPO" add -A; git -C "$HR_REPO" commit -qm tickets
+if [[ -e "$HB_BIN/timeout" ]]; then
+  out=$(PATH="$HB_PATH" "$REPO_ROOT/bin/stampede" headless "$HR_REPO" --max-tickets 1 2>&1); rc=$?
+  [[ "$rc" == 0 ]] && ok "headless e2e rc=0 without herdr on PATH" || bad "e2e rc=$rc: $(printf '%s' "$out" | tail -3)"
+  jq -e -s 'any(.[]; (.ticket|tostring) == "T-1" and .suite == "green")' \
+    "$HR_REPO/.herdr-swarm/session-verdicts.jsonl" >/dev/null 2>&1 \
+    && ok "T-1 gated green via log-harvested verdict" || bad "no green T-1 verdict"
+  jq -e -s 'any(.[]; (.ticket|tostring) == "T-2")' \
+    "$HR_REPO/.herdr-swarm/session-verdicts.jsonl" >/dev/null 2>&1 \
+    && bad "max-tickets=1 ignored (T-2 processed)" || ok "max-tickets=1 honored (T-2 untouched)"
+  jq -e -s 'any(.[]; (.ticket|tostring) == "T-RESOLVED")' \
+    "$HR_REPO/.herdr-swarm/session-verdicts.jsonl" >/dev/null 2>&1 \
+    && bad "resolved ticket dispatched" || ok "resolved tickets skipped"
+  jq -e -s 'any(.[]; (.ticket|tostring) == "T-1" and .status == "queued")' \
+    "$HR_REPO/.herdr-swarm/integration.jsonl" >/dev/null 2>&1 \
+    && ok "green verdict enqueued for arbiter" || bad "no arbiter enqueue"
+  ls "$HR_REPO/.herdr-swarm/channel"/*.md >/dev/null 2>&1 \
+    && ok "reply channel opened for the worker" || bad "no channel file"
+  grep -lq 'ARCH DONE #T-1' "$HR_REPO"/.herdr-swarm/logs/*.log 2>/dev/null \
+    && ok "vendor log captured the verdict anchor" || bad "no verdict in logs/"
+else
+  printf '  · [9] skipped — no timeout(1) available for the harness\n'
+fi
+
+# [10] headless wall-clock timeout: never-verdict worker, finite exit
+if [[ -e "$HB_BIN/timeout" ]]; then
+  HR2=$(mktemp -d "$SCRATCH/hr2.XXXXXX")
+  git -C "$HR2" init -q -b main
+  git -C "$HR2" config user.email t@t; git -C "$HR2" config user.name t
+  git -C "$HR2" remote add origin https://github.com/t/scratch2.git
+  printf '.herdr-swarm/\n' > "$HR2/.gitignore"
+  printf 'test:\n\t@true\n' > "$HR2/Makefile"
+  mkdir -p "$HR2/maps/tickets"
+  printf 'x\n' > "$HR2/f.txt"; git -C "$HR2" add -A; git -C "$HR2" commit -qm base
+  printf -- '---\nid: T-HANG\nstatus: backlog\n---\nbody\n' > "$HR2/maps/tickets/th.md"
+  git -C "$HR2" add -A; git -C "$HR2" commit -qm tickets
+  printf '#!/bin/sh\nsleep 60\n' > "$HB_BIN/opencode"; chmod +x "$HB_BIN/opencode"
+  t0=$SECONDS
+  PATH="$HB_PATH" "$REPO_ROOT/bin/stampede" headless "$HR2" --max-tickets 1 --timeout 3 >/dev/null 2>&1; rc=$?
+  el=$((SECONDS - t0))
+  [[ "$rc" != 0 ]] && ok "timeout batch exits non-zero (rc=$rc)" || bad "hang batch rc=0"
+  [[ "$el" -lt 30 ]] && ok "timeout bounded the run (${el}s)" || bad "run took ${el}s"
+  jq -e -s 'any(.[]; .ticket == "T-HANG")' "$HR2/.herdr-swarm/dead-letter.jsonl" >/dev/null 2>&1 \
+    && ok "unconcluded ticket dead-lettered" || bad "no dead-letter for T-HANG"
+  [[ -z "$(ls "$HR2/.herdr-swarm/pids" 2>/dev/null)" ]] \
+    && ok "worker killed + pidfile cleaned at batch end" || bad "pidfile left: $(ls "$HR2/.herdr-swarm/pids")"
+fi
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
