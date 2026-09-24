@@ -2,10 +2,14 @@
 id: HEADLESS-2
 title: "Research: what would a true --headless (no-pane) run mode require?"
 type: wayfinder:research
-status: backlog
+status: resolved
+commit: aad1b88
 assignee: looper
 owns: docs/findings/
 parent: maps/universal-herdr-swarm.md
+resolution:
+  commit: aad1b88
+  findings_file: docs/findings/headless-mode-design.md
 ---
 
 # HEADLESS-2 — headless run mode design research
@@ -47,3 +51,13 @@ Resolved by research (Skill tool, "research"), not implementation — no code ch
 deliberately a stopping point before real implementation tickets get written, since the destination for the bigger
 piece of "headless mode" was never actually confirmed with the driver (see `maps/universal-herdr-swarm.md`'s
 headless-mode entry and the 2026-09-23 grilling round that didn't reach a shared understanding).
+
+## Resolution
+
+Resolved by research in commit `aad1b88` with the publication of [`docs/findings/headless-mode-design.md`](file:///Users/hinchk/Fun/stampede/docs/findings/headless-mode-design.md):
+
+1. **Verification & Harvesting Mechanism**: Analyzed Herdr daemon vs. direct subprocess management. Demonstrated that Herdr daemon has no pane-less background agent primitive. Recommended direct subprocess management with structured channel/log verification (`loop-bot-herd.sh:734-738`), with refinement turns replacing interactive prompts.
+2. **Seat Scoping & Trigger Mechanism**: Established the working assumption of an *additive* batch drain mode (`stampede drain --headless`) rather than a full replacement of the interactive pane system, explicitly flagged as unconfirmed with the driver. Scoped execution seats strictly to workers (`arch-1`, `arch-2`), reviewer (`reviewer`), and supervisor/arbiter daemons, omitting interactive seats (`looper`, `pm`, `docs`, `gh`).
+3. **Brief Delivery Protocol**: Demonstrated evolution of Nonce Brief Delivery Protocol ([ADR 0003](file:///Users/hinchk/Fun/stampede/docs/adr/0003-dynamic-seating-and-nonce-brief-delivery.md)) to non-PTY environments via CLI prompt flags (`claude -p`, `opencode run`) or environment variables, preserving <200b pointer efficiency without PTY synchronization hazards.
+4. **Blast Radius & Fail-Closed Safety Guarantees**: Audited Suite Gate ([ADR 0001](file:///Users/hinchk/Fun/stampede/docs/adr/0001-fail-closed-profile-and-test-gating.md)), Partition/Lease Gate ([ADR 0012](file:///Users/hinchk/Fun/stampede/docs/adr/0012-task-partitioning-and-disjoint-dispatches.md)), Reviewer Loop (`REV-1`–`REV-5`), and Sovereign Human Promote Gate ([ADR 0009](file:///Users/hinchk/Fun/stampede/docs/adr/0009-arbiter-branch-integration-and-cas-merge.md)), proving all machine gates remain robust without visual monitoring. Identified 3 new headless hazards: runaway re-verdict loops (mitigated by attempt caps), hanging process lease starvation (mitigated by timeouts/eviction), and swallowed alerts (mitigated by dead-letter logging).
+5. **No Code / Next Step**: Zero implementation code written; proposed a dedicated Wayfinder Map (`maps/headless-run-mode.md`) for driver architectural alignment and confirmation.
