@@ -100,7 +100,7 @@ Probed via `agent rename` (validation shared with `agent start` — `probe-a` wa
 | T-011 (`down`) | Teardown = close agent panes (agents retire automatically) → `workspace close`; keep `.herdr-swarm/`. |
 | T-012 (supervisor pane) | Seating the loop-bot shell pane uses the same anchor-ID routing; no agent involved (plain pane). |
 
-## E. Probe log (chronological receipts)
+## E. Probe log (chronological receipts) — 2026-09-19 (T-001)
 
 1. `workspace list` → `wK(~)`, `wM(loop-bot-herd-agy, focused, 14 panes/8 tabs, 5 agents)`.
 2. `workspace create --cwd …/probe-t001 --label probe-t001 --focus` → `wN` (focused:true; anchor `wN:t1`/`wN:p1` at probe cwd).
@@ -110,3 +110,59 @@ Probed via `agent rename` (validation shared with `agent start` — `probe-a` wa
 6. `agent start looper … --pane wN:p1` → `agent_name_taken` (holder reported in `wM`).
 7. Rename sweep: `-`/`_` accept; `· . : space / @ uppercase leading-digit` reject.
 8. Cleanup: `pane close wN:p2` (probe-a retired) → `workspace close wN` → `pane close wM:pF`. Final: workspaces `wK`,`wM(focused)`; wM back to 14 panes; agents exactly `looper,pm,arch,agy-docs,agy-gh`.
+
+---
+
+## F. `agent prompt` focus semantics (HEADLESS-1)
+
+**Date:** 2026-09-23 · **herdr 0.9.1** · **Method:** live probes against the running
+`hinchk-stampede` swarm workspace (`wW`). All outputs observed, not inferred.
+
+### F1. `agent prompt` has no `--no-focus` option — passing one fails the call
+
+`herdr agent prompt --help` lists exactly three options: `--wait`, `--until`,
+`--timeout`. Probing the flag:
+
+```
+$ herdr agent prompt x y --no-focus --timeout 1
+unknown option: --no-focus
+```
+
+**Consequence:** any script or brief that appends `--no-focus` to
+`herdr agent prompt` makes the call fail — and the supervisor's prompt sites are
+`>/dev/null 2>&1 || true`-guarded, so the failure (and the dispatch it carried)
+would be **silent**. The flag documented in the herdr skill's "use `--no-focus`
+for background work" guidance belongs to `herdr pane split`
+(SKILL.md:103,161) — not to `agent prompt`.
+
+### F2. Prompting does not steal the human's pane focus
+
+With the human's focus verified on `wW:p4` (pm pane, `focused:true` via
+`pane list`), a prompt was submitted to an idle agent in another tab:
+
+```
+$ herdr agent prompt agy-gh-hinchk-stampede "AUDIT PROBE …" && sleep 1 && …
+$ herdr pane list --workspace wW | <focused-flags>
+BEFORE: [('wW:p4', True)]
+AFTER:  [('wW:p4', True)]        # unchanged — wW:p9 never gained focus
+```
+
+**Conclusion (f):** `agent prompt` is not a focus-stealing surface in 0.9.1 —
+focusing is an explicit act (`herdr focus <agent>`, `herdr pane focus`). The
+repo's one genuine focus-affecting call, `herdr pane split`, already passes
+`--no-focus` centrally in `split_pane` (lib/layout_engine.sh:16). If a future
+herdr makes `agent prompt` focus (or ships a prompt-level `--no-focus`),
+re-audit HEADLESS-2 against this section.
+
+---
+
+## G. Probe log (chronological receipts) — 2026-09-23 (HEADLESS-1)
+
+1. `herdr agent prompt --help` → options: `--wait`, `--until`, `--timeout` only.
+2. `herdr agent prompt x y --no-focus` → `unknown option: --no-focus`.
+3. `herdr --version` → `herdr 0.9.1`; `herdr --help` → `focus` subcommand exists.
+4. `pane list --workspace wW` → focused: `wW:p4` only.
+5. `agent prompt agy-gh-hinchk-stampede "<audit probe>"` (idle, `wW:p9`) →
+   accepted; re-read `pane list` → focus still `wW:p4` only. Probe disclosed in
+   the prompt text ("no action required — reply ack"); one agy-gh turn spent.
+
