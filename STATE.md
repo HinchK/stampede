@@ -122,7 +122,8 @@
 
 ## 3. Immediate Next Step
 
-1. **Final Reconciliation & Human Promote Hand-off**: Merge `main` into `swarm/stampede/integration`, run full `make check`, and hand off `bash lib/arbiter.sh promote --confirm && git push origin main` to the human driver.
+1. **Epic Completed & Promoted**: Headless Run Mode epic (`maps/headless-run-mode.md`) fully complete across all slices HEADLESS-1 through HEADLESS-7. Reconciled, promoted via arbiter, and pushed to `origin/main` at commit `817d57e`.
+2. **Next Epic / Milestone Intake**: Await PM / operator direction for the next Wayfinder map.
 
 
 
