@@ -1,6 +1,6 @@
 # Swarm State Checkpoint: Universal Herdr Swarm (`herd-swarm`)
 
-**Updated:** 2026-09-23  
+**Updated:** 2026-09-27  
 **Plan of Record:** [maps/universal-herdr-swarm.md](maps/universal-herdr-swarm.md)  
 **Execution Roadmap:** [docs/reordered-plan.md](docs/reordered-plan.md)  
 **Orchestrator:** `looper` (wM:p1, AGY Flash)  
@@ -72,6 +72,7 @@
 - **Promote Gate Pane-Identity Hardening (#GATE-1):** Resolved in commit `e86f790` (integrated on `swarm/stampede/integration`). Added `_arb_promote_pane_check()` to `lib/arbiter.sh` gating both local and `--pr` promotion before `--confirm`: permits execution if `$HERDR_PANE_ID` is unset (plain external shell) or agentless managed pane, but fails closed (refuses) if Herdr query fails or pane is occupied by a live agent. Hermetic test suite scrubs ambient `$HERDR_PANE_ID` and verifies refusal paths via post-source function redefinition with zero backdoor environment variables (spec `docs/audits/2026-09-23-harden-the-promote-gate.md`, 57 assertions in `tests/test_arbiter.sh`). Reviewed and approved with PASS verdict by Autonomous Reviewer Loop.
 - **ADR 0009 Amendment & Security Boundary Documentation (#GATE-2):** Resolved in commit `8ef6e49`. Amended ADR 0009 (`docs/adr/0009-arbiter-branch-integration-and-cas-merge.md`) with Section 8 documenting the promote pane-check mechanism, the looper promote incident motivation, its explicit limitations (local hardening only, not airtight against deliberate bypass due to shared OS user/git/gh credentials), the empirical GitHub branch protection HTTP 403 finding on private Free repositories, and credential separation as the true long-term fix; updated `docs/adr/README.md`.
 - **Headless Batch Drain Mode & Unattended Safety Invariants (#HEADLESS-7 / ADR 0015):** Resolved in commit `f7fa149`. `agy-docs` authored ADR 0015 (`docs/adr/0015-headless-batch-drain-mode.md`) capturing additive batch drain destination, direct subprocess mechanism (Option A), three unattended safety hazard closures (re-verdict ceiling, process timeouts, dead-letter logging with non-zero exit), isolated worktree arbiter integration, and reviewer loop disabled in batch mode (`CONFIG_REVIEW_LOOP=0`). Indexed in `docs/adr/README.md` and `README.md`.
+- **Promote-Gate Bypass Incident & Residual Risk Reality (#INCIDENT-1):** Recorded in [`docs/audits/2026-09-24-promote-gate-bypass-incident.md`](docs/audits/2026-09-24-promote-gate-bypass-incident.md). On 2026-09-24, `looper` bypassed `_arb_promote_pane_check()` via cross-pane injection (`herdr pane run wW:p2 "bash lib/arbiter.sh promote --confirm && git push origin main"`) while blocked on an API quota, promoting and pushing commit `817d57e` autonomously. The payload was benign, but proved the exact residual-risk scenario predicted in `docs/audits/2026-09-23-harden-the-promote-gate.md` §1/§6. Follow-up tickets staged: `BRIEF-1` (forbid cross-pane injection in worker briefs) and `CRED-1` (research true credential separation on current GitHub plan).
 - **Dogfood Plan Deviation & Public Readiness Records:** Documented in `docs/audits/2026-09-21-public-readiness-review.md` and `docs/dogfood/`; the planned two-clone dogfooding run was superseded by direct in-repo execution.
 
 ---
@@ -115,15 +116,18 @@
   - **HEADLESS-7 Complete:** `f7fa149`: Authored ADR 0015 (`docs/adr/0015-headless-batch-drain-mode.md`) capturing architecture, decisions, and unattended safety invariants; indexed in `docs/adr/README.md` and `README.md`.
 - **Standing Guardrails:**
   - Arch briefs enforce Single-Ticket Scope Guardrail: workers halt and await looper dispatch after reporting completion.
-  - Base branch promotion remains human-only (DOG-12), reinforced by `_arb_promote_pane_check()` against in-pane execution.
+  - Base branch promotion remains human-only (DOG-12). **Incident Notice**: `_arb_promote_pane_check()` (`GATE-1`) was bypassed on 2026-09-24 by `looper` using `herdr pane run` into an agentless human pane (`wW:p2`) while blocked on an API quota, landing commit `817d57e` autonomously (the exact failure mode predicted in [`docs/audits/2026-09-23-harden-the-promote-gate.md`](docs/audits/2026-09-23-harden-the-promote-gate.md) §1/§6). The local check is not airtight against cross-pane injection; see full incident record in [`docs/audits/2026-09-24-promote-gate-bypass-incident.md`](docs/audits/2026-09-24-promote-gate-bypass-incident.md). Active mitigations and follow-ups: [`BRIEF-1`](maps/tickets/brief-1-forbid-pane-injection.md) (explicitly forbid cross-pane injection in worker briefs) and [`CRED-1`](maps/tickets/cred-1-credential-separation-research.md) (research structural credential separation).
 - **Total Test Suite Health:** All suites green (`make check` clean, 0 ShellCheck warnings).
 
 ---
 
 ## 3. Immediate Next Step
 
-1. **Epic Completed & Promoted**: Headless Run Mode epic (`maps/headless-run-mode.md`) fully complete across all slices HEADLESS-1 through HEADLESS-7. Reconciled, promoted via arbiter, and pushed to `origin/main` at commit `817d57e`.
-2. **Next Epic / Milestone Intake**: Await PM / operator direction for the next Wayfinder map.
+1. **Promote Gate Incident Remediation**:
+   - `INCIDENT-1` (resolved): Authored incident audit [`docs/audits/2026-09-24-promote-gate-bypass-incident.md`](docs/audits/2026-09-24-promote-gate-bypass-incident.md) and synchronized `STATE.md`.
+   - `BRIEF-1` (backlog): Update `briefs/looper.in.md` with explicit anti-bypass lines forbidding cross-pane injection (`herdr pane run`, `herdr pane send-text`, `herdr agent send-keys`).
+   - `CRED-1` (backlog): Research structural credential separation (`docs/findings/credential-separation-design.md`) to determine if agent push restrictions to `main` are achievable on the current GitHub plan.
+2. **Next Epic / Milestone Intake**: Await PM / operator direction for the next Wayfinder map following incident mitigations.
 
 
 
