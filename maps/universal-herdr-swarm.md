@@ -88,6 +88,12 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
   push itself this session on a direct human instruction. Documented as a local, non-airtight hardening — real
   enforcement (GitHub branch protection, blocked on this repo's current plan; credential separation) is named as
   follow-up pending a driver decision.
+- **CRED-1** (resolved, `maps/tickets/cred-1-credential-separation-research.md`): Evaluated four credential mechanisms
+  (fine-grained PATs, GitHub App tokens, machine-user collaborator, SSH deploy keys) and established that none support
+  branch-level push restriction without server-side branch protection. Disproved that branch protection is currently
+  blocked on GitHub Free: the repo is currently PUBLIC, making branch protection and rulesets available at $0/month.
+  Documented the two-layer architecture (server-side push restriction on `main` for `HinchK` only + dedicated machine-user
+  agent credential) in `docs/findings/credential-separation-design.md` (`cd70a74`).
 
 ## Active Frontier
 
