@@ -98,6 +98,8 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 
 ## Active Frontier
 
+- **[SUPER-1](tickets/super-1-isolated-type-normalization.md):** Supervisor: normalize ledger isolated boolean/integer
+  across gate spawn, reap, and test harness (`loop-bot-herd.sh`, `herdr-loop-swarm.sh`, `tests/test_async_gate.sh`).
 - **[GRANT-1](tickets/grant-1-session-promote-authorization.md):** Session-scoped promote authorization: remove per-promote
   friction without removing human control (single explicit opt-in per session, non-agent pane gate preserved).
 - **[Headless Run Mode](headless-run-mode.md):** additive `stampede drain --headless` batch queue drainer,
