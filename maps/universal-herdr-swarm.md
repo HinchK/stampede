@@ -102,11 +102,12 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - **SUPER-1** (resolved, `maps/tickets/super-1-isolated-type-normalization.md`): Supervisor ledger isolated type normalization
   across `resolve_seat_gate`, `gate_spawn`, and `gate_reap`, plus launcher boolean emission. Robustly handles both boolean and legacy
   integer ledger shapes. Reviewed PASS and integrated on real integration branch `swarm/stampede/integration` at `611cc4e`.
+- **ARB-SLUG-1** (resolved, `maps/tickets/arb-slug-1-fail-closed-integration-ref.md`): Canonical slug resolution chain
+  (`PROJECT_SLUG` > `SWARM_CONFIG_NAME` > `basename`), fail-closed missing ref refusal in `arbiter_drain`, and explicit `arbiter_init_ref`.
+  Reviewed PASS and integrated on `swarm/stampede/integration` at `3bb01bd`.
 
 ## Active Frontier
 
-- **[ARB-SLUG-1](tickets/arb-slug-1-fail-closed-integration-ref.md):** Arbiter silently creates a phantom integration branch
-  instead of failing closed on slug mismatch (`lib/arbiter.sh`, `tests/test_arbiter.sh`).
 - **[Headless Run Mode](headless-run-mode.md):** additive `stampede drain --headless` batch queue drainer,
   confirmed with the driver 2026-09-24 — HEADLESS-3 through HEADLESS-7.
 
