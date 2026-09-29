@@ -88,9 +88,18 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
   push itself this session on a direct human instruction. Documented as a local, non-airtight hardening — real
   enforcement (GitHub branch protection, blocked on this repo's current plan; credential separation) is named as
   follow-up pending a driver decision.
+- **CRED-1** (superseded by GRANT-1, `maps/tickets/cred-1-credential-separation-research.md`): Evaluated four credential mechanisms
+  (fine-grained PATs, GitHub App tokens, machine-user collaborator, SSH deploy keys) and established that none support
+  branch-level push restriction without server-side branch protection. Disproved that branch protection is currently
+  blocked on GitHub Free: the repo is currently PUBLIC, making branch protection and rulesets available at $0/month.
+  Documented the two-layer architecture (server-side push restriction on `main` for `HinchK` only + dedicated machine-user
+  agent credential) in `docs/findings/credential-separation-design.md` (`cd70a74`). Superseded 2026-09-29: driver rejected
+  multi-account credential separation as excessive onboarding friction; replaced by session-scoped promote grant (`maps/tickets/grant-1-session-promote-authorization.md`).
 
 ## Active Frontier
 
+- **[GRANT-1](tickets/grant-1-session-promote-authorization.md):** Session-scoped promote authorization: remove per-promote
+  friction without removing human control (single explicit opt-in per session, non-agent pane gate preserved).
 - **[Headless Run Mode](headless-run-mode.md):** additive `stampede drain --headless` batch queue drainer,
   confirmed with the driver 2026-09-24 — HEADLESS-3 through HEADLESS-7.
 
