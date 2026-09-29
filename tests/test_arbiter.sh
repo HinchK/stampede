@@ -295,6 +295,83 @@ arbiter_promote --confirm >/dev/null 2>&1 \
   && ok "no pane context: unstubbed check allows" \
   || bad "no pane context: unstubbed check allows"
 
+# ── 7f. session-scoped promote grant (GRANT-1) ─────────────────────────────
+# The grant is the human's one-per-session opt-in: creation is pane-gated
+# exactly like promote, a valid grant waives pane check + confirm for
+# promote calls, expiry/revoke/malformed files behave as no grant at all.
+GRANT="$REPO/.herdr-swarm/promote-grant.json"
+
+# (a) grant creation from a non-agent context writes the structured file
+rm -f "$GRANT"
+arbiter_grant_session --ttl 600 >/dev/null 2>&1 \
+  && ok "grant-session succeeds from non-agent context" \
+  || bad "grant-session refused from non-agent context"
+jq -e --arg p "no-herdr-context" \
+  '(.granted_at | type == "number") and (.expires_at | type == "number") and (.granted_from_pane == $p) and (.expires_at - .granted_at == 600)' \
+  "$GRANT" >/dev/null 2>&1 \
+  && ok "grant file carries granted_at/expires_at/TTL/pane origin" \
+  || bad "grant file malformed: $(cat "$GRANT" 2>/dev/null)"
+
+# (b) grant creation from an agent pane refuses, writes nothing
+herdr() { # stub: agent parked in this pane
+  [[ "${1:-}" == "agent" && "${2:-}" == "list" ]] \
+    && printf '{"result":{"agents":[{"name":"stub-agent","pane_id":"wT:p9"}]}}\n' \
+    || return 1
+}
+if HERDR_PANE_ID="wT:p9" arbiter_grant_session --ttl 600 >/dev/null 2>&1; then
+  bad "grant-session refuses from agent pane"
+else
+  ok "grant-session refuses from agent pane"
+fi
+rm -f "$GRANT"
+if HERDR_PANE_ID="wT:p9" arbiter_grant_session --ttl 600 >/dev/null 2>&1; then :; fi
+[[ ! -f "$GRANT" ]] \
+  && ok "refused grant writes no file" || bad "refused grant wrote a file"
+
+# (c) valid grant: promote needs neither --confirm nor a clean pane
+arbiter_grant_session --ttl 600 >/dev/null 2>&1
+if HERDR_PANE_ID="wT:p9" arbiter_promote >/dev/null 2>&1; then
+  ok "grant-gated promote succeeds from an agent pane, no flags"
+else
+  bad "grant-gated promote refused (grant not honored)"
+fi
+rm -f "$GRANT"
+
+# (d) expiry: a past expires_at behaves as no grant
+jq -cn --argjson now "$(date +%s)" '{granted_at: ($now - 7200), expires_at: ($now - 3600), granted_from_pane: "no-herdr-context"}' > "$GRANT"
+if HERDR_PANE_ID="wT:p9" arbiter_promote >/dev/null 2>&1; then
+  bad "expired grant still authorizes promote"
+else
+  ok "expired grant behaves as no grant"
+fi
+# malformed file likewise
+printf 'not json at all\n' > "$GRANT"
+if HERDR_PANE_ID="wT:p9" arbiter_promote >/dev/null 2>&1; then
+  bad "malformed grant file still authorizes promote"
+else
+  ok "malformed grant file behaves as no grant"
+fi
+rm -f "$GRANT"
+
+# (e) revoke: pane-gated itself, and a revoked session refuses promote again
+arbiter_grant_session --ttl 600 >/dev/null 2>&1
+if HERDR_PANE_ID="wT:p9" arbiter_revoke_session >/dev/null 2>&1; then
+  bad "revoke-session refuses from agent pane"
+else
+  ok "revoke-session refuses from agent pane"
+fi
+[[ -f "$GRANT" ]] \
+  && ok "agent-paned revoke left the grant in place" || bad "agent-paned revoke deleted the grant"
+arbiter_revoke_session >/dev/null 2>&1
+[[ ! -f "$GRANT" ]] \
+  && ok "revoke-session removes the grant file" || bad "grant survived revoke"
+if arbiter_promote >/dev/null 2>&1; then
+  bad "post-revoke promote without confirm refuses"
+else
+  ok "post-revoke promote without confirm refuses"
+fi
+unset -f herdr
+
 # ── 8. PR body generation (no network) ─────────────────────────────────────
 arbiter_pr_body "$REPO/.herdr-swarm/pr-body.md"
 check "PR body lists integrated tickets with Closes lines" \
