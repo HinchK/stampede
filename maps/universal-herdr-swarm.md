@@ -98,12 +98,13 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - **GRANT-1** (resolved, `maps/tickets/grant-1-session-promote-authorization.md`): Session-scoped promote authorization
   (`grant-session [--ttl s]`, `revoke-session`) preserving the GATE-1 pane check so agents cannot self-grant. When a
   valid unexpired grant exists in `.herdr-swarm/promote-grant.json`, `arbiter_promote` proceeds flagless without `--confirm`.
-  Reviewed PASS and integrated on `swarm/stampede/integration` at `c7d8367`.
+  Reviewed PASS and integrated on `swarm/hinchk-stampede/integration` at `b24b3fe`.
+- **SUPER-1** (resolved, `maps/tickets/super-1-isolated-type-normalization.md`): Supervisor ledger isolated type normalization
+  across `resolve_seat_gate`, `gate_spawn`, and `gate_reap`, plus launcher boolean emission. Robustly handles both boolean and legacy
+  integer ledger shapes. Reviewed PASS and integrated on `swarm/hinchk-stampede/integration` at `1238290`.
 
 ## Active Frontier
 
-- **[SUPER-1](tickets/super-1-isolated-type-normalization.md):** Supervisor: normalize ledger isolated boolean/integer
-  across gate spawn, reap, and test harness (`loop-bot-herd.sh`, `herdr-loop-swarm.sh`, `tests/test_async_gate.sh`).
 - **[Headless Run Mode](headless-run-mode.md):** additive `stampede drain --headless` batch queue drainer,
   confirmed with the driver 2026-09-24 — HEADLESS-3 through HEADLESS-7.
 
