@@ -955,9 +955,12 @@ arbiter_auto_drain() {
   # Explicit env: a separate process does not inherit the supervisor's
   # unexported shell bindings, and the arbiter must come from the
   # orchestrator (SCRIPT_DIR), never the target tree (DOG-13).
-  REPO_DIR="$REPO_DIR" STATE_DIR="$STATE_DIR" PROJECT_SLUG="$PROJECT_SLUG" \
-    BASE_BRANCH="${BASE_BRANCH:-}" TEST_CMD="$TEST_CMD" SUITE_TIMEOUT_S="$SUITE_TIMEOUT_S" \
-    bash "$SCRIPT_DIR/lib/arbiter.sh" drain \
+  # ARB-SLUG-1: the drain's slug is the config [swarm] name — the canonical
+  # integration-ref slug — NOT this process's seat-namespacing slug (the
+  # profile-REPO slug), whose mismatch is what forked a phantom ref.
+  REPO_DIR="$REPO_DIR" STATE_DIR="$STATE_DIR" PROJECT_SLUG="${SWARM_CONFIG_NAME:-$PROJECT_SLUG}" \
+  BASE_BRANCH="${BASE_BRANCH:-}" TEST_CMD="$TEST_CMD" SUITE_TIMEOUT_S="$SUITE_TIMEOUT_S" \
+  bash "$SCRIPT_DIR/lib/arbiter.sh" drain \
     >> "${STATE_DIR}/gate-logs/arbiter-drain.log" 2>&1 &
   drain_pid=$!
   note "arbiter auto-drain: ${queued} queued record(s) — drain spawned (pid ${drain_pid}, log: ${STATE_DIR}/gate-logs/arbiter-drain.log)"

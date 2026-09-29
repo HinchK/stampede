@@ -101,6 +101,10 @@ arbiter_enqueue 201 seat-a "$SHA_A"
 git -C "$REPO" worktree remove --force "$TEST_DIR/wa2" >/dev/null 2>&1 || true
 
 # ── 2. drain: ff integration + diverged merge ─────────────────────────────
+# ARB-SLUG-1: the integration ref is initialized EXPLICITLY — this fixture
+# used to rely on drain's implicit create-if-missing, which is exactly the
+# phantom-branch mechanism this suite now proves is gone.
+arbiter_init_ref >/dev/null 2>&1
 arbiter_drain 2>/dev/null
 ck 201 integrated "drain: #201 integrated"
 ck 202 integrated "drain: #202 integrated"
@@ -490,6 +494,57 @@ arbiter_enqueue_and_drain 213 seat-k "$SHA_K" 2>/dev/null
 ck 213 integrated "stale lock evicted — killed drain does not block later drains"
 check "recovering drain acquires and releases the lock cleanly" \
   '[[ ! -d "$REPO/.herdr-swarm/arbiter.lock" ]]'
+
+# ── 10. fail-closed integration ref + canonical slug (ARB-SLUG-1) ──────────
+# A slug that resolves to a missing integration ref (wrong source, typo, or
+# the supervisor/launcher disagreement that created a phantom fork rooted at
+# main) must REFUSE — never fall back to base and never create the ref.
+PHANTOM_REF="refs/heads/swarm/phantom-slug/integration"
+SHA_PH=$(git -C "$REPO" rev-parse main)
+printf '{"ts": 1, "ticket": "PH-1", "seat": "seat-x", "sha": "%s", "status": "queued"}\n' "$SHA_PH" >> "$Q"
+PH_ERR="$TEST_DIR/phantom-refusal.txt"
+if PROJECT_SLUG=phantom-slug arbiter_drain >/dev/null 2>"$PH_ERR"; then
+  bad "10a missing integration ref: drain refuses"
+else
+  ok "10a missing integration ref: drain refuses"
+fi
+grep -q "REFUSED" "$PH_ERR" && grep -q "init-ref" "$PH_ERR" \
+  && ok "10b refusal names the ref and the explicit init remedy" \
+  || bad "10b refusal text: $(head -2 "$PH_ERR")"
+check "10c no phantom branch created by the refusal" \
+  '! git -C "$REPO" show-ref --verify --quiet '"$PHANTOM_REF"''
+ck PH-1 queued "10d queued record untouched by the refused drain"
+
+# explicit one-time init creates it; re-init refuses
+if PROJECT_SLUG=phantom-slug arbiter_init_ref >/dev/null 2>&1; then
+  ok "10e init-ref creates the missing integration ref"
+else
+  bad "10e init-ref failed"
+fi
+check "10f init rooted the ref at the base branch" \
+  '[[ "$(git -C "$REPO" rev-parse '"$PHANTOM_REF"')" == "$SHA_PH" ]]'
+if PROJECT_SLUG=phantom-slug arbiter_init_ref >/dev/null 2>&1; then
+  bad "10g re-init of an existing ref refuses"
+else
+  ok "10g re-init of an existing ref refuses"
+fi
+
+# with the ref initialized, the queued record drains cleanly
+PROJECT_SLUG=phantom-slug arbiter_drain >/dev/null 2>&1
+ck PH-1 integrated "10h drain proceeds once the ref exists explicitly"
+
+# slug resolution precedence: explicit env > [swarm] name > basename
+slug_of() { ( eval "$1 _arb_cfg" >/dev/null 2>&1; printf '%s' "${ARB_SLUG:-}" ); }
+[[ "$(slug_of 'PROJECT_SLUG=env-slug; SWARM_CONFIG_NAME=cfg-name;')" == "env-slug" ]] \
+  && ok "10i explicit PROJECT_SLUG wins" || bad "10i precedence: $(slug_of 'PROJECT_SLUG=env-slug; SWARM_CONFIG_NAME=cfg-name;')"
+[[ "$(slug_of 'unset PROJECT_SLUG; SWARM_CONFIG_NAME=cfg-name;')" == "cfg-name" ]] \
+  && ok "10j config [swarm] name is the canonical default" || bad "10j config name not honored"
+[[ "$(slug_of 'unset PROJECT_SLUG; unset SWARM_CONFIG_NAME;')" == "repo" ]] \
+  && ok "10k basename is the last-resort fallback" || bad "10k fallback: $(slug_of 'unset PROJECT_SLUG; unset SWARM_CONFIG_NAME;')"
+
+# ── summary ────────────────────────────────────────────────────────────────
+printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
+(( FAIL == 0 ))
 
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"

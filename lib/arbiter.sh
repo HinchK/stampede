@@ -41,7 +41,13 @@ ARBITER_TMP_SLEEP=0.2
 _arb_cfg() {
   ARB_REPO="${REPO_DIR:-$PWD}"
   ARB_STATE="${STATE_DIR:-${ARB_REPO}/.herdr-swarm}"
-  ARB_SLUG="${PROJECT_SLUG:-$(slugify "$(basename "$ARB_REPO")")}"
+  # ARB-SLUG-1: one canonical slug chain, mirroring the supervisor's binding
+  # order — explicit PROJECT_SLUG (callers, tests) wins; then the config
+  # [swarm] name (SWARM_CONFIG_NAME, bound by the launcher/supervisor config
+  # eval and matching the existing integration refs); basename only as a
+  # bare-standalone last resort, which the fail-closed drain below renders
+  # harmless (a basename slug that has no ref refuses instead of forking).
+  ARB_SLUG="${PROJECT_SLUG:-${SWARM_CONFIG_NAME:-$(slugify "$(basename "$ARB_REPO")")}}"
   ARB_BASE="${BASE_BRANCH:-$(git -C "$ARB_REPO" rev-parse --abbrev-ref HEAD 2>/dev/null || printf 'main')}"
   ARB_QUEUE="${ARB_STATE}/integration.jsonl"
   ARB_REF="refs/heads/swarm/${ARB_SLUG}/integration"
@@ -187,12 +193,22 @@ arbiter_drain() {
     seat=$(jq -r '.seat' <<<"$rec")
     sha=$(jq -r '.sha' <<<"$rec")
 
-    # I0 = integration tip (initialized from the base branch if missing)
+    # I0 = integration tip. ARB-SLUG-1 fail-closed: a missing ref REFUSES —
+    # falling back to the base here is exactly how a slug mismatch silently
+    # forked the integration line from main (2026-09-29 incident). Creating
+    # the canonical integration branch is a one-time explicit `init-ref`,
+    # never a drain fallback.
     local i0
     if git -C "$ARB_REPO" show-ref --verify --quiet "$ARB_REF"; then
       i0=$(git -C "$ARB_REPO" rev-parse "$ARB_REF")
     else
-      i0=$(git -C "$ARB_REPO" rev-parse "$ARB_BASE")
+      printf 'arbiter: drain REFUSED — integration ref %s not found\n' "$ARB_REF" >&2
+      printf 'arbiter: slug resolved as "%s" (PROJECT_SLUG=%s, SWARM_CONFIG_NAME=%s, else basename) — a mismatch here means this drain would fork a new integration line\n' \
+        "$ARB_SLUG" "${PROJECT_SLUG:-<unset>}" "${SWARM_CONFIG_NAME:-<unset>}" >&2
+      printf 'arbiter: creating the integration branch is a one-time explicit init, never a drain fallback:\n' >&2
+      printf 'arbiter:   bash lib/arbiter.sh init-ref\n' >&2
+      arbiter_unlock "$ARB_STATE"
+      return 1
     fi
 
     if ! _arb_integrate "$ticket" "$seat" "$sha" "$i0"; then
@@ -260,9 +276,9 @@ _arb_integrate() { # TICKET SEAT SHA I0
   # 3. CAS ref update — the tip may only move from exactly I0. A missing ref
   # is first created AT the base tip with empty-old (must-not-exist), which
   # loses loudly to any concurrent creator; the CAS then still guards the tip.
-  if ! git -C "$ARB_REPO" show-ref --verify --quiet "$ARB_REF"; then
-    git -C "$ARB_REPO" update-ref "$ARB_REF" "$i0" "" >/dev/null 2>&1 || true
-  fi
+  # ARB-SLUG-1: no create-if-missing here — the silent update-ref below is
+  # the second half of the phantom-branch mechanism. The drain guarantees
+  # the ref exists; if it vanished mid-pass, the CAS against $i0 fails loud.
   if ! git -C "$ARB_REPO" update-ref "$ARB_REF" "$candidate" "$i0" 2>/dev/null; then
     _arb_set_status "$ticket" "$sha" "retry" "{integration_before: \"${i0}\"}"
     _arb_telemetry arbiter.retry "$ticket" "$seat" "$sha" \
@@ -481,6 +497,26 @@ arbiter_promote() {
   printf 'arbiter: promoted integration to %s\n' "$ARB_BASE" >&2
 }
 
+# arbiter_init_ref — the ONE-TIME, explicit creation of the canonical
+# integration branch (ARB-SLUG-1). Refuses if the ref already exists; never
+# runs implicitly from drain/enqueue paths.
+arbiter_init_ref() { # [BASE_COMMIT]
+  _arb_cfg
+  local base="${1:-$ARB_BASE}"
+  if git -C "$ARB_REPO" show-ref --verify --quiet "$ARB_REF"; then
+    printf 'arbiter: init refused — %s already exists at %s\n' \
+      "$ARB_REF" "$(git -C "$ARB_REPO" rev-parse "$ARB_REF")" >&2
+    return 1
+  fi
+  if ! git -C "$ARB_REPO" rev-parse -q --verify "${base}^{commit}" >/dev/null 2>&1; then
+    printf 'arbiter: init refused — base commit not found: %s\n' "$base" >&2
+    return 1
+  fi
+  git -C "$ARB_REPO" update-ref "$ARB_REF" "$base" ""
+  printf 'arbiter: initialized %s at %s\n' "$ARB_REF" \
+    "$(git -C "$ARB_REPO" rev-parse --short "$ARB_REF")"
+}
+
 # CLI dispatcher
 if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
   cmd="${1:-}"
@@ -491,9 +527,10 @@ if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
     promote) arbiter_promote "$@" ;;
     grant-session)  arbiter_grant_session "$@" ;;
     revoke-session) arbiter_revoke_session "$@" ;;
+    init-ref) arbiter_init_ref "${1:-}" ;;
     pr-body) arbiter_pr_body "${1:?out-file}" ;;
     *)
-      printf 'Usage: %s enqueue <ticket> <seat> <sha> | drain | promote [--pr] [--confirm] | grant-session [--ttl s] | revoke-session | pr-body <file>\n' "$0" >&2
+      printf 'Usage: %s enqueue <ticket> <seat> <sha> | drain | promote [--pr] [--confirm] | grant-session [--ttl s] | revoke-session | init-ref [base] | pr-body <file>\n' "$0" >&2
       printf '       enqueue also drains the queue in the same invocation (PROVE-4); drain remains for manual re-runs\n' >&2
       exit 1 ;;
   esac
