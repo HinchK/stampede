@@ -2,7 +2,7 @@
 id: SUPER-1
 title: "Supervisor: normalize ledger isolated boolean/integer across gate spawn, reap, and test harness"
 type: wayfinder:task
-status: resolved
+status: review_passed
 assignee: arch
 owns: loop-bot-herd.sh,tests/test_async_gate.sh,herdr-loop-swarm.sh
 parent: maps/universal-herdr-swarm.md
@@ -40,7 +40,7 @@ bash tests/test_async_gate.sh
 make check
 ```
 
-## Resolution
+## Status
 
 - **Root Cause**: `herdr-loop-swarm.sh` serialized `isolated` as an integer (`1`/`0`) in `seats.json`, while `loop-bot-herd.sh` expected boolean strings (`"true"`), causing `gate_reap` to skip the review loop seam for green gates on isolated worker seats.
 - **Implementation**:
@@ -48,4 +48,4 @@ make check
   - `loop-bot-herd.sh`: Robust normalization in `resolve_seat_gate`, `gate_spawn`, and `gate_reap` accepting `true`, `1`, `"1"`, and `"true"`, ensuring backward compatibility with existing on-disk ledgers.
 - **Suite Gate**: `tests/test_async_gate.sh` §15 (+3 tests, 54/54 passing) proving integer-ledger green gates enqueue into arbiter and run in isolated worktree; `make check` all 19 suites green, 0 shellcheck warnings.
 - **Review**: Autonomous Reviewer Loop PASS verdict by `reviewer-hinchk-stampede` (Round 1/2) in `.herdr-swarm/reviews/SUPER-1-3080ff9a3b4202d7b55f610626264a429924ad26.md`.
-- **Integrated**: Auto-drained and integrated on `swarm/hinchk-stampede/integration` at `1238290`. Lease released.
+- **Integration**: Pending redo against current `swarm/stampede/integration` tip (prior drain landed on divergent fork `swarm/hinchk-stampede/integration`).

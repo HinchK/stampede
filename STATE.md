@@ -125,17 +125,16 @@
 
 1. **GRANT-1 Session-Scoped Promote Authorization (INTEGRATED)**:
    - **Reviewer Pass**: Reviewed by `reviewer-hinchk-stampede` (Round 1/2) with PASS verdict in [`.herdr-swarm/reviews/GRANT-1-e472cb858ce8a33b387b59a268c5f06073de3d55.md`](.herdr-swarm/reviews/GRANT-1-e472cb858ce8a33b387b59a268c5f06073de3d55.md).
-   - **Integrated**: Integrated onto `swarm/hinchk-stampede/integration` at `b24b3fe` via `arbiter_enqueue_and_drain`. Lease released cleanly. Ticket resolved.
-2. **SUPER-1 Ledger Isolated Type Normalization (INTEGRATED)**:
+   - **Integrated**: Integrated onto real `swarm/stampede/integration` tip at `c7d8367` via `arbiter_enqueue_and_drain`. Lease released cleanly. Ticket resolved.
+2. **SUPER-1 Ledger Isolated Type Normalization (IMPLEMENTED & REVIEW PASSED — INTEGRATION PENDING REDO)**:
    - **Root Cause & Fix**: `herdr-loop-swarm.sh` serialized `isolated` as integer `1`/`0` in `seats.json`, while `loop-bot-herd.sh`'s `resolve_seat_gate`, `gate_spawn`, and `gate_reap` string-checked against `"true"`. Fixed at launcher (JSON boolean) and defensively normalized across all supervisor gate readers. Added test coverage in `tests/test_async_gate.sh` §15 (54/54 passing).
    - **Reviewer Pass**: Autonomous Reviewer Loop PASS verdict by `reviewer-hinchk-stampede` (Round 1/2) in [`.herdr-swarm/reviews/SUPER-1-3080ff9a3b4202d7b55f610626264a429924ad26.md`](.herdr-swarm/reviews/SUPER-1-3080ff9a3b4202d7b55f610626264a429924ad26.md).
-   - **Integrated**: Integrated onto `swarm/hinchk-stampede/integration` at `1238290`. Lease released via `lib/partition.sh lease release SUPER-1`. Ticket marked resolved on `main` (`8cb8e69`).
-3. **Supervisor Daemon Refresh**:
-   - Restart `./loop-bot-herd.sh watch` so the active background supervisor executes the updated code.
+   - **Integration Status**: An initial automated drain ran under daemon environment `PROJECT_SLUG=hinchk-stampede`, which created and integrated onto a divergent ref `swarm/hinchk-stampede/integration` rather than the true integration ref `swarm/stampede/integration`. SUPER-1 fix commit `3080ff9` is safe on `swarm/hinchk-stampede/arch-1-hinchk-stampede` and pending proper integration redo against `swarm/stampede/integration` (tip `c7d8367`).
+3. **Redo SUPER-1 Integration**:
+   - Re-run enqueue and drain for SUPER-1 (`3080ff9`) targeting `swarm/stampede/integration`.
+   - Verify `git merge-base --is-ancestor 3080ff9 swarm/stampede/integration`.
 4. **Reconciliation & Human Promotion**:
-   - Both `GRANT-1` and `SUPER-1` are fully integrated on `swarm/hinchk-stampede/integration` (commit `1238290`).
-   - Awaiting human driver to execute `bash lib/arbiter.sh promote --confirm` and `git push origin main`.
-   - Once promoted, the human driver may run `bash lib/arbiter.sh grant-session` to grant session-scoped promote permissions to agents if desired.
+   - Once SUPER-1 is genuinely integrated on `swarm/stampede/integration`, hand off to human driver for `bash lib/arbiter.sh promote --confirm` and `git push origin main`.
 5. **Next Horizon Roadmap**:
    - 5 tickets staged in `maps/tickets-staged/` (`horizon-1` through `horizon-5`) charted in [`maps/next-horizon.md`](maps/next-horizon.md).
 
