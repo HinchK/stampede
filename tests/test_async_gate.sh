@@ -377,6 +377,10 @@ sleep 0.6; gate_reap >/dev/null 2>&1
 [[ "$(last_suite_of H-2)" == "RED" ]] \
   && assert_ok 14b "headless RED recorded by the same gate" || assert_bad 14b "headless RED ($(last_suite_of H-2))"
 CRIT_BRIEF="$STATE/briefs/seat-b-H-2-${SHA_H2}-red.md"
+# the critique turn is a BACKGROUND spawn — give the vendor stub a beat to
+# exec and record its argv before asserting on it (race observed 2026-09-24:
+# identical code flaked here purely on scheduling)
+sleep 0.5
 [[ -f "$CRIT_BRIEF" ]] \
   && assert_ok 14b2 "RED feedback written as a critique brief" || assert_bad 14b2 "no critique brief at $CRIT_BRIEF"
 grep -q "ARCH DONE #H-2" "$CRIT_BRIEF" && grep -q "suite is RED" "$CRIT_BRIEF" \
