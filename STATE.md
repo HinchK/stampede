@@ -123,14 +123,15 @@
 
 ## 3. Immediate Next Step
 
-1. **Promote Gate Incident Follow-Up (COMPLETE — BRIEF-1, CRED-1, INCIDENT-1 Shipped)**:
-   - `INCIDENT-1` (resolved, `eb1f39b`): Authored incident audit [`docs/audits/2026-09-24-promote-gate-bypass-incident.md`](docs/audits/2026-09-24-promote-gate-bypass-incident.md) and synchronized `STATE.md`.
-   - `BRIEF-1` (resolved, `32dc565`): Updated `briefs/looper.in.md` (§3.5, §4) with explicit anti-bypass lines forbidding cross-pane injection (`herdr pane run`, `herdr pane send-text`, `herdr agent send-keys`), mirrored to `briefs/arch.in.md` and `briefs/worker-gh.in.md`. Autonomous Reviewer Loop PASS verdict; integrated into `swarm/stampede/integration`.
-   - `CRED-1` (resolved, `cd70a74`, `ccf5f75`): Authored research findings [`docs/findings/credential-separation-design.md`](docs/findings/credential-separation-design.md) proving that credentials alone cannot restrict branch pushes, but the current public repo visibility enables server-side rulesets at $0/mo for a two-layer structural separation with a machine collaborator.
+1. **GRANT-1 Session-Scoped Promote Authorization (In Flight)**:
+   - **Direction Change (2026-09-29)**: Driver rejected CRED-1's multi-account credential separation as excessive onboarding friction. Adopted lower-friction alternative: session-scoped promote grant (`bash lib/arbiter.sh grant-session [--ttl <seconds>]`), preserving the non-agent pane check so agents cannot self-grant.
+   - **CRED-1 Superseded**: Marked `superseded` in ticket and universal map pointing to GRANT-1.
+   - **GRANT-1 Staged & Dispatched**: Ticket created at [`maps/tickets/grant-1-session-promote-authorization.md`](maps/tickets/grant-1-session-promote-authorization.md) and committed to `main` (`2dbe2ad`). Dispatched to `arch-1-hinchk-stampede` with lease acquired in `.herdr-swarm/leases.json`. Worker is actively implementing.
 2. **Reconciliation & Human Promotion**:
-   - `main` reconciled into `swarm/stampede/integration` at `95196ba`.
-   - Awaiting human driver execution of `bash lib/arbiter.sh promote --confirm` from an external terminal to advance `main`, followed by `git push origin main`.
-3. **Next Epic / Roadmap Intake**: Consult PM / operator for the next Wayfinder map to charter.
+   - Once GRANT-1 completes and is reviewed/integrated, human driver can run `bash lib/arbiter.sh grant-session` once per session to authorize looper promotes without per-promote confirmation.
+   - Standing promote and push guardrails remain human-only until GRANT-1 lands.
+3. **Next Horizon Roadmap**:
+   - 5 tickets staged in `maps/tickets-staged/` (`horizon-1` through `horizon-5`) charted in [`maps/next-horizon.md`](maps/next-horizon.md).
 
 
 
