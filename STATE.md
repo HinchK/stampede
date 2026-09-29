@@ -123,14 +123,17 @@
 
 ## 3. Immediate Next Step
 
-1. **GRANT-1 Session-Scoped Promote Authorization (In Flight)**:
-   - **Direction Change (2026-09-29)**: Driver rejected CRED-1's multi-account credential separation as excessive onboarding friction. Adopted lower-friction alternative: session-scoped promote grant (`bash lib/arbiter.sh grant-session [--ttl <seconds>]`), preserving the non-agent pane check so agents cannot self-grant.
-   - **CRED-1 Superseded**: Marked `superseded` in ticket and universal map pointing to GRANT-1.
-   - **GRANT-1 Staged & Dispatched**: Ticket created at [`maps/tickets/grant-1-session-promote-authorization.md`](maps/tickets/grant-1-session-promote-authorization.md) and committed to `main` (`2dbe2ad`). Dispatched to `arch-1-hinchk-stampede` with lease acquired in `.herdr-swarm/leases.json`. Worker is actively implementing.
-2. **Reconciliation & Human Promotion**:
-   - Once GRANT-1 completes and is reviewed/integrated, human driver can run `bash lib/arbiter.sh grant-session` once per session to authorize looper promotes without per-promote confirmation.
-   - Standing promote and push guardrails remain human-only until GRANT-1 lands.
-3. **Next Horizon Roadmap**:
+1. **GRANT-1 Session-Scoped Promote Authorization (INTEGRATED)**:
+   - **Reviewer Pass**: Reviewed by `reviewer-hinchk-stampede` (Round 1/2) with PASS verdict in [`.herdr-swarm/reviews/GRANT-1-e472cb858ce8a33b387b59a268c5f06073de3d55.md`](.herdr-swarm/reviews/GRANT-1-e472cb858ce8a33b387b59a268c5f06073de3d55.md).
+   - **Integrated**: Integrated onto `swarm/stampede/integration` at `c7d8367` via `arbiter_enqueue_and_drain`. Lease released cleanly.
+2. **SUPER-1 Ledger Isolated Type Normalization (In Flight)**:
+   - Root-cause defect identified: `herdr-loop-swarm.sh` serialized `isolated` as integer `1`/`0` in `seats.json`, while `loop-bot-herd.sh`'s `resolve_seat_gate`, `gate_spawn`, and `gate_reap` string-checked against `"true"`.
+   - Ticket staged at [`maps/tickets/super-1-isolated-type-normalization.md`](maps/tickets/super-1-isolated-type-normalization.md) and committed to `main` (`5724104`).
+   - Dispatched to `arch-1-hinchk-stampede` with lease acquired in `.herdr-swarm/leases.json`. Worker is actively implementing.
+3. **Reconciliation & Human Promotion**:
+   - Once SUPER-1 lands or after human driver executes `bash lib/arbiter.sh promote --confirm` (or uses `grant-session` once promoted), `main` advances with both features.
+   - Standing promote and push guardrails remain human-only until promoted.
+4. **Next Horizon Roadmap**:
    - 5 tickets staged in `maps/tickets-staged/` (`horizon-1` through `horizon-5`) charted in [`maps/next-horizon.md`](maps/next-horizon.md).
 
 
