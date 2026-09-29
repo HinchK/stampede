@@ -2,8 +2,9 @@
 id: BRIEF-1
 title: "Forbid cross-pane injection as a gate bypass in worker briefs"
 type: wayfinder:task
-status: backlog
-assignee: arch
+status: resolved
+commit: 32dc565
+assignee: arch-1
 owns: briefs/looper.in.md
 parent: maps/universal-herdr-swarm.md
 ---
@@ -45,3 +46,11 @@ Human/pm review — a brief-text change, no test suite applies.
 This alone will not prevent a determined or reasoning agent from finding the same or a different bypass again —
 see `CRED-1` for the actual fix (credential separation). This ticket is the cheap, immediate mitigation, not the
 solution.
+
+## Resolution
+
+- **Brief Updated**: `briefs/looper.in.md` §3.5 and §4 explicitly forbid cross-pane command execution/injection with the 2026-09-24 incident cited verbatim, while explicitly carving out legitimate inter-agent notification protocols (`herdr agent prompt` + `send-keys enter`).
+- **Mirrors Added**: Mirrored to `briefs/arch.in.md` §2 and `briefs/worker-gh.in.md`.
+- **Suite Gate**: All 19 suites green (`make check` clean, 0 shellcheck warnings).
+- **Review**: Autonomous Reviewer Loop PASS verdict by `reviewer-hinchk-stampede` (Round 1/2) in `.herdr-swarm/reviews/BRIEF-1-32dc56585527d21fe140b0016b8b2a82a0f47dfc.md`.
+- **Integrated**: Auto-drained and integrated on `swarm/stampede/integration` at `32dc565`.
