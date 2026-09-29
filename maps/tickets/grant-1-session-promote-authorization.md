@@ -2,7 +2,8 @@
 id: GRANT-1
 title: "Session-scoped promote grant: remove per-promote friction without removing human control"
 type: wayfinder:task
-status: backlog
+status: resolved
+commit: e472cb8
 assignee: arch
 owns: lib/arbiter.sh,tests/test_arbiter.sh,briefs/looper.in.md
 parent: maps/universal-herdr-swarm.md
@@ -57,3 +58,13 @@ itself permission.
 ```bash
 bash tests/test_arbiter.sh
 ```
+
+## Resolution
+
+- **Implementation**:
+  - `lib/arbiter.sh`: Added `arbiter_grant_session [--ttl SECONDS]` and `arbiter_revoke_session` reusing `_arb_promote_pane_check()`.
+  - `arbiter_promote`: Valid session grant (`.herdr-swarm/promote-grant.json`) waives `--confirm` and pane checks; expired/absent/malformed grants fall through to human refusal.
+  - `briefs/looper.in.md`: Updated to check-first promote policy.
+- **Suite Gate**: `tests/test_arbiter.sh` 77/77 passing (+11 assertions); `make check` green (19 suites, 0 shellcheck warnings).
+- **Review**: Autonomous Reviewer Loop PASS verdict by `reviewer-hinchk-stampede` (Round 1/2) in `.herdr-swarm/reviews/GRANT-1-e472cb858ce8a33b387b59a268c5f06073de3d55.md`.
+- **Integrated**: Auto-drained and integrated on `swarm/stampede/integration` at `c7d8367`.
