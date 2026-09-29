@@ -133,8 +133,10 @@
 3. **Reconciliation & Human Promotion**:
    - Both `GRANT-1` (`c7d8367`) and `SUPER-1` (`611cc4e`) are now genuine linear ancestors of `swarm/stampede/integration`.
    - Standing promote and push guardrails remain human-only: awaiting human driver to execute `bash lib/arbiter.sh promote --confirm` and `git push origin main`.
-4. **Follow-Up Investigation (Slug/Ref Divergence)**:
-   - Diagnosed root-cause mechanism of fork: `profile.env` sets `REPO=HinchK/stampede`, causing launcher/daemon to use `PROJECT_SLUG=hinchk-stampede` (`refs/heads/swarm/hinchk-stampede/integration`), whereas bare CLI invocations default to directory basename `stampede` (`refs/heads/swarm/stampede/integration`). Ready for separate formal ticketing.
+4. **ARB-SLUG-1 Fail-Closed Integration Ref Resolution (STAGED & DISPATCHED)**:
+   - Defect ticket staged at `maps/tickets/arb-slug-1-fail-closed-integration-ref.md`.
+   - Diagnosed root-cause mechanism of fork: `profile.env` sets `REPO=HinchK/stampede`, causing launcher/daemon to use `PROJECT_SLUG=hinchk-stampede` (`refs/heads/swarm/hinchk-stampede/integration`), whereas bare CLI invocations default to directory basename `stampede` (`refs/heads/swarm/stampede/integration`). Furthermore, arbiter silently fell back to branching from `main` instead of failing closed when the ref did not exist.
+   - Dispatched to `arch-1-hinchk-stampede` with lease acquired on `lib/arbiter.sh` and `tests/test_arbiter.sh`.
 5. **Next Horizon Roadmap**:
    - 5 tickets staged in `maps/tickets-staged/` (`horizon-1` through `horizon-5`) charted in [`maps/next-horizon.md`](maps/next-horizon.md).
 

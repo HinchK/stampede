@@ -105,6 +105,8 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 
 ## Active Frontier
 
+- **[ARB-SLUG-1](tickets/arb-slug-1-fail-closed-integration-ref.md):** Arbiter silently creates a phantom integration branch
+  instead of failing closed on slug mismatch (`lib/arbiter.sh`, `tests/test_arbiter.sh`).
 - **[Headless Run Mode](headless-run-mode.md):** additive `stampede drain --headless` batch queue drainer,
   confirmed with the driver 2026-09-24 — HEADLESS-3 through HEADLESS-7.
 
