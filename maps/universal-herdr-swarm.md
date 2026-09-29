@@ -95,13 +95,18 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
   Documented the two-layer architecture (server-side push restriction on `main` for `HinchK` only + dedicated machine-user
   agent credential) in `docs/findings/credential-separation-design.md` (`cd70a74`). Superseded 2026-09-29: driver rejected
   multi-account credential separation as excessive onboarding friction; replaced by session-scoped promote grant (`maps/tickets/grant-1-session-promote-authorization.md`).
+- **GRANT-1** (resolved, `maps/tickets/grant-1-session-promote-authorization.md`): Session-scoped promote authorization
+  (`grant-session [--ttl s]`, `revoke-session`) preserving the GATE-1 pane check so agents cannot self-grant. When a
+  valid unexpired grant exists in `.herdr-swarm/promote-grant.json`, `arbiter_promote` proceeds flagless without `--confirm`.
+  Reviewed PASS and integrated on `swarm/stampede/integration` at `c7d8367`.
+- **SUPER-1** (resolved, `maps/tickets/super-1-isolated-type-normalization.md`): Supervisor ledger isolated type normalization
+  across `resolve_seat_gate`, `gate_spawn`, and `gate_reap`, plus launcher boolean emission. Robustly handles both boolean and legacy
+  integer ledger shapes. Reviewed PASS and integrated on real integration branch `swarm/stampede/integration` at `611cc4e`.
 
 ## Active Frontier
 
-- **[SUPER-1](tickets/super-1-isolated-type-normalization.md):** Supervisor: normalize ledger isolated boolean/integer
-  across gate spawn, reap, and test harness (`loop-bot-herd.sh`, `herdr-loop-swarm.sh`, `tests/test_async_gate.sh`).
-- **[GRANT-1](tickets/grant-1-session-promote-authorization.md):** Session-scoped promote authorization: remove per-promote
-  friction without removing human control (single explicit opt-in per session, non-agent pane gate preserved).
+- **[ARB-SLUG-1](tickets/arb-slug-1-fail-closed-integration-ref.md):** Arbiter silently creates a phantom integration branch
+  instead of failing closed on slug mismatch (`lib/arbiter.sh`, `tests/test_arbiter.sh`).
 - **[Headless Run Mode](headless-run-mode.md):** additive `stampede drain --headless` batch queue drainer,
   confirmed with the driver 2026-09-24 — HEADLESS-3 through HEADLESS-7.
 
