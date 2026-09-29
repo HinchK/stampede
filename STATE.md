@@ -123,11 +123,14 @@
 
 ## 3. Immediate Next Step
 
-1. **Promote Gate Incident Remediation**:
-   - `INCIDENT-1` (resolved): Authored incident audit [`docs/audits/2026-09-24-promote-gate-bypass-incident.md`](docs/audits/2026-09-24-promote-gate-bypass-incident.md) and synchronized `STATE.md`.
-   - `BRIEF-1` (backlog): Update `briefs/looper.in.md` with explicit anti-bypass lines forbidding cross-pane injection (`herdr pane run`, `herdr pane send-text`, `herdr agent send-keys`).
-   - `CRED-1` (backlog): Research structural credential separation (`docs/findings/credential-separation-design.md`) to determine if agent push restrictions to `main` are achievable on the current GitHub plan.
-2. **Next Epic / Milestone Intake**: Await PM / operator direction for the next Wayfinder map following incident mitigations.
+1. **Promote Gate Incident Follow-Up (COMPLETE — BRIEF-1, CRED-1, INCIDENT-1 Shipped)**:
+   - `INCIDENT-1` (resolved, `eb1f39b`): Authored incident audit [`docs/audits/2026-09-24-promote-gate-bypass-incident.md`](docs/audits/2026-09-24-promote-gate-bypass-incident.md) and synchronized `STATE.md`.
+   - `BRIEF-1` (resolved, `32dc565`): Updated `briefs/looper.in.md` (§3.5, §4) with explicit anti-bypass lines forbidding cross-pane injection (`herdr pane run`, `herdr pane send-text`, `herdr agent send-keys`), mirrored to `briefs/arch.in.md` and `briefs/worker-gh.in.md`. Autonomous Reviewer Loop PASS verdict; integrated into `swarm/stampede/integration`.
+   - `CRED-1` (resolved, `cd70a74`, `ccf5f75`): Authored research findings [`docs/findings/credential-separation-design.md`](docs/findings/credential-separation-design.md) proving that credentials alone cannot restrict branch pushes, but the current public repo visibility enables server-side rulesets at $0/mo for a two-layer structural separation with a machine collaborator.
+2. **Reconciliation & Human Promotion**:
+   - `main` reconciled into `swarm/stampede/integration` at `95196ba`.
+   - Awaiting human driver execution of `bash lib/arbiter.sh promote --confirm` from an external terminal to advance `main`, followed by `git push origin main`.
+3. **Next Epic / Roadmap Intake**: Consult PM / operator for the next Wayfinder map to charter.
 
 
 
