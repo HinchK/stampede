@@ -534,12 +534,17 @@ for tab_name in herd ops; do
     fi
 
     if [[ -n "$seat_pane" ]]; then
-      # v2 ledger entry (jq-built; paths may contain any character)
+      # v2 ledger entry (jq-built; paths may contain any character).
+      # SUPER-1: isolated ships as a JSON BOOLEAN — the ledger v2 contract
+      # (lib/cli/stampede-headless.sh, supervisor readers) compares against
+        # true; the TOML binding's 1/0 integers must not leak into the file.
       root_branch=$(git -C "$PWD" rev-parse --abbrev-ref HEAD 2>/dev/null || printf '')
+      seat_isolated_bool=false
+      (( seat_isolated )) && seat_isolated_bool=true
       SEAT_LEDGER+=$(jq -cn \
         --arg name "$seat_name" --arg kind "${resolved_kind:-$seat_kind}" --arg pane "$seat_pane" \
         --arg wt_dir "${seat_cwd:-$PWD}" --arg branch "${wt_branch:-$root_branch}" \
-        --argjson isolated "$seat_isolated" \
+        --argjson isolated "$seat_isolated_bool" \
         '{name: $name, kind: $kind, pane: $pane, worktree_dir: $wt_dir, branch: $branch, isolated: $isolated}')$'\n'
       if [[ "$tab_name" == "ops" ]]; then
         SEATED_OPS_PANES+=" ${seat_pane}"
