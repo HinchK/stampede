@@ -122,6 +122,14 @@ chmod +x "$HB_BIN/opencode"
 # machine's own if present, else the e2e degrades to the skip note below.
 if command -v gtimeout >/dev/null 2>&1; then ln -s "$(command -v gtimeout)" "$HB_BIN/timeout"
 elif command -v timeout >/dev/null 2>&1; then ln -s "$(command -v timeout)" "$HB_BIN/timeout"; fi
+# jq must be on the stripped HB_PATH too: when pyenv resolves to a python
+# outside /opt/homebrew/bin (e.g. ~/.local/bin/python3.14), HB_PATH loses
+# the homebrew dir entirely and the batch's jq-dependent steps (seats.json
+# ledger, queue reads) fail under the batch shell's set -e.
+if command -v jq >/dev/null 2>&1; then ln -s "$(command -v jq)" "$HB_BIN/jq"; fi
+# git as well: Apple's /usr/bin/git shim is present, but keep the invocation
+# environment identical to a real one when homebrew git exists.
+if command -v git >/dev/null 2>&1 && [[ "$(command -v git)" != /usr/bin/* ]]; then ln -s "$(command -v git)" "$HB_BIN/git"; fi
 # The supervisor source-time needs a tomllib-capable interpreter (DOG-1) —
 # the stripped PATH must carry the one this repo resolves.
 HB_PY=$(bash "$REPO_ROOT/lib/pyenv.sh" 2>/dev/null || true)
@@ -136,9 +144,27 @@ printf 'test:\n\t@true\n' > "$HR_REPO/Makefile"
 mkdir -p "$HR_REPO/maps/tickets"
 printf 'x\n' > "$HR_REPO/f.txt"; git -C "$HR_REPO" add -A; git -C "$HR_REPO" commit -qm base
 printf -- '---\nid: T-RESOLVED\nstatus: resolved\nowns: f.txt\n---\nbody\n' > "$HR_REPO/maps/tickets/t0.md"
-printf -- '---\nid: T-1\nstatus: backlog\nowns: f.txt\n---\nbody one\n' > "$HR_REPO/maps/tickets/t1.md"
-printf -- '---\nid: T-2\nstatus: backlog\n---\nbody two\n' > "$HR_REPO/maps/tickets/t2.md"
-git -C "$HR_REPO" add -A; git -C "$HR_REPO" commit -qm tickets
+  printf -- '---\nid: T-1\nstatus: backlog\nowns: f.txt\n---\nbody one\n' > "$HR_REPO/maps/tickets/t1.md"
+  printf -- '---\nid: T-2\nstatus: backlog\n---\nbody two\n' > "$HR_REPO/maps/tickets/t2.md"
+  git -C "$HR_REPO" add -A; git -C "$HR_REPO" commit -qm tickets
+  # slugify for the ARB-SLUG-1 init-ref below (the ref must be created under
+  # the same slug the batch itself resolves from the profile REPO).
+  # set +e/+o pipefail: lib/common.sh runs `set -euo pipefail` at its top —
+  # without the restore, the leak flips this suite (written for set -u only)
+  # into fail-abort mode, and any later non-zero command (e.g. [10]'s
+  # deliberately-failing batch) kills the whole suite before rc capture.
+  # shellcheck disable=SC1091
+  source "$REPO_ROOT/lib/common.sh"
+  set +e +o pipefail
+  # ARB-SLUG-1 (arrived via integration): drain refuses when the canonical
+  # integration ref is missing — one-time explicit init, exactly the setup a
+  # real repo gets, with the slug the batch itself will resolve (profile
+  # REPO "t/scratch" → slugify).
+  PROJECT_SLUG="$(slugify t/scratch)" REPO_DIR="$HR_REPO" STATE_DIR="$HR_REPO/.herdr-swarm" \
+    BASE_BRANCH=main PATH="$HB_PATH" bash "$REPO_ROOT/lib/arbiter.sh" init-ref >/dev/null 2>&1 || true
+  git -C "$HR_REPO" show-ref --verify --quiet "refs/heads/swarm/$(slugify t/scratch)/integration" \
+    && ok "integration ref initialized (ARB-SLUG-1 one-time setup)" || bad "init-ref failed"
+
 if [[ -e "$HB_BIN/timeout" ]]; then
   out=$(PATH="$HB_PATH" "$REPO_ROOT/bin/stampede" headless "$HR_REPO" --max-tickets 1 2>&1); rc=$?
   [[ "$rc" == 0 ]] && ok "headless e2e rc=0 without herdr on PATH" || bad "e2e rc=$rc: $(printf '%s' "$out" | tail -3)"
@@ -257,6 +283,10 @@ if [[ -e "$HB_BIN/timeout" ]]; then
   printf -- '---\nid: T-A\nstatus: backlog\n---\nbody a\n' > "$HR4/maps/tickets/ta.md"
   printf -- '---\nid: T-B\nstatus: backlog\n---\nbody b\n' > "$HR4/maps/tickets/tb.md"
   git -C "$HR4" add -A; git -C "$HR4" commit -qm tickets
+  # ARB-SLUG-1: same one-time init as [9], slug matching the batch's resolve
+  # (profile REPO "t/scratch4")
+  PROJECT_SLUG="$(slugify t/scratch4)" REPO_DIR="$HR4" STATE_DIR="$HR4/.herdr-swarm" \
+    BASE_BRANCH=main PATH="$HB_PATH" bash "$REPO_ROOT/lib/arbiter.sh" init-ref >/dev/null 2>&1 || true
   cat > "$HB_BIN/opencode" <<'EOF'
 #!/bin/sh
 brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')

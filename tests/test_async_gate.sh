@@ -445,6 +445,11 @@ git -C "$WTB" add -A; git -C "$WTB" -c user.email=t@t -c user.name=t commit -q -
 if [[ -f "$Q" ]]; then
   jq -s -c 'map(select(.status != "queued")) | .[]' "$Q" > "$Q.tmp" && mv "$Q.tmp" "$Q"
 fi
+# ARB-SLUG-1 (arrived via integration): drain no longer silently creates the
+# integration ref from the base — it refuses. One-time explicit init, the
+# same function a real repo's setup would run, in-process so the slug
+# binding matches the enqueue and the drain below.
+arbiter_init_ref >/dev/null 2>&1 || true
 SHA_H9=$(git -C "$WTB" rev-parse HEAD)
 arbiter_enqueue H-9 seat-b "$SHA_H9" >/dev/null 2>&1
 printf '{"version":1,"leases":[{"ticket":"H-9","seat":"seat-b","paths":[]}]}\n' > "$STATE/leases.json"
