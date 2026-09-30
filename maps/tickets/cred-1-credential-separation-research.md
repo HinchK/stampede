@@ -2,7 +2,7 @@
 id: CRED-1
 title: "Research: is credential separation for agent seats actually achievable on this GitHub plan?"
 type: wayfinder:research
-status: closed
+status: superseded
 outcome: superseded
 commit: cd70a74
 assignee: agy-gh

@@ -19,15 +19,15 @@ documented/synced/proven" gap that's opened up across `agy-docs`, `agy-gh`, and 
 
 ## Decisions so far
 
-- PART-1 found during dispatch (superseded status not recognized by ownership check, blocking `docs/findings/`); PROVE-HEADLESS-1 staged behind PART-1 pending its integration.
-- [Backfill GitHub issue sync](tickets/sync-1-gh-issue-backfill.md) (SYNC-1, resolved): Backfilled 44 GitHub issues (#66–#109) with 41 closed and 3 backlog open (`CONTEXT-1` #69, `PART-1` #82, `PROVE-HEADLESS-1` #88), establishing 100% parity (98/98 tickets in sync) between local tickets and upstream GitHub Issues.
+- [Partition superseded status handling](tickets/part-1-superseded-ownership-check.md) (PART-1, resolved): `_partition_ticket_active()` in `lib/partition.sh` now classifies `superseded` as unconditionally inactive (matching `backlog|ready`), releasing path ownership without requiring integration evidence. Suite 41/41 passing; integrated on `swarm/stampede/integration` at `c4603eb`. Unblocks `PROVE-HEADLESS-1`.
+- [Expand CONTEXT.md vocabulary](tickets/context-1-vocabulary-expansion.md) (CONTEXT-1, resolved): Added definitions, citations, and `_Avoid_` directives to `CONTEXT.md` for 7 post-Phase 1 concepts (Arbiter Integration Pipeline, Worktree Isolation, Partition & Lease, Autonomous Reviewer Loop, Headless Batch Drain, Session-Scoped Promote Grant, Fail-Closed Ref Resolution). Committed at `5b64e8b`.
+- [Backfill GitHub issue sync](tickets/sync-1-gh-issue-backfill.md) (SYNC-1, resolved): Backfilled 44 GitHub issues (#66–#109) with 41 closed and 3 backlog open (`CONTEXT-1` #69, `PART-1` #82, `PROVE-HEADLESS-1` #88), establishing 100% parity (98/98 tickets in sync) between local tickets and upstream GitHub Issues. Committed at `c3cab1f`.
 
 ## Active Frontier
 
-- [Partition superseded status handling](tickets/part-1-superseded-ownership-check.md) (PART-1) — released, `arch`.
-- [Expand CONTEXT.md vocabulary](tickets/context-1-vocabulary-expansion.md) (CONTEXT-1) — released, `agy-docs`.
 - [Prove headless batch mode on a real run](tickets/prove-headless-1-real-batch-run.md) (PROVE-HEADLESS-1) —
-  staged, `arch` (blocked pending PART-1 integration: real lease conflict via `docs/findings/`).
+  unblocked, `arch-2`. (Blocker cleared by PART-1 integration; ready for dispatch).
+
 
 ## Not yet specified
 
