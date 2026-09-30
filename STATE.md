@@ -140,10 +140,10 @@
    - **CONTEXT-1 (RESOLVED)**: Vocabulary expanded in `CONTEXT.md` for 7 post-Phase 1 concepts, updated architectural pipeline diagram and safety protocols. Committed to `main` at `5b64e8b`. Lease released.
    - **SYNC-1 (RESOLVED)**: Backfilled 44 GitHub issues (#66–#109) with 100% parity across local tickets. Committed to `main` at `c3cab1f`. Lease released.
    - **PART-2 (INTEGRATED & RESOLVED)**: `lease_acquire()` active-ticket ownership conflict check enforcement via `_partition_active_conflicts()`. Suite 47/47 passing; Reviewer PASS verdict; integrated onto `swarm/stampede/integration` at `9905b54`. Lease released.
-   - **PROVE-HEADLESS-1 (IN FLIGHT)**: Running in `arch-2-hinchk-stampede`'s worktree executing real headless batch drain in `/tmp`. Unblocked from permission prompt.
-   - **SYNC-2 (STAGED)**: Staged on Active Frontier for `arch-1-hinchk-stampede` to recognize `superseded` in `lib/gh_sync.sh` closed-recognition set.
+   - **PROVE-HEADLESS-1 (INTEGRATED & RESOLVED)**: Real headless batch run proven against ephemeral scratch repo with `herdr` off PATH. 7 batch attempts, 2 harness probes, 2 operator recoveries; happy path end-to-end; DEAD_LETTER + exit 1 contract; 8 findings (3 defects in shipped code: F3 phantom worktree rc masking, F6 first-RED exit 0 with unreachable ceiling, F7 TOML clobbering env knobs). Reviewer PASS verdict; integrated onto `swarm/stampede/integration` at `f588670`. Lease released.
+   - **SYNC-2 (STAGED / ACTIVE FRONTIER)**: Staged on Active Frontier for `arch-1-hinchk-stampede` to recognize `superseded` in `lib/gh_sync.sh` closed-recognition set.
 5. **Reconciliation & Human Promotion**:
-   - `GRANT-1`, `SUPER-1`, `ARB-SLUG-1`, `PART-1` (`c4603eb`), and `PART-2` (`9905b54`) are linear ancestors of `swarm/stampede/integration`.
+   - `GRANT-1`, `SUPER-1`, `ARB-SLUG-1`, `PART-1` (`c4603eb`), `PART-2` (`9905b54`), and `PROVE-HEADLESS-1` (`f588670`) are linear ancestors of `swarm/stampede/integration`.
    - Standing promote and push guardrails remain human-only: awaiting human driver to execute `bash lib/arbiter.sh promote --confirm` and `git push origin main`.
 6. **Next Horizon Roadmap**:
    - 5 tickets staged in `maps/tickets-staged/` (`horizon-1` through `horizon-5`) charted in [`maps/next-horizon.md`](maps/next-horizon.md).
