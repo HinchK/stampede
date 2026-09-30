@@ -188,7 +188,11 @@ _partition_ticket_active() {
   local id="$1" status="$2" integ="$3"
   case "$status" in
     in_progress) return 0 ;;
-    backlog|ready) return 1 ;;
+    # PART-1: superseded = never executed, never will be (dropped by an
+    # explicit decision) — it holds no ownership claim, unlike resolved
+    # tickets whose integration evidence may still testify. Same class as
+    # backlog|ready: inactive, unconditionally.
+    backlog|ready|superseded) return 1 ;;
     resolved|done|closed)
       # No evidence file → it cannot testify against the ticket → inactive.
       if [[ ! -f "$integ" ]]; then
