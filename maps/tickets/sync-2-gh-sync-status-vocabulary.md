@@ -2,7 +2,7 @@
 id: SYNC-2
 title: "gh_sync.sh doesn't recognize superseded as closed-equivalent, forcing a ticket-file workaround"
 type: wayfinder:defect
-status: backlog
+status: resolved
 assignee: arch
 owns: lib/gh_sync.sh
 parent: maps/close-the-gaps.md
@@ -38,3 +38,11 @@ the reviewer during `PART-1`'s review.
 bash tests/test_gh_sync.sh
 bash lib/gh_sync.sh --dry-run
 ```
+
+## Resolution
+
+- **Implementation**: In commit `a3bc78d`, `arch-1-hinchk-stampede` updated `local_is_closed` in `lib/gh_sync.sh:348` to include `"superseded"`, treating it as closed-equivalent across both arms (closed remote remains `IN_SYNC` without reopening; open remote plans `UPDATE_REMOTE` close).
+- **Status Audit**: Audited all ticket status values across `maps/tickets/` (`backlog`, `closed`, `done`, `resolved`, `superseded`) — confirmed only `backlog` is open-class.
+- **Suite Gate**: `tests/test_gh_sync.sh` expanded (+3 tests, 30/30 passing) including fixture assertions proving superseded tickets remain untouched in frontmatter without requiring hand-patching; `make check` all 19 suites green, 0 shellcheck warnings.
+- **Review**: Autonomous Reviewer Loop Round 1/2 issued `PASS` in `.herdr-swarm/reviews/SYNC-2-a3bc78d933b134c1e3102592906d9e5f8b333b9f.md`.
+- **Integration**: Integrated onto `swarm/stampede/integration` at `0276187` via arbiter auto-drain. Lease released cleanly.

@@ -135,17 +135,24 @@
    - **Root Cause & Fix**: Arbiter slug resolution unified to single canonical chain (`PROJECT_SLUG` > `SWARM_CONFIG_NAME` > `basename`); supervisor `arbiter_auto_drain` now passes canonical config name `stampede`; `arbiter_drain` fails closed if integration ref is missing (never silently branches from `main`); added `arbiter_init_ref` (`arbiter.sh init-ref [BASE]`) for explicit initialization.
    - **Reviewer Pass**: Reviewed by `reviewer-hinchk-stampede` (Round 1/2) with PASS verdict in [`.herdr-swarm/reviews/ARB-SLUG-1-cb418921e51ced67792fe6ee2a648638f77749cb.md`](.herdr-swarm/reviews/ARB-SLUG-1-cb418921e51ced67792fe6ee2a648638f77749cb.md).
    - **Integration**: Integrated onto `swarm/stampede/integration` at `3bb01bd` on top of `SUPER-1` (`611cc4e`) and `GRANT-1` (`c7d8367`). Verified ancestor. Lease released cleanly.
-4. **Close the Gaps Epic (IN PROGRESS)**:
+4. **Close the Gaps Epic (COMPLETE — All 5 Tickets Shipped & Integrated)**:
    - **PART-1 (INTEGRATED & RESOLVED)**: `_partition_ticket_active()` in `lib/partition.sh` updated to treat `superseded` as unconditionally inactive. Suite 41/41 passing; Reviewer PASS verdict; integrated onto `swarm/stampede/integration` at `c4603eb`. Lease released.
    - **CONTEXT-1 (RESOLVED)**: Vocabulary expanded in `CONTEXT.md` for 7 post-Phase 1 concepts, updated architectural pipeline diagram and safety protocols. Committed to `main` at `5b64e8b`. Lease released.
    - **SYNC-1 (RESOLVED)**: Backfilled 44 GitHub issues (#66–#109) with 100% parity across local tickets. Committed to `main` at `c3cab1f`. Lease released.
    - **PART-2 (INTEGRATED & RESOLVED)**: `lease_acquire()` active-ticket ownership conflict check enforcement via `_partition_active_conflicts()`. Suite 47/47 passing; Reviewer PASS verdict; integrated onto `swarm/stampede/integration` at `9905b54`. Lease released.
    - **PROVE-HEADLESS-1 (INTEGRATED & RESOLVED)**: Real headless batch run proven against ephemeral scratch repo with `herdr` off PATH. 7 batch attempts, 2 harness probes, 2 operator recoveries; happy path end-to-end; DEAD_LETTER + exit 1 contract; 8 findings (3 defects in shipped code: F3 phantom worktree rc masking, F6 first-RED exit 0 with unreachable ceiling, F7 TOML clobbering env knobs). Reviewer PASS verdict; integrated onto `swarm/stampede/integration` at `f588670`. Lease released.
-   - **SYNC-2 (STAGED / ACTIVE FRONTIER)**: Staged on Active Frontier for `arch-1-hinchk-stampede` to recognize `superseded` in `lib/gh_sync.sh` closed-recognition set.
-5. **Reconciliation & Human Promotion**:
-   - `GRANT-1`, `SUPER-1`, `ARB-SLUG-1`, `PART-1` (`c4603eb`), `PART-2` (`9905b54`), and `PROVE-HEADLESS-1` (`f588670`) are linear ancestors of `swarm/stampede/integration`.
+   - **SYNC-2 (INTEGRATED & RESOLVED)**: `local_is_closed` in `lib/gh_sync.sh` updated to recognize `superseded` as closed-equivalent without status hand-patching. Suite 30/30 passing; Reviewer PASS verdict; integrated onto `swarm/stampede/integration` at `0276187`. Lease released.
+   - Map `maps/close-the-gaps.md` destination fully achieved.
+5. **Harden Headless Mode Epic (IN PROGRESS — maps/harden-headless-mode.md)**:
+   - **HL-RED-1 (IN FLIGHT)**: Dispatched to `arch-2-hinchk-stampede` (highest severity defect: first-RED critique loop, ceiling reachability, auto-drain and lease release in-batch).
+   - **HL-WT-1 (IN FLIGHT)**: Dispatched to `arch-1-hinchk-stampede` (`worktree_provision` rc propagation and `headless_spawn` cd guard).
+   - **HL-CFG-1 (STAGED)**: Staged on Active Frontier for env override support on headless knobs.
+   - **HL-TMO-1 (STAGED)**: Staged on Active Frontier for worker timeout `-k` SIGKILL escalation (sequenced behind `HL-RED-1` due to shared `lib/headless.sh`).
+   - **HL-DOCS-1 (STAGED)**: Staged for `agy-docs` (honest dead-letter reasons with log pointers and sandbox docs).
+6. **Reconciliation & Human Promotion**:
+   - `GRANT-1`, `SUPER-1`, `ARB-SLUG-1`, `PART-1` (`c4603eb`), `PART-2` (`9905b54`), `PROVE-HEADLESS-1` (`f588670`), and `SYNC-2` (`0276187`) are linear ancestors of `swarm/stampede/integration`.
    - Standing promote and push guardrails remain human-only: awaiting human driver to execute `bash lib/arbiter.sh promote --confirm` and `git push origin main`.
-6. **Next Horizon Roadmap**:
+7. **Next Horizon Roadmap**:
    - 5 tickets staged in `maps/tickets-staged/` (`horizon-1` through `horizon-5`) charted in [`maps/next-horizon.md`](maps/next-horizon.md).
 
 

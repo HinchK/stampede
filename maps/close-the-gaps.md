@@ -25,11 +25,11 @@ documented/synced/proven" gap that's opened up across `agy-docs`, `agy-gh`, and 
 - PROVE-HEADLESS-1 dispatch process note: The PROVE-HEADLESS-1 dispatch was found to have used an irregular path (`lease_acquire` bypassing `check`'s BLOCKED verdict) — substantively harmless since the underlying conflict was PART-1's false positive, but the process gap is real and is now chartered as PART-2.
 - [Close lease_acquire check bypass](tickets/part-2-lease-acquire-bypass.md) (PART-2, resolved): Factored active-ticket ownership conflict logic into `_partition_active_conflicts()` so both `partition_check` and `lease_acquire` enforce the identical rule before state mutation (excluding self-ticket for normal dispatch flow). Suite 47/47 passing; integrated on `swarm/stampede/integration` at `9905b54`.
 - [Prove headless batch mode on a real run](tickets/prove-headless-1-real-batch-run.md) (PROVE-HEADLESS-1, resolved): Proved `bin/stampede headless` live against an ephemeral scratch repo with `herdr` off PATH. Captured 7 batch attempts, 2 probes, 2 operator recoveries, happy path end-to-end, DEAD_LETTER + exit 1 contract, and 8 concrete findings (3 defects). Reviewed PASS and integrated on `swarm/stampede/integration` at `f588670`.
+- [Recognize superseded in gh_sync.sh](tickets/sync-2-gh-sync-status-vocabulary.md) (SYNC-2, resolved): Added `superseded` to `lib/gh_sync.sh` closed-recognition set (`local_is_closed`). Canonical status stays canonical without temporary frontmatter patching. Suite 30/30 passing; integrated on `swarm/stampede/integration` at `0276187`.
 
 ## Active Frontier
 
-- [Recognize superseded in gh_sync.sh](tickets/sync-2-gh-sync-status-vocabulary.md) (SYNC-2) —
-  released, staged. (Add `superseded` to `lib/gh_sync.sh` closed-recognition set).
+*(All tickets resolved — Close the Gaps destination achieved. Successor map: `maps/harden-headless-mode.md`)*
 
 
 
