@@ -2,7 +2,7 @@
 id: PART-2
 title: "lease_acquire() doesn't re-run the ownership/active-ticket check that check performs"
 type: wayfinder:defect
-status: backlog
+status: resolved
 assignee: arch
 owns: lib/partition.sh,tests/test_partition.sh
 parent: maps/close-the-gaps.md
@@ -46,3 +46,14 @@ Standing-rule correction alongside this: `check`'s verdict is authoritative. If 
 answer -- do not look for a narrower command whose scope happens not to enforce the same rule and treat its
 success as permission. This applies regardless of whether the underlying conflict turns out to be a false
 positive (as `PART-1`'s was) -- the check must be trusted or fixed, never routed around.
+
+## Resolution
+
+- **Implementation**:
+  - `lib/partition.sh`: Factored active-ticket ownership conflict logic into `_partition_active_conflicts()` so both `partition_check` and `lease_acquire` enforce the identical rule.
+  - `lease_acquire` runs the conflict check before taking the lease lock and before modifying `leases.json`, refusing with a clear error without creating any lease or lock residue.
+  - Excluded the ticket being acquired (`skip_id`) so leasing one's own in-progress ticket remains valid as the normal dispatch flow.
+- **Suite Gate**: `tests/test_partition.sh` Section 18 (+6 tests, 47/47 passing) covering explicit/implicit blocked acquire refusal, no lease written, and unblocking upon ticket transition to superseded; `make check` all 19 suites green, 0 shellcheck warnings.
+- **Review**: Autonomous Reviewer Loop PASS verdict by `reviewer-hinchk-stampede` (Round 1/2) in `.herdr-swarm/reviews/PART-2-a2af844260633750c11a877b8c68233c85d97652.md`.
+- **Integrated**: Integrated onto `swarm/stampede/integration` at `9905b54` on top of `PART-1` (`c4603eb`). Lease released cleanly.
+
