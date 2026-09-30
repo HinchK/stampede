@@ -99,6 +99,8 @@ echo "── gh_sync hermetic suite (scratch: $TEST_DIR)"
 # T-A resolved <-> #11 OPEN      -> close remote
 # T-B in_progress <-> #12 CLOSED -> reopen remote (push) / resolve local (both)
 # T-C in_progress <-> #13 OPEN   -> in sync
+# T-D superseded <-> #14 CLOSED  -> in sync (SYNC-2: superseded IS closed)
+# T-E superseded <-> #15 OPEN    -> close remote (closed-equivalent)
 R1="$TEST_DIR/drift"
 mkdir -p "$R1/maps/tickets"
 cat > "$R1/maps/tickets/alpha.md" <<'EOF'
@@ -137,11 +139,37 @@ github_url: "https://github.com/test/repo/issues/13"
 
 Body of T-C.
 EOF
+cat > "$R1/maps/tickets/delta.md" <<'EOF'
+---
+id: T-D
+title: "Delta dropped"
+type: wayfinder:task
+status: superseded
+github_issue: 14
+github_url: "https://github.com/test/repo/issues/14"
+---
+
+Body of T-D — dropped in favour of another ticket (never executed).
+EOF
+cat > "$R1/maps/tickets/epsilon.md" <<'EOF'
+---
+id: T-E
+title: "Epsilon dropped, remote open"
+type: wayfinder:task
+status: superseded
+github_issue: 15
+github_url: "https://github.com/test/repo/issues/15"
+---
+
+Body of T-E — dropped, remote issue left open by mistake.
+EOF
 cat > "$ISSUES" <<'EOF'
 [
   {"number": 11, "title": "[T-A] Alpha drift",  "state": "OPEN",   "stateReason": null,       "labels": [], "url": "https://github.com/test/repo/issues/11"},
   {"number": 12, "title": "[T-B] Beta drift",   "state": "CLOSED", "stateReason": "completed", "labels": [], "url": "https://github.com/test/repo/issues/12"},
-  {"number": 13, "title": "[T-C] Gamma steady", "state": "OPEN",   "stateReason": null,       "labels": [], "url": "https://github.com/test/repo/issues/13"}
+  {"number": 13, "title": "[T-C] Gamma steady", "state": "OPEN",   "stateReason": null,       "labels": [], "url": "https://github.com/test/repo/issues/13"},
+  {"number": 14, "title": "[T-D] Delta dropped", "state": "CLOSED", "stateReason": "completed", "labels": [], "url": "https://github.com/test/repo/issues/14"},
+  {"number": 15, "title": "[T-E] Epsilon dropped, remote open", "state": "OPEN", "stateReason": null, "labels": [], "url": "https://github.com/test/repo/issues/15"}
 ]
 EOF
 
@@ -168,8 +196,16 @@ check "2c" "matched pair -> IN_SYNC" \
   'jq -e ".items[] | select(.ticket_id==\"T-C\") | .action==\"IN_SYNC\"" "$OUT"'
 check "2d" "direction both flips the pull arm: open ticket + CLOSED remote -> UPDATE_LOCAL resolve" \
   'run_sync --direction both --target-dir "$R1" --repo test/repo --json; jq -e ".items[] | select(.ticket_id==\"T-B\") | .action==\"UPDATE_LOCAL\" and .subaction==\"resolve\"" "$OUT"'
-check "2e" "summary counts add up (1 close, 1 pull, 1 in-sync, 3 total)" \
-  'jq -e ".summary.update_remote==1 and .summary.update_local==1 and .summary.in_sync==1 and .summary.total==3" "$OUT"'
+check "2e" "summary counts add up (2 close, 1 pull, 2 in-sync, 5 total)" \
+  'jq -e ".summary.update_remote==2 and .summary.update_local==1 and .summary.in_sync==2 and .summary.total==5" "$OUT"'
+# SYNC-2: superseded is closed-equivalent — never a reopen, and a closed
+# remote stays closed WITHOUT anyone hand-patching the ticket's status.
+check "2f" "superseded ticket + CLOSED remote -> IN_SYNC (no reopen planned)" \
+  'run_sync --target-dir "$R1" --repo test/repo --json; jq -e ".items[] | select(.ticket_id==\"T-D\") | .action==\"IN_SYNC\"" "$OUT" && ! jq -e ".items[] | select(.ticket_id==\"T-D\") | .subaction==\"reopen\"" "$OUT"'
+check "2g" "superseded ticket + OPEN remote -> UPDATE_REMOTE close" \
+  'jq -e ".items[] | select(.ticket_id==\"T-E\") | .action==\"UPDATE_REMOTE\" and .subaction==\"close\"" "$OUT"'
+check "2h" "superseded recognition needs no status patching (frontmatter untouched)" \
+  '! grep -q "^synced_at:" "$R1/maps/tickets/delta.md" && grep -q "^status: superseded$" "$R1/maps/tickets/delta.md"'
 
 # ── 3. unlinked tickets propose CREATE with the label contract ──────────────
 R2="$TEST_DIR/create"
