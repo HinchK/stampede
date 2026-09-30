@@ -130,13 +130,14 @@
    - **Root Cause & Fix**: `herdr-loop-swarm.sh` serialized `isolated` as integer `1`/`0` in `seats.json`, while `loop-bot-herd.sh`'s `resolve_seat_gate`, `gate_spawn`, and `gate_reap` string-checked against `"true"`. Fixed at launcher (JSON boolean) and defensively normalized across all supervisor gate readers. Added test coverage in `tests/test_async_gate.sh` §15 (54/54 passing).
    - **Reviewer Pass**: Autonomous Reviewer Loop PASS verdict by `reviewer-hinchk-stampede` (Round 1/2) in [`.herdr-swarm/reviews/SUPER-1-3080ff9a3b4202d7b55f610626264a429924ad26.md`](.herdr-swarm/reviews/SUPER-1-3080ff9a3b4202d7b55f610626264a429924ad26.md).
    - **Genuine Integration**: Re-drained properly onto `swarm/stampede/integration` at `611cc4e` (parent `c7d8367`). Verified: `git merge-base --is-ancestor 3080ff9 refs/heads/swarm/stampede/integration` is true, and full `make check` is clean across all 19 suites on the integrated tree.
-3. **Reconciliation & Human Promotion**:
-   - Both `GRANT-1` (`c7d8367`) and `SUPER-1` (`611cc4e`) are now genuine linear ancestors of `swarm/stampede/integration`.
-   - Standing promote and push guardrails remain human-only: awaiting human driver to execute `bash lib/arbiter.sh promote --confirm` and `git push origin main`.
-4. **ARB-SLUG-1 Fail-Closed Integration Ref Resolution (STAGED & DISPATCHED)**:
+3. **ARB-SLUG-1 Fail-Closed Integration Ref Resolution (INTEGRATED & VERIFIED)**:
    - Defect ticket staged at `maps/tickets/arb-slug-1-fail-closed-integration-ref.md`.
-   - Diagnosed root-cause mechanism of fork: `profile.env` sets `REPO=HinchK/stampede`, causing launcher/daemon to use `PROJECT_SLUG=hinchk-stampede` (`refs/heads/swarm/hinchk-stampede/integration`), whereas bare CLI invocations default to directory basename `stampede` (`refs/heads/swarm/stampede/integration`). Furthermore, arbiter silently fell back to branching from `main` instead of failing closed when the ref did not exist.
-   - Dispatched to `arch-1-hinchk-stampede` with lease acquired on `lib/arbiter.sh` and `tests/test_arbiter.sh`.
+   - **Root Cause & Fix**: Arbiter slug resolution unified to single canonical chain (`PROJECT_SLUG` > `SWARM_CONFIG_NAME` > `basename`); supervisor `arbiter_auto_drain` now passes canonical config name `stampede`; `arbiter_drain` fails closed if integration ref is missing (never silently branches from `main`); added `arbiter_init_ref` (`arbiter.sh init-ref [BASE]`) for explicit initialization.
+   - **Reviewer Pass**: Reviewed by `reviewer-hinchk-stampede` (Round 1/2) with PASS verdict in [`.herdr-swarm/reviews/ARB-SLUG-1-cb418921e51ced67792fe6ee2a648638f77749cb.md`](.herdr-swarm/reviews/ARB-SLUG-1-cb418921e51ced67792fe6ee2a648638f77749cb.md).
+   - **Integration**: Integrated onto `swarm/stampede/integration` at `3bb01bd` on top of `SUPER-1` (`611cc4e`) and `GRANT-1` (`c7d8367`). Verified ancestor. Lease released cleanly.
+4. **Reconciliation & Human Promotion**:
+   - `GRANT-1` (`c7d8367`), `SUPER-1` (`611cc4e`), and `ARB-SLUG-1` (`3bb01bd`) are now genuine linear ancestors of `swarm/stampede/integration`.
+   - Standing promote and push guardrails remain human-only: awaiting human driver to execute `bash lib/arbiter.sh promote --confirm` and `git push origin main`.
 5. **Next Horizon Roadmap**:
    - 5 tickets staged in `maps/tickets-staged/` (`horizon-1` through `horizon-5`) charted in [`maps/next-horizon.md`](maps/next-horizon.md).
 

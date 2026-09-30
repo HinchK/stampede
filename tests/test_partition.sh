@@ -144,6 +144,25 @@ printf '{"ts":1,"ticket":"T-RES","seat":"x","sha":"abc","status":"integrated"}\n
 partition_check "$CAND2" "$REPO" >/dev/null 2>&1 && ok 11b "integrated ticket releases the block" \
   || bad 11b "integrated ticket releases the block"
 
+# ── case 11c: superseded tickets hold no ownership claim (PART-1) ───────────
+# A superseded ticket was never executed and never will be — it must not
+# block a candidate on the same owned path, regardless of evidence state
+# (the incident shape: CRED-1 superseded by GRANT-1 still colliding with a
+# docs/findings/ candidate). Exercise both evidence states.
+SUP="$REPO/maps/tickets/t-sup.md"
+printf -- '---\nid: T-SUP\nstatus: superseded\nowns: docs/findings/\n---\n' > "$SUP"
+CAND3="$REPO/maps/tickets/cand3.md"
+printf -- '---\nid: T-C3\nstatus: ready\nowns: docs/findings/report.md\n---\n' > "$CAND3"
+# evidence PRESENT and silent about T-SUP: superseded beats the contrary-
+# evidence rule that keeps resolved tickets active — it never ran at all
+partition_check "$CAND3" "$REPO" >/dev/null 2>&1 && ok 11c "superseded ticket does not block (evidence present)" \
+  || bad 11c "superseded ticket blocked candidate (evidence present)"
+# evidence ABSENT: same answer, no lease/evidence escape hatch needed
+rm -f "$STATE/integration.jsonl"
+partition_check "$CAND3" "$REPO" >/dev/null 2>&1 && ok 11c2 "superseded ticket does not block (no evidence)" \
+  || bad 11c2 "superseded ticket blocked candidate (no evidence)"
+rm -f "$SUP"
+
 # ── case 12: no-owns fallback = exclusive serialized ───────────────────────
 # (11b left T-RES integrated on record; keep it that way — present evidence
 # naming the ticket is what keeps it inactive here)

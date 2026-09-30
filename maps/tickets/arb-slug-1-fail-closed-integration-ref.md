@@ -2,7 +2,7 @@
 id: ARB-SLUG-1
 title: "Arbiter silently creates a phantom integration branch instead of failing closed on slug mismatch"
 type: wayfinder:defect
-status: backlog
+status: resolved
 assignee: arch
 owns: lib/arbiter.sh,tests/test_arbiter.sh
 parent: maps/universal-herdr-swarm.md
@@ -57,3 +57,14 @@ bash tests/test_arbiter.sh   # new fail-closed assertion for missing/mismatched 
 The divergent branch this incident created (rooted at commit f0194dc) should be left alone as a historical
 artifact once this ticket lands -- don't delete or rewrite it, it's harmless now that the real integration ref is
 correct and this ticket prevents recurrence.
+
+## Resolution
+
+- **Implementation**:
+  - `lib/arbiter.sh`: Canonical slug resolution chain (`PROJECT_SLUG` > `SWARM_CONFIG_NAME` > `basename`).
+  - `loop-bot-herd.sh`: `arbiter_auto_drain` passes canonical `SWARM_CONFIG_NAME` (`stampede`) from `swarm.config.toml`.
+  - `lib/arbiter.sh`: `arbiter_drain` fails closed if `refs/heads/swarm/<slug>/integration` is missing (loud error, prints diagnostics, releases lock, returns 1). Deleted implicit create-if-missing fallback in `_arb_integrate`.
+  - `lib/arbiter.sh`: Added `arbiter_init_ref` (CLI `arbiter.sh init-ref [BASE]`) for explicit, one-time integration branch initialization.
+- **Suite Gate**: `tests/test_arbiter.sh` Section 10 (+11 tests, 88/88 passing) covering missing ref refusal, no-fork guarantee, explicit init-ref, and precedence chain; `make check` all 19 suites green, 0 shellcheck warnings.
+- **Review**: Autonomous Reviewer Loop PASS verdict by `reviewer-hinchk-stampede` (Round 1/2) in `.herdr-swarm/reviews/ARB-SLUG-1-cb418921e51ced67792fe6ee2a648638f77749cb.md`.
+- **Integrated**: Auto-drained and integrated on `swarm/stampede/integration` at `3bb01bd` on top of `SUPER-1` (`611cc4e`) and `GRANT-1` (`c7d8367`). Verified ancestor. Lease released cleanly.
