@@ -23,15 +23,14 @@ documented/synced/proven" gap that's opened up across `agy-docs`, `agy-gh`, and 
 - [Expand CONTEXT.md vocabulary](tickets/context-1-vocabulary-expansion.md) (CONTEXT-1, resolved): Added definitions, citations, and `_Avoid_` directives to `CONTEXT.md` for 7 post-Phase 1 concepts (Arbiter Integration Pipeline, Worktree Isolation, Partition & Lease, Autonomous Reviewer Loop, Headless Batch Drain, Session-Scoped Promote Grant, Fail-Closed Ref Resolution). Committed at `5b64e8b`.
 - [Backfill GitHub issue sync](tickets/sync-1-gh-issue-backfill.md) (SYNC-1, resolved): Backfilled 44 GitHub issues (#66–#109) with 41 closed and 3 backlog open (`CONTEXT-1` #69, `PART-1` #82, `PROVE-HEADLESS-1` #88), establishing 100% parity (98/98 tickets in sync) between local tickets and upstream GitHub Issues. Committed at `c3cab1f`.
 - PROVE-HEADLESS-1 dispatch process note: The PROVE-HEADLESS-1 dispatch was found to have used an irregular path (`lease_acquire` bypassing `check`'s BLOCKED verdict) — substantively harmless since the underlying conflict was PART-1's false positive, but the process gap is real and is now chartered as PART-2.
+- [Close lease_acquire check bypass](tickets/part-2-lease-acquire-bypass.md) (PART-2, resolved): Factored active-ticket ownership conflict logic into `_partition_active_conflicts()` so both `partition_check` and `lease_acquire` enforce the identical rule before state mutation (excluding self-ticket for normal dispatch flow). Suite 47/47 passing; integrated on `swarm/stampede/integration` at `9905b54`.
+- [Prove headless batch mode on a real run](tickets/prove-headless-1-real-batch-run.md) (PROVE-HEADLESS-1, resolved): Proved `bin/stampede headless` live against an ephemeral scratch repo with `herdr` off PATH. Captured 7 batch attempts, 2 probes, 2 operator recoveries, happy path end-to-end, DEAD_LETTER + exit 1 contract, and 8 concrete findings (3 defects). Reviewed PASS and integrated on `swarm/stampede/integration` at `f588670`.
 
 ## Active Frontier
 
-- [Prove headless batch mode on a real run](tickets/prove-headless-1-real-batch-run.md) (PROVE-HEADLESS-1) —
-  in flight, `arch-2`. (Running headless batch in `/tmp`; flagged for eventual review per PART-2 process note).
-- [Close lease_acquire check bypass](tickets/part-2-lease-acquire-bypass.md) (PART-2) —
-  released, `arch-1`. (Ensure `lease_acquire` enforces active-ticket and ownership conflict checks).
 - [Recognize superseded in gh_sync.sh](tickets/sync-2-gh-sync-status-vocabulary.md) (SYNC-2) —
   released, staged. (Add `superseded` to `lib/gh_sync.sh` closed-recognition set).
+
 
 
 
