@@ -11,6 +11,9 @@ resolution:
   adr_index_updated: docs/adr/README.md
   spec_reference: docs/audits/2026-09-23-harden-the-promote-gate.md
   implementation_commit: e86f790
+github_issue: 72
+github_url: "https://github.com/HinchK/stampede/issues/72"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # GATE-2 — Document the promote gate hardening (Wave, blocked by GATE-1)

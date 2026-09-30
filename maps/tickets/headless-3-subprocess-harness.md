@@ -15,6 +15,9 @@ resolution:
   reviewer_verdict: PASS
   review_file: .herdr-swarm/reviews/HEADLESS-3-b157772d6d6fd26171f6af36b81640eee6eb413d.md
   channel_report: .herdr-swarm/channel/arch-1-hinchk-stampede-headless-3-round2.md
+github_issue: 76
+github_url: "https://github.com/HinchK/stampede/issues/76"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # HEADLESS-3 — subprocess harness (Slice 3a)

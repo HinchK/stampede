@@ -2,10 +2,13 @@
 id: PART-1
 title: "Partition ownership check treats superseded tickets as still active, false-blocking disjoint dispatch"
 type: wayfinder:defect
-status: backlog
+status: resolved
 assignee: arch
 owns: lib/partition.sh,tests/test_partition.sh
 parent: maps/close-the-gaps.md
+github_issue: 82
+github_url: "https://github.com/HinchK/stampede/issues/82"
+synced_at: "2026-09-30T17:14:49Z"
 ---
 
 # PART-1 -- superseded status not recognized by ownership check
@@ -73,3 +76,12 @@ Per this project's write-boundary convention, this ticket exists because looper 
 and verified the fix in a scratch edit but must not land it directly -- `lib/*.sh` and `tests/*.sh` are outside a
 root anchor's permitted paths. The scratch edit was discarded; `arch` re-derives and lands it properly, same
 precedent as `ARB-SLUG-1`.
+
+## Resolution
+
+- **Implementation**:
+  - `lib/partition.sh`: Grouped `superseded` with `backlog|ready` in `_partition_ticket_active()` (`backlog|ready|superseded) return 1 ;;`). Superseded tickets are unconditionally inactive and hold no ownership claim.
+- **Suite Gate**: `tests/test_partition.sh` cases 11c and 11c2 (+2 tests, 41/41 passing) covering both evidence states (evidence file present and silent vs absent). Full census confirms all live statuses handled. `make check` all 19 suites green.
+- **Review**: Autonomous Reviewer Loop PASS verdict by `reviewer-hinchk-stampede` (Round 1/2) in `.herdr-swarm/reviews/PART-1-3339f373256334817a746aa353339850b984381e.md`.
+- **Integrated**: Integrated on `swarm/stampede/integration` at `c4603eb` on top of `3bb01bd` (`ARB-SLUG-1`). Lease released cleanly.
+

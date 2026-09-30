@@ -7,6 +7,9 @@ commit: d7c3563
 assignee: arch
 owns: swarm.config.toml
 parent: maps/prove-and-reconcile.md
+github_issue: 85
+github_url: "https://github.com/HinchK/stampede/issues/85"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # PROVE-2 — Enable the Reviewer seat (Wave 1)

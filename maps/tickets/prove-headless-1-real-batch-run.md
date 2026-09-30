@@ -3,9 +3,12 @@ id: PROVE-HEADLESS-1
 title: "Prove bin/stampede headless on a real batch run"
 type: wayfinder:task
 status: backlog
-assignee: arch
+assignee: arch-2
 owns: docs/findings/
 parent: maps/close-the-gaps.md
+github_issue: 88
+github_url: "https://github.com/HinchK/stampede/issues/88"
+synced_at: "2026-09-30T17:14:49Z"
 ---
 
 # PROVE-HEADLESS-1 — real headless batch run
@@ -44,6 +47,8 @@ to headless mode instead of the interactive launcher).
 Human/pm review of the receipt doc, including the actual terminal output quoted, not summarized.
 
 ## Notes
+
+Dispatch process note (2026-09-30): Dispatch to `arch-2` proceeded via direct `lease_acquire` after `bash lib/partition.sh check` reported BLOCKED (due to PART-1's false positive). This process gap is chartered as `PART-2` and flagged for the eventual review; it does not block the in-flight run.
 
 If something doesn't work as designed, that's the point of this ticket — report it plainly (matching this
 project's whole "claims need receipts" ethos) rather than quietly working around it. A found defect here is a

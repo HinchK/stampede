@@ -7,6 +7,9 @@ assignee: arch-1
 owns: lib/config.sh,swarm.config.toml,briefs/reviewer.in.md,briefs/reviewer.md,tests/test_config.sh
 parent: maps/autonomous-reviewer-loop.md
 blocked_by: []
+github_issue: 102
+github_url: "https://github.com/HinchK/stampede/issues/102"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # REV-1 — Reviewer config flag and harvested verdict protocol (Wave 1)

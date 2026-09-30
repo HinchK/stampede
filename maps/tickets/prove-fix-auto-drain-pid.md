@@ -13,6 +13,9 @@ resolution:
   integration_ref: swarm/stampede/integration
   reviewer_verdict: PASS
   review_file: .herdr-swarm/reviews/PROVE-7-c3f3c865d70fbd3250c3cc50e0b62e8782f5c677.md
+github_issue: 86
+github_url: "https://github.com/HinchK/stampede/issues/86"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # PROVE-7 — auto-drain PID/lock staleness defect

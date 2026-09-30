@@ -6,6 +6,9 @@ status: resolved
 assignee: arch
 owns: lib/arbiter.sh,tests/test_arbiter.sh
 parent: maps/universal-herdr-swarm.md
+github_issue: 71
+github_url: "https://github.com/HinchK/stampede/issues/71"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # GATE-1 — Promote gate hardening (implementation)

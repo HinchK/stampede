@@ -7,6 +7,9 @@ assignee: arch-1
 owns: lib/lifecycle.sh,herdr-loop-swarm.sh,tests/test_review_loop.sh
 parent: maps/autonomous-reviewer-loop.md
 blocked_by: [REV-1, REV-2]
+github_issue: 104
+github_url: "https://github.com/HinchK/stampede/issues/104"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # REV-3 — Looper autonomous review loop state machine and fail-closed gate (Wave 3)

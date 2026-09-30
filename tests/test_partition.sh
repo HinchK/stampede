@@ -379,6 +379,47 @@ else
   sup_bad 17h "non-ticket brief dispatch blocked"
 fi
 
+# ── case 18: lease_acquire cannot bypass a check BLOCKED verdict (PART-2) ───
+# An active ticket's ownership claim must gate lease_acquire itself, not
+# only `check` — no narrower command may launder a BLOCKED into a lease.
+ACT="$REPO/maps/tickets/p2-act.md"
+printf -- '---\nid: P2-ACT\nstatus: in_progress\nowns: lib/shared/\n---\nbody\n' > "$ACT"
+NEW="$REPO/maps/tickets/p2-new.md"
+printf -- '---\nid: P2-NEW\nstatus: ready\nowns: lib/shared/x.sh\n---\nbody\n' > "$NEW"
+printf '{"version":1,"leases":[]}' > "$STATE/leases.json"   # NO live lease conflict
+partition_check "$NEW" "$REPO" >/dev/null 2>&1 \
+  && sup_bad 18a "check BLOCKED by active ticket (fixture sanity)" \
+  || sup_ok 18a "check BLOCKED by active ticket (fixture sanity)"
+if lease_acquire P2-NEW seat-x "" "lib/shared/x.sh" >/dev/null 2>&1; then
+  sup_bad 18b "blocked ticket cannot lease via explicit paths"
+else
+  sup_ok 18b "blocked ticket cannot lease via explicit paths"
+fi
+if lease_acquire P2-NEW seat-x >/dev/null 2>&1; then
+  sup_bad 18c "blocked ticket cannot lease via its ticket file"
+else
+  sup_ok 18c "blocked ticket cannot lease via its ticket file"
+fi
+if [[ $(jq -r '(.leases // []) | length' "$STATE/leases.json") == 0 ]]; then
+  sup_ok 18d "refused acquire wrote no lease"
+else
+  sup_bad 18d "refused acquire wrote a lease"
+fi
+# the gate tracks ACTIVITY, not the ticket's existence: once the blocker
+# goes superseded (PART-1), the same acquire succeeds
+printf -- '---\nid: P2-ACT\nstatus: superseded\nowns: lib/shared/\n---\nbody\n' > "$ACT"
+if lease_acquire P2-NEW seat-x >/dev/null 2>&1; then
+  sup_ok 18e "inactive blocker no longer gates the acquire"
+else
+  sup_bad 18e "inactive blocker still gates the acquire"
+fi
+if [[ $(jq -r '(.leases // []) | length' "$STATE/leases.json") == 1 ]]; then
+  sup_ok 18f "successful acquire wrote exactly one lease"
+else
+  sup_bad 18f "lease count wrong after acquire"
+fi
+rm -f "$ACT" "$NEW"
+
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))

@@ -7,6 +7,9 @@ assignee: arch-1
 owns: lib/lifecycle.sh,lib/telemetry.py,lib/cli/stampede-status.sh,tests/test_review_loop.sh,tests/test_telemetry.sh,tests/test_cli_status.sh
 parent: maps/autonomous-reviewer-loop.md
 blocked_by: [REV-3]
+github_issue: 105
+github_url: "https://github.com/HinchK/stampede/issues/105"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # REV-4 — Review telemetry, rich status aggregation, and end-to-end verification (Wave 4)

@@ -7,6 +7,9 @@ assignee: arch
 owns: lib/providers.sh,lib/cli/stampede-doctor.sh,tests/test_providers.sh,tests/test_cli_doctor.sh
 parent: maps/public-multi-provider.md
 blocked_by: PUB-1
+github_issue: 91
+github_url: "https://github.com/HinchK/stampede/issues/91"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # PUB-2 — Provider registry + `stampede doctor` (Wave 9)

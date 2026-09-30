@@ -8,6 +8,9 @@ owns: lib/quota.sh,lib/cli/stampede-quota.sh,tests/test_quota.sh
 parent: maps/public-multi-provider.md
 blocked_by: PUB-2
 supersedes: maps/tickets-parked/cross-llm-quota-and-credit-probing.md
+github_issue: 98
+github_url: "https://github.com/HinchK/stampede/issues/98"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # PUB-9 — `stampede quota`: provider headroom, read-only (Wave 11)
