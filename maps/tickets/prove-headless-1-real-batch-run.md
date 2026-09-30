@@ -48,6 +48,8 @@ Human/pm review of the receipt doc, including the actual terminal output quoted,
 
 ## Notes
 
+Dispatch process note (2026-09-30): Dispatch to `arch-2` proceeded via direct `lease_acquire` after `bash lib/partition.sh check` reported BLOCKED (due to PART-1's false positive). This process gap is chartered as `PART-2` and flagged for the eventual review; it does not block the in-flight run.
+
 If something doesn't work as designed, that's the point of this ticket — report it plainly (matching this
 project's whole "claims need receipts" ethos) rather than quietly working around it. A found defect here is a
 successful outcome for this ticket, same as it was for `PROVE-3`.
