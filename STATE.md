@@ -136,12 +136,14 @@
    - **Reviewer Pass**: Reviewed by `reviewer-hinchk-stampede` (Round 1/2) with PASS verdict in [`.herdr-swarm/reviews/ARB-SLUG-1-cb418921e51ced67792fe6ee2a648638f77749cb.md`](.herdr-swarm/reviews/ARB-SLUG-1-cb418921e51ced67792fe6ee2a648638f77749cb.md).
    - **Integration**: Integrated onto `swarm/stampede/integration` at `3bb01bd` on top of `SUPER-1` (`611cc4e`) and `GRANT-1` (`c7d8367`). Verified ancestor. Lease released cleanly.
 4. **Close the Gaps Epic (IN PROGRESS)**:
-   - **PART-1 (INTEGRATED & RESOLVED)**: `_partition_ticket_active()` in `lib/partition.sh` updated to treat `superseded` as unconditionally inactive. Suite 41/41 passing; Reviewer PASS verdict; integrated onto `swarm/stampede/integration` at `c4603eb`. Lease released. Unblocks `PROVE-HEADLESS-1`.
+   - **PART-1 (INTEGRATED & RESOLVED)**: `_partition_ticket_active()` in `lib/partition.sh` updated to treat `superseded` as unconditionally inactive. Suite 41/41 passing; Reviewer PASS verdict; integrated onto `swarm/stampede/integration` at `c4603eb`. Lease released.
    - **CONTEXT-1 (RESOLVED)**: Vocabulary expanded in `CONTEXT.md` for 7 post-Phase 1 concepts, updated architectural pipeline diagram and safety protocols. Committed to `main` at `5b64e8b`. Lease released.
    - **SYNC-1 (RESOLVED)**: Backfilled 44 GitHub issues (#66–#109) with 100% parity across local tickets. Committed to `main` at `c3cab1f`. Lease released.
-   - **PROVE-HEADLESS-1 (UNBLOCKED / READY FOR DISPATCH)**: Staged for `arch-2-hinchk-stampede` (assigned per Arch Seat Balancing Convention). Real headless batch run against staged tickets.
+   - **PART-2 (INTEGRATED & RESOLVED)**: `lease_acquire()` active-ticket ownership conflict check enforcement via `_partition_active_conflicts()`. Suite 47/47 passing; Reviewer PASS verdict; integrated onto `swarm/stampede/integration` at `9905b54`. Lease released.
+   - **PROVE-HEADLESS-1 (IN FLIGHT)**: Running in `arch-2-hinchk-stampede`'s worktree executing real headless batch drain in `/tmp`. Unblocked from permission prompt.
+   - **SYNC-2 (STAGED)**: Staged on Active Frontier for `arch-1-hinchk-stampede` to recognize `superseded` in `lib/gh_sync.sh` closed-recognition set.
 5. **Reconciliation & Human Promotion**:
-   - `GRANT-1`, `SUPER-1`, `ARB-SLUG-1`, and `PART-1` (`c4603eb`) are linear ancestors of `swarm/stampede/integration`.
+   - `GRANT-1`, `SUPER-1`, `ARB-SLUG-1`, `PART-1` (`c4603eb`), and `PART-2` (`9905b54`) are linear ancestors of `swarm/stampede/integration`.
    - Standing promote and push guardrails remain human-only: awaiting human driver to execute `bash lib/arbiter.sh promote --confirm` and `git push origin main`.
 6. **Next Horizon Roadmap**:
    - 5 tickets staged in `maps/tickets-staged/` (`horizon-1` through `horizon-5`) charted in [`maps/next-horizon.md`](maps/next-horizon.md).
