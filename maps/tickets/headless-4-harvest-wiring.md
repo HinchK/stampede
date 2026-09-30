@@ -15,6 +15,9 @@ resolution:
   reviewer_verdict: PASS
   review_file: .herdr-swarm/reviews/HEADLESS-4-85b27585a25d2b0e57f02bf76aeb7cb756b80c0f.md
   channel_report: .herdr-swarm/channel/arch-1-hinchk-stampede-1790234776-31332.md
+github_issue: 77
+github_url: "https://github.com/HinchK/stampede/issues/77"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # HEADLESS-4 — harvest wiring (Slice 3b)

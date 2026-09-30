@@ -12,6 +12,9 @@ resolution:
 assignee: looper
 blocked_by: PROVE-1,PROVE-2
 parent: maps/prove-and-reconcile.md
+github_issue: 89
+github_url: "https://github.com/HinchK/stampede/issues/89"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # PROVE-3 — Prove the Reviewer Loop (Wave 1)

@@ -2,10 +2,13 @@
 id: CONTEXT-1
 title: "Expand CONTEXT.md with vocabulary for everything shipped since Phase 1"
 type: wayfinder:doc
-status: backlog
+status: resolved
 assignee: agy-docs
 owns: CONTEXT.md
 parent: maps/close-the-gaps.md
+github_issue: 69
+github_url: "https://github.com/HinchK/stampede/issues/69"
+synced_at: "2026-09-30T17:14:49Z"
 ---
 
 # CONTEXT-1 — vocabulary expansion
@@ -42,3 +45,11 @@ and note plainly in the entry if no ADR exists yet for something that probably s
 
 Human/pm review — vocabulary doc, no test suite applies. Spot-check that at least two citations resolve to real,
 current file/line references.
+
+## Resolution
+
+- **Vocabulary Expansion**: Added definitions, implementations, and `_Avoid_` directives to `CONTEXT.md` for all 7 concepts: Arbiter Integration Pipeline, Worktree Isolation, Partition & Lease, Autonomous Reviewer Loop, Headless Batch Drain, Session-Scoped Promote Grant, and Fail-Closed Ref Resolution.
+- **Architectural Interaction Matrix**: Rebuilt ASCII diagram to depict the complete pipeline (Suite Gate -> Reviewer Loop Gate -> Arbiter CAS -> Sovereign Human Gate).
+- **Invariants & Safety**: Documented Sovereign Human Promotion, Partition Disjointness & Lease Integrity, and Zero Cross-Pane Evasion protocols.
+- **Landed**: Committed directly to `main` at `5b64e8b07553562c9b07cf6d3e2fb2e7709e5fd7`. Lease released cleanly.
+

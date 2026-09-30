@@ -6,6 +6,9 @@ status: resolved
 assignee: arch
 owns: lib/cli/stampede-headless.sh,bin/stampede,tests/test_cli.sh,CLAUDE.md
 parent: maps/headless-run-mode.md
+github_issue: 79
+github_url: "https://github.com/HinchK/stampede/issues/79"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # HEADLESS-6 — CLI entrypoint (Slice 3c)

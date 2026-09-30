@@ -7,6 +7,9 @@ commit: b02609d
 assignee: arch
 owns: CLAUDE.md,.github/workflows/ci.yml
 parent: maps/prove-and-reconcile.md
+github_issue: 87
+github_url: "https://github.com/HinchK/stampede/issues/87"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # PROVE-6 — Suite-count drift (Wave 1)

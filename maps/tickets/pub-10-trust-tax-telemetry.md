@@ -7,6 +7,9 @@ assignee: arch
 owns: lib/telemetry.py,docs/findings/telemetry-schema.md
 parent: maps/public-multi-provider.md
 blocked_by: PUB-1
+github_issue: 99
+github_url: "https://github.com/HinchK/stampede/issues/99"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # PUB-10 — Trust-tax telemetry schema (Wave 11)

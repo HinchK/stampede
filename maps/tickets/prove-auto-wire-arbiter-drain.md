@@ -7,6 +7,9 @@ commit: 16dd481
 assignee: arch
 owns: loop-bot-herd.sh,lib/arbiter.sh,tests/test_arbiter.sh
 parent: maps/prove-and-reconcile.md
+github_issue: 83
+github_url: "https://github.com/HinchK/stampede/issues/83"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # PROVE-4 — Auto-wire arbiter_drain (Wave 1)

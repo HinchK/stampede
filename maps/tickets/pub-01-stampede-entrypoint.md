@@ -7,6 +7,9 @@ assignee: arch
 owns: bin/stampede,Makefile,README.md,tests/test_cli.sh
 parent: maps/public-multi-provider.md
 blocked_by: DOG-10
+github_issue: 90
+github_url: "https://github.com/HinchK/stampede/issues/90"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # PUB-1 — `bin/stampede` entrypoint + CLI convention (Wave 8, runs alone)

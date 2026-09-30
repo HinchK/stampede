@@ -12,21 +12,28 @@ documented/synced/proven" gap that's opened up across `agy-docs`, `agy-gh`, and 
 - Three independent tickets, one per underused seat, confirmed with the driver 2026-09-30 specifically to make
   sure `agy-gh`, `agy-docs`, and the OpenCode (`arch-1`/`arch-2`) panes are all doing real work, not just the
   implementation seats.
+- Arch Seat Balancing Convention: a ticket assigned the generic `arch` label resolves to whichever of `arch-1-hinchk-stampede` / `arch-2-hinchk-stampede` has the older (further behind) `state_change_seq` at dispatch time (i.e. whichever has sat idle longest), not always `arch-1`. Check `herdr agent list` at dispatch time to decide.
 - No blocking between them — disjoint `owns:`, safe to dispatch all three at once.
 - Core Invariant, unchanged: promote/push stay human-only unless a valid session grant exists (`GRANT-1`); no
   cross-pane injection; never trust a self-reported "done" without independent verification.
 
 ## Decisions so far
 
-- PART-1 found during dispatch (superseded status not recognized by ownership check, blocking `docs/findings/`); PROVE-HEADLESS-1 staged behind PART-1 pending its integration.
+- [Partition superseded status handling](tickets/part-1-superseded-ownership-check.md) (PART-1, resolved): `_partition_ticket_active()` in `lib/partition.sh` now classifies `superseded` as unconditionally inactive (matching `backlog|ready`), releasing path ownership without requiring integration evidence. Suite 41/41 passing; integrated on `swarm/stampede/integration` at `c4603eb`. Unblocks `PROVE-HEADLESS-1`.
+- [Expand CONTEXT.md vocabulary](tickets/context-1-vocabulary-expansion.md) (CONTEXT-1, resolved): Added definitions, citations, and `_Avoid_` directives to `CONTEXT.md` for 7 post-Phase 1 concepts (Arbiter Integration Pipeline, Worktree Isolation, Partition & Lease, Autonomous Reviewer Loop, Headless Batch Drain, Session-Scoped Promote Grant, Fail-Closed Ref Resolution). Committed at `5b64e8b`.
+- [Backfill GitHub issue sync](tickets/sync-1-gh-issue-backfill.md) (SYNC-1, resolved): Backfilled 44 GitHub issues (#66–#109) with 41 closed and 3 backlog open (`CONTEXT-1` #69, `PART-1` #82, `PROVE-HEADLESS-1` #88), establishing 100% parity (98/98 tickets in sync) between local tickets and upstream GitHub Issues. Committed at `c3cab1f`.
+- PROVE-HEADLESS-1 dispatch process note: The PROVE-HEADLESS-1 dispatch was found to have used an irregular path (`lease_acquire` bypassing `check`'s BLOCKED verdict) — substantively harmless since the underlying conflict was PART-1's false positive, but the process gap is real and is now chartered as PART-2.
 
 ## Active Frontier
 
-- [Partition superseded status handling](tickets/part-1-superseded-ownership-check.md) (PART-1) — released, `arch`.
-- [Expand CONTEXT.md vocabulary](tickets/context-1-vocabulary-expansion.md) (CONTEXT-1) — released, `agy-docs`.
-- [Backfill GitHub issue sync](tickets/sync-1-gh-issue-backfill.md) (SYNC-1) — released, `agy-gh`.
 - [Prove headless batch mode on a real run](tickets/prove-headless-1-real-batch-run.md) (PROVE-HEADLESS-1) —
-  staged, `arch` (blocked pending PART-1 integration: real lease conflict via `docs/findings/`).
+  in flight, `arch-2`. (Running headless batch in `/tmp`; flagged for eventual review per PART-2 process note).
+- [Close lease_acquire check bypass](tickets/part-2-lease-acquire-bypass.md) (PART-2) —
+  released, `arch-1`. (Ensure `lease_acquire` enforces active-ticket and ownership conflict checks).
+- [Recognize superseded in gh_sync.sh](tickets/sync-2-gh-sync-status-vocabulary.md) (SYNC-2) —
+  released, staged. (Add `superseded` to `lib/gh_sync.sh` closed-recognition set).
+
+
 
 ## Not yet specified
 

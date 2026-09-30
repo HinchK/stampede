@@ -11,6 +11,9 @@ resolution:
   commit: debd73e
   promoted_at: 2026-09-22
   verification: "make check green (16 suites, 428 passed, 0 failed; tests/test_async_gate.sh 33/33; shellcheck 0 warnings); PM sign-off"
+github_issue: 106
+github_url: "https://github.com/HinchK/stampede/issues/106"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # REV-5 — Supervisor review loop wiring, verdict harvesting, and telemetry (Wave 5)

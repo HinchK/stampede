@@ -7,6 +7,9 @@ assignee: arch-2
 owns: lib/cli/stampede-status.sh,tests/test_cli_status.sh
 parent: maps/public-multi-provider.md
 blocked_by: PUB-10
+github_issue: 100
+github_url: "https://github.com/HinchK/stampede/issues/100"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # PUB-11 — Rich status: the session at a glance (Wave 12, runs alone)

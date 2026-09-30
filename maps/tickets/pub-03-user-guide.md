@@ -7,6 +7,9 @@ assignee: arch
 owns: docs/user-guide.md
 parent: maps/public-multi-provider.md
 blocked_by: PUB-1
+github_issue: 92
+github_url: "https://github.com/HinchK/stampede/issues/92"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # PUB-3 — User guide: zero to first verified verdict (Wave 9)

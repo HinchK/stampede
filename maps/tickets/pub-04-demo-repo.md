@@ -7,6 +7,9 @@ assignee: arch
 owns: examples/demo-repo/
 parent: maps/public-multi-provider.md
 blocked_by: PUB-1
+github_issue: 93
+github_url: "https://github.com/HinchK/stampede/issues/93"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # PUB-4 — Demo repo: prove the loop in five minutes (Wave 9)

@@ -9,12 +9,15 @@ owns: loop-bot-herd.sh,herdr-loop-swarm.sh,briefs/looper.in.md
 parent: maps/universal-herdr-swarm.md
 resolution:
   commit: c8fbad2980971cc6b331f5cb1e7ae8f3275dd326
-  status: premise-disproven
+  outcome: premise-disproven
   integrated_at: c8fbad2
   integration_ref: swarm/stampede/integration
   reviewer_verdict: PASS
   review_file: .herdr-swarm/reviews/HEADLESS-1-c8fbad2980971cc6b331f5cb1e7ae8f3275dd326.md
   findings_file: docs/findings/herdr-semantics.md#f-agent-prompt-focus-semantics-headless-1
+github_issue: 74
+github_url: "https://github.com/HinchK/stampede/issues/74"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # HEADLESS-1 — stop stealing focus on dispatch

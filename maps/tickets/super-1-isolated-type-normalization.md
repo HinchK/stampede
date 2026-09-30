@@ -6,6 +6,9 @@ status: resolved
 assignee: arch
 owns: loop-bot-herd.sh,tests/test_async_gate.sh,herdr-loop-swarm.sh
 parent: maps/universal-herdr-swarm.md
+github_issue: 107
+github_url: "https://github.com/HinchK/stampede/issues/107"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # SUPER-1 — Ledger isolated type normalization in supervisor gate harvest

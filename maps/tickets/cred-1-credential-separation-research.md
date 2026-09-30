@@ -3,6 +3,7 @@ id: CRED-1
 title: "Research: is credential separation for agent seats actually achievable on this GitHub plan?"
 type: wayfinder:research
 status: superseded
+outcome: superseded
 commit: cd70a74
 assignee: agy-gh
 owns: docs/findings/
@@ -10,6 +11,9 @@ parent: maps/universal-herdr-swarm.md
 resolution:
   commit: cd70a74
   findings_file: docs/findings/credential-separation-design.md
+github_issue: 70
+github_url: "https://github.com/HinchK/stampede/issues/70"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 **Superseded 2026-09-29:** driver rejected the multi-account credential-separation approach as excessive onboarding friction for a project whose whole point is frictionless multi-agent orchestration. See GRANT-1 for the adopted lower-friction alternative. Research below kept for the record — the GitHub API findings (public repo -> branch protection available for free) remain accurate and useful if this is ever revisited.

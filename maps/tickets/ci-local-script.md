@@ -8,6 +8,9 @@ assignee: arch
 owns: scripts/ci-local.sh,CLAUDE.md
 parent: maps/public-readiness.md
 blocked_by: []
+github_issue: 68
+github_url: "https://github.com/HinchK/stampede/issues/68"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # DOG-18 — scripts/ci-local.sh: local CI-parity wrapper (Wave DX-1)
