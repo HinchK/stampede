@@ -3,8 +3,8 @@ id: HL-DOCS-1
 title: "Document honest dead-letter reasons with log pointers and sandbox external_directory requirements"
 type: wayfinder:doc
 status: backlog
-assignee: agy-docs
-owns: docs/findings/headless-mode-design.md,lib/cli/stampede-headless.sh
+assignee: arch
+owns: docs/findings/headless-mode-design.md,lib/cli/stampede-headless.sh,tests/test_cli.sh
 parent: maps/harden-headless-mode.md
 ---
 

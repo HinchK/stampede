@@ -28,7 +28,7 @@ Fix the three genuine defects and two hardening/ergonomic gaps discovered during
 - [Escalate headless worker timeouts with SIGKILL](tickets/hl-tmo-1-worker-timeout-escalation.md) (HL-TMO-1) —
   staged, `arch`. (Severity LOW: `-k` escalation for SIGTERM-ignoring workers; blocked on HL-RED-1 due to shared `lib/headless.sh`).
 - [Document sandbox requirements and honest dead-letter reasons](tickets/hl-docs-1-dead-letter-reasons-and-brief-sandbox.md) (HL-DOCS-1) —
-  staged, `agy-docs`. (Severity LOW: log pointers and external_directory sandbox docs).
+  released, `arch`. (Severity LOW: log pointers, code diagnostics, and external_directory sandbox docs).
 
 ## Decisions so far
 
