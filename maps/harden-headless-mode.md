@@ -24,7 +24,7 @@ Fix the three genuine defects and two hardening/ergonomic gaps discovered during
 - [Propagate worktree_provision exit status](tickets/hl-wt-1-worktree-provision-rc.md) (HL-WT-1) —
   completed, `arch` (integrated @ `b95b383`). Propagated failure rc from `_wt_add_with_retry`, guarded `headless_spawn` cd, and added hermetic regression test case 16.
 - [Respect env overrides for headless knobs](tickets/hl-cfg-1-toml-env-override.md) (HL-CFG-1) —
-  staged, `arch`. (Severity LOW-MED: emit `CONFIG_HEADLESS_*` only when unset).
+  completed, `arch` (integrated @ `7d27c8a`). Implemented `emit_env_wins` in `lib/config.sh` and verified environment overrides in `tests/test_config.sh`.
 - [Escalate headless worker timeouts with SIGKILL](tickets/hl-tmo-1-worker-timeout-escalation.md) (HL-TMO-1) —
   staged, `arch`. (Severity LOW: `-k` escalation for SIGTERM-ignoring workers; blocked on HL-RED-1 due to shared `lib/headless.sh`).
 - [Document sandbox requirements and honest dead-letter reasons](tickets/hl-docs-1-dead-letter-reasons-and-brief-sandbox.md) (HL-DOCS-1) —

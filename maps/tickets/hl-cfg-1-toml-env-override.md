@@ -2,7 +2,7 @@
 id: HL-CFG-1
 title: "swarm.config.toml headless knobs clobber environment variable overrides"
 type: wayfinder:defect
-status: backlog
+status: resolved
 assignee: arch
 owns: lib/config.sh,tests/test_config.sh
 parent: maps/harden-headless-mode.md
@@ -31,3 +31,11 @@ Receipt quote (Finding F7):
 ```bash
 bash tests/test_config.sh
 ```
+
+## Resolution
+
+- **Author:** `arch-1-hinchk-stampede` (commit `d81b629c84945c751b713c2a2e2790fd8cc8cbce`)
+- **Review:** `reviewer-hinchk-stampede` Round 1/2 PASS (`.herdr-swarm/reviews/HL-CFG-1-d81b629c84945c751b713c2a2e2790fd8cc8cbce.md`)
+- **Integrated:** `7d27c8a` onto `swarm/stampede/integration`
+- **Summary:** In `lib/config.sh`, implemented `emit_env_wins` so that headless knobs (`CONFIG_HEADLESS_MAX_ATTEMPTS` and `CONFIG_HEADLESS_WORKER_TIMEOUT_S`) are only exported if they are not already present in `os.environ`, properly respecting environment overrides. Added tests 7g, 7h, and 7i in `tests/test_config.sh` verifying that environment variables survive configuration evaluation while unset variables bind to TOML defaults (43/43 tests pass).
+
