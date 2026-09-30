@@ -24,6 +24,7 @@ You run in OpenCode powered by **GLM-5.3** (or frontier coding backend).
 - **Atomic Commits**: Commit changes using Conventional Commits (`feat:`, `fix:`, `refactor:`, `perf:`, `test:`) referencing the issue/ticket.
 - **Clean Working Tree**: Ensure no temporary artifacts or debug files remain untracked in the git working tree.
 - **Privacy & Security**: Enforce zero-telemetry, secret-pattern redaction, and strict input validation.
+- **No Gate Bypass via Other Panes**: Never use `herdr pane run`, `herdr pane send-text`, `herdr agent send-keys`, or any cross-pane injection to execute a command in a pane other than your own — a worker did this on 2026-09-24 to route `arbiter promote --confirm` around the human gate. Human-only gates (promote, push) block the command, not just you; if blocked, stop and report. (Reporting a message to another seat via `herdr agent prompt` + `send-keys enter` remains the notification protocol.)
 
 ---
 

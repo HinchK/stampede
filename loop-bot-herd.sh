@@ -189,7 +189,14 @@ resolve_seat_gate() {
   [[ -f "$ledger" ]] || return 0
   rec=$(jq -c --arg s "$seat" '.seats[]? | select(.name == $s)' "$ledger" 2>/dev/null | head -n1)
   [[ -n "$rec" ]] || return 0
-  GATE_ISOLATED=$(jq -r '.isolated // false' <<<"$rec")
+  # SUPER-1: the ledger has carried both shapes — boolean true (headless CLI,
+  # test fixtures) and integer 1 (the launcher's argjson emission) — while
+  # every consumer compared against "true". Normalize once, here: true / 1 /
+  # "1" / "true" (any case) are isolated; everything else is not.
+  GATE_ISOLATED=$(jq -r '
+    (.isolated // false) |
+    if . == true or . == 1 or (. == "1") or ((. | tostring | ascii_downcase) == "true") then "true" else "false" end
+  ' <<<"$rec")
   GATE_BRANCH=$(jq -r '.branch // empty' <<<"$rec")
   if [[ "$GATE_ISOLATED" == "true" ]]; then
     GATE_DIR=$(jq -r '.worktree_dir // empty' <<<"$rec")
@@ -224,6 +231,13 @@ gate_tree_matches() {
 
 gate_spawn() { # SEAT TICKET SHA GATE_DIR VERDICT_LINE ISOLATED
   local seat="$1" ticket="$2" sha="$3" dir="$4" vline="$5" isolated="${6:-false}"
+  # SUPER-1: accept any isolated shape the callers carry (boolean true,
+  # integer 1, "true"/"1" strings) and record a clean JSON boolean in the
+  # job metadata — reap compares against true.
+  local iso_bool=false
+  case "$isolated" in
+    true|1|[Tt]rue|TRUE) iso_bool=true ;;
+  esac
   local jid="${seat}-${sha:0:7}"
   local jdir="${STATE_DIR}/gates"
   local jlog="${STATE_DIR}/gate-logs/${jid}.log"
@@ -248,9 +262,9 @@ gate_spawn() { # SEAT TICKET SHA GATE_DIR VERDICT_LINE ISOLATED
   ) >/dev/null 2>&1 &
   local gpid=$!
   jq -cn --arg s "$seat" --arg t "$ticket" --arg sha "$sha" --arg d "$dir" \
-    --arg st "$(date -u +%FT%TZ)" --argjson pid "$gpid" --arg v "$vline" --arg iso "$isolated" \
+    --arg st "$(date -u +%FT%TZ)" --argjson pid "$gpid" --arg v "$vline" --argjson iso "$iso_bool" \
     '{version: 1, seat: $s, ticket: ($t|tostring), sha: $sha, dir: $d, start_time: $st,
-      pid: $pid, isolated: ($iso == "true"), verdict_line: $v}' \
+      pid: $pid, isolated: $iso, verdict_line: $v}' \
     > "${jdir}/${jid}.job.tmp" && mv "${jdir}/${jid}.job.tmp" "${jdir}/${jid}.job"
   log "gate job spawned: ${jid} (pid ${gpid}, cap ${GATE_CONCURRENCY})"
 }
@@ -292,7 +306,12 @@ gate_reap() {
     ticket=$(jq -r '.ticket // empty' <<<"$meta")
     sha=$(jq -r '.sha // empty' <<<"$meta")
     dir=$(jq -r '.dir // empty' <<<"$meta")
-    iso=$(jq -r '.isolated // false' <<<"$meta")
+    # SUPER-1: normalize the job's isolated shape the same way the ledger
+    # side does — boolean true or integer 1 are isolated, anything else not.
+    iso=$(jq -r '
+      (.isolated // false) |
+      if . == true or . == 1 or (. == "1") or ((. | tostring | ascii_downcase) == "true") then "true" else "false" end
+    ' <<<"$meta")
     [[ -n "$seat" && -n "$ticket" && -n "$sha" && -n "$dir" ]] || { rm -f "$job" "$jrc"; continue; }
     rc_val=$(cat "$jrc" 2>/dev/null || printf '1')
     ts=$(date +%s)
@@ -936,9 +955,12 @@ arbiter_auto_drain() {
   # Explicit env: a separate process does not inherit the supervisor's
   # unexported shell bindings, and the arbiter must come from the
   # orchestrator (SCRIPT_DIR), never the target tree (DOG-13).
-  REPO_DIR="$REPO_DIR" STATE_DIR="$STATE_DIR" PROJECT_SLUG="$PROJECT_SLUG" \
-    BASE_BRANCH="${BASE_BRANCH:-}" TEST_CMD="$TEST_CMD" SUITE_TIMEOUT_S="$SUITE_TIMEOUT_S" \
-    bash "$SCRIPT_DIR/lib/arbiter.sh" drain \
+  # ARB-SLUG-1: the drain's slug is the config [swarm] name — the canonical
+  # integration-ref slug — NOT this process's seat-namespacing slug (the
+  # profile-REPO slug), whose mismatch is what forked a phantom ref.
+  REPO_DIR="$REPO_DIR" STATE_DIR="$STATE_DIR" PROJECT_SLUG="${SWARM_CONFIG_NAME:-$PROJECT_SLUG}" \
+  BASE_BRANCH="${BASE_BRANCH:-}" TEST_CMD="$TEST_CMD" SUITE_TIMEOUT_S="$SUITE_TIMEOUT_S" \
+  bash "$SCRIPT_DIR/lib/arbiter.sh" drain \
     >> "${STATE_DIR}/gate-logs/arbiter-drain.log" 2>&1 &
   drain_pid=$!
   note "arbiter auto-drain: ${queued} queued record(s) — drain spawned (pid ${drain_pid}, log: ${STATE_DIR}/gate-logs/arbiter-drain.log)"

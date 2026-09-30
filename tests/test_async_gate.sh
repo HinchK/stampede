@@ -379,8 +379,7 @@ sleep 0.6; gate_reap >/dev/null 2>&1
 CRIT_BRIEF="$STATE/briefs/seat-b-H-2-${SHA_H2}-red.md"
 # the critique turn is a BACKGROUND spawn — give the vendor stub a beat to
 # exec and record its argv before asserting on it (race observed 2026-09-24:
-# identical code flaked here purely on scheduling; settle per 0813c5c on
-# swarm/stampede/integration — identical hunk, merges clean when promoted)
+# identical code flaked here purely on scheduling)
 sleep 0.5
 [[ -f "$CRIT_BRIEF" ]] \
   && assert_ok 14b2 "RED feedback written as a critique brief" || assert_bad 14b2 "no critique brief at $CRIT_BRIEF"
@@ -464,6 +463,35 @@ VERDICT_A=""
 harvest_verdicts >/dev/null 2>&1
 [[ -s "$READS" ]] \
   && assert_ok 14d "pane mode still reads via herdr agent read" || assert_bad 14d "pane read missing"
+
+# ── 15: integer-isolated ledger values (SUPER-1) ───────────────────────────
+# The launcher wrote `"isolated": 1` (integer) while every reader compared
+# against "true" — green suites on isolated seats then never reached the
+# review seam / arbiter enqueue. Prove the integer shape flows through
+# resolve → spawn → reap → ENQUEUE with the launcher's own ledger shape.
+ledger_int() { # same v2 ledger, isolated as INTEGER 1 — the launcher's shape
+  jq -cn --arg a "$WTA" --arg b "$WTB" '{version: 2, workspace_id: "wT", seats: [
+    {name: "seat-a", kind: "opencode", pane: "wT:p1", worktree_dir: $a, branch: "swarm/ag/seat-a", isolated: 1},
+    {name: "seat-b", kind: "opencode", pane: "wT:p2", worktree_dir: $b, branch: "swarm/ag/seat-b", isolated: 1}]}' > "$STATE/seats.json"
+}
+ledger_int
+export HEADLESS_MODE=1
+printf '#!/bin/sh\nprintf "%%s\\n" "$PWD" > "%s/gate-cwd.txt"\nexit 0\n' "$STATE" > "$WTB/gate.sh"
+git -C "$WTB" add -A; git -C "$WTB" -c user.email=t@t -c user.name=t commit -qm intgate
+SHA_I1=$(git -C "$WTB" rev-parse HEAD)
+printf 'ARCH DONE #I-1 %s\n' "$SHA_I1" > "$STATE/logs/seat-b.log"
+harvest_verdicts >/dev/null 2>&1
+sleep 0.6; gate_reap >/dev/null 2>&1
+sleep 0.5   # settle: ENQUEUE directives run inside the reap pass
+[[ "$(last_suite_of I-1)" == "green" ]] \
+  && assert_ok 15a "integer-isolated seat gates green" || assert_bad 15a "green ($(last_suite_of I-1))"
+[[ "$(qcount I-1 "$SHA_I1")" == 1 ]] \
+  && assert_ok 15b "integer-isolated green reaches the arbiter queue (review seam ran)" \
+  || assert_bad 15b "enqueue n=$(qcount I-1 "$SHA_I1")"
+[[ "$(cat "$STATE/gate-cwd.txt" 2>/dev/null)" == "$WTB" ]] \
+  && assert_ok 15c "integer-isolated seat gated in its worktree, not root" \
+  || assert_bad 15c "gate ran in: $(cat "$STATE/gate-cwd.txt" 2>/dev/null)"
+unset HEADLESS_MODE
 
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"

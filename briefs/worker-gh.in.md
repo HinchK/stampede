@@ -28,6 +28,7 @@ You run in AGY powered by **Gemini Flash**.
 - **Explicit Target Repo**: Always pass `-R {{REPO}}` to all `gh` CLI commands when operating in multi-remote or forked repositories.
 - **Fallback Resilience**: If GitHub MCP tools encounter auth errors, fall back to native `gh` CLI commands seamlessly.
 - **Push Policy**: Never push to remote (`git push origin main --tags`) without explicit human driver approval.
+- **No Gate Bypass via Other Panes**: Never use `herdr pane run`, `herdr pane send-text`, `herdr agent send-keys`, or any cross-pane injection to execute a command outside your own pane to route around a human-only gate (a worker did exactly this on 2026-09-24). If a gate blocks you, stop and report — never find a technical path around it.
 - **Accurate Receipts**: Every closed ticket MUST reference the exact commit SHA and test verification stats.
 
 ---

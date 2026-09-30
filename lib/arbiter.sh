@@ -41,7 +41,13 @@ ARBITER_TMP_SLEEP=0.2
 _arb_cfg() {
   ARB_REPO="${REPO_DIR:-$PWD}"
   ARB_STATE="${STATE_DIR:-${ARB_REPO}/.herdr-swarm}"
-  ARB_SLUG="${PROJECT_SLUG:-$(slugify "$(basename "$ARB_REPO")")}"
+  # ARB-SLUG-1: one canonical slug chain, mirroring the supervisor's binding
+  # order — explicit PROJECT_SLUG (callers, tests) wins; then the config
+  # [swarm] name (SWARM_CONFIG_NAME, bound by the launcher/supervisor config
+  # eval and matching the existing integration refs); basename only as a
+  # bare-standalone last resort, which the fail-closed drain below renders
+  # harmless (a basename slug that has no ref refuses instead of forking).
+  ARB_SLUG="${PROJECT_SLUG:-${SWARM_CONFIG_NAME:-$(slugify "$(basename "$ARB_REPO")")}}"
   ARB_BASE="${BASE_BRANCH:-$(git -C "$ARB_REPO" rev-parse --abbrev-ref HEAD 2>/dev/null || printf 'main')}"
   ARB_QUEUE="${ARB_STATE}/integration.jsonl"
   ARB_REF="refs/heads/swarm/${ARB_SLUG}/integration"
@@ -187,12 +193,22 @@ arbiter_drain() {
     seat=$(jq -r '.seat' <<<"$rec")
     sha=$(jq -r '.sha' <<<"$rec")
 
-    # I0 = integration tip (initialized from the base branch if missing)
+    # I0 = integration tip. ARB-SLUG-1 fail-closed: a missing ref REFUSES —
+    # falling back to the base here is exactly how a slug mismatch silently
+    # forked the integration line from main (2026-09-29 incident). Creating
+    # the canonical integration branch is a one-time explicit `init-ref`,
+    # never a drain fallback.
     local i0
     if git -C "$ARB_REPO" show-ref --verify --quiet "$ARB_REF"; then
       i0=$(git -C "$ARB_REPO" rev-parse "$ARB_REF")
     else
-      i0=$(git -C "$ARB_REPO" rev-parse "$ARB_BASE")
+      printf 'arbiter: drain REFUSED — integration ref %s not found\n' "$ARB_REF" >&2
+      printf 'arbiter: slug resolved as "%s" (PROJECT_SLUG=%s, SWARM_CONFIG_NAME=%s, else basename) — a mismatch here means this drain would fork a new integration line\n' \
+        "$ARB_SLUG" "${PROJECT_SLUG:-<unset>}" "${SWARM_CONFIG_NAME:-<unset>}" >&2
+      printf 'arbiter: creating the integration branch is a one-time explicit init, never a drain fallback:\n' >&2
+      printf 'arbiter:   bash lib/arbiter.sh init-ref\n' >&2
+      arbiter_unlock "$ARB_STATE"
+      return 1
     fi
 
     if ! _arb_integrate "$ticket" "$seat" "$sha" "$i0"; then
@@ -260,9 +276,9 @@ _arb_integrate() { # TICKET SEAT SHA I0
   # 3. CAS ref update — the tip may only move from exactly I0. A missing ref
   # is first created AT the base tip with empty-old (must-not-exist), which
   # loses loudly to any concurrent creator; the CAS then still guards the tip.
-  if ! git -C "$ARB_REPO" show-ref --verify --quiet "$ARB_REF"; then
-    git -C "$ARB_REPO" update-ref "$ARB_REF" "$i0" "" >/dev/null 2>&1 || true
-  fi
+  # ARB-SLUG-1: no create-if-missing here — the silent update-ref below is
+  # the second half of the phantom-branch mechanism. The drain guarantees
+  # the ref exists; if it vanished mid-pass, the CAS against $i0 fails loud.
   if ! git -C "$ARB_REPO" update-ref "$ARB_REF" "$candidate" "$i0" 2>/dev/null; then
     _arb_set_status "$ticket" "$sha" "retry" "{integration_before: \"${i0}\"}"
     _arb_telemetry arbiter.retry "$ticket" "$seat" "$sha" \
@@ -327,16 +343,88 @@ _arb_promote_pane_check() {
   return 0
 }
 
-# arbiter_promote [--pr] [--confirm]  (or env PROMOTE_CONFIRM=1)
-arbiter_promote() {
-  # GATE-1: agent-pane guard fires before the --confirm gate and before the
-  # --pr/local dispatch — a PR promote still pushes the integration branch,
-  # which the Push Guardrail forbids agents just as much as a local ff-merge.
+# ── session-scoped promote grant (GRANT-1) ─────────────────────────────────
+# The human's one-per-session opt-in: `grant-session` (pane-gated exactly
+# like promote) writes a TTL'd authorization; a valid grant lets arbiter_
+# promote run without --confirm and without the pane check. An agent can
+# never grant itself: creation requires the same non-agent-pane proof the
+# promote itself required (GATE-1). No config toggle — every session starts
+# ungranted.
+
+_arb_grant_file() { # prints the grant path (ARB_STATE must be bound)
+  printf '%s\n' "${ARB_STATE}/promote-grant.json"
+}
+
+_arb_grant_valid() { # rc 0 iff the grant file exists, parses, and is unexpired
+  local gf now expires
+  gf=$(_arb_grant_file)
+  [[ -f "$gf" ]] || return 1
+  expires=$(jq -r '.expires_at // empty' "$gf" 2>/dev/null) || return 1
+  [[ "$expires" =~ ^[0-9]+$ ]] || return 1
+  now=$(date +%s)
+  (( now < expires ))
+}
+
+# arbiter_grant_session [--ttl SECONDS] — human-only (GATE-1 pane check).
+arbiter_grant_session() {
+  _arb_cfg
+  local ttl=14400 i
+  local args=("$@")
+  for (( i=0; i<${#args[@]}; i++ )); do
+    if [[ "${args[$i]}" == "--ttl" ]]; then
+      ttl="${args[$((i+1))]:-}"
+      if [[ ! "$ttl" =~ ^[0-9]+$ ]] || (( ttl < 1 )); then
+        printf 'arbiter: --ttl needs a positive number of seconds\n' >&2
+        return 1
+      fi
+    fi
+  done
   if ! _arb_promote_pane_check; then
+    printf 'arbiter: grant refused — session grants are created by the human, from a human context\n' >&2
     return 1
   fi
+  local now gf
+  now=$(date +%s)
+  gf=$(_arb_grant_file)
+  jq -cn --argjson g "$now" --argjson e $(( now + ttl )) \
+       --arg p "${HERDR_PANE_ID:-no-herdr-context}" \
+       '{granted_at: $g, expires_at: $e, granted_from_pane: $p}' \
+    > "${gf}.tmp" && mv "${gf}.tmp" "$gf"
+  printf 'arbiter: session grant active — promote authorized for %ss (until %s, from %s)\n' \
+    "$ttl" "$(date -r $(( now + ttl )) '+%Y-%m-%d %H:%M:%S' 2>/dev/null || printf '%s' $(( now + ttl )))" \
+    "${HERDR_PANE_ID:-no-herdr-context}" >&2
+}
 
+# arbiter_revoke_session — delete the grant; human-only via the same gate.
+arbiter_revoke_session() {
   _arb_cfg
+  if ! _arb_promote_pane_check; then
+    printf 'arbiter: revoke refused — session grants are revoked by the human, from a human context\n' >&2
+    return 1
+  fi
+  rm -f "$(_arb_grant_file)"
+  printf 'arbiter: session grant revoked — promote is human-only again\n' >&2
+}
+
+# arbiter_promote [--pr] [--confirm]  (or env PROMOTE_CONFIRM=1; or a valid
+# human-created session grant)
+arbiter_promote() {
+  _arb_cfg
+
+  # GRANT-1: a valid, unexpired, human-created session grant authorizes this
+  # call outright — no pane check, no confirm flag. No grant (absent,
+  # expired, or malformed): the GATE-1 pane check gates exactly as before.
+  local granted=0
+  if _arb_grant_valid; then
+    granted=1
+  else
+    # GATE-1: agent-pane guard fires before the --confirm gate and before
+    # the --pr/local dispatch — a PR promote still pushes the integration
+    # branch, which the Push Guardrail forbids agents just as much.
+    if ! _arb_promote_pane_check; then
+      return 1
+    fi
+  fi
   local mode="local" confirmed=0 arg
   for arg in "$@"; do
     case "$arg" in
@@ -348,13 +436,15 @@ arbiter_promote() {
   # Human gate (DOG-12): moving a base branch is a human-only act. A brief is
   # a request, not enforcement — this refusal is the enforcement. It fires
   # before every other check so the human-action message is always the one
-  # printed.
-  if [[ "$confirmed" -ne 1 && "${PROMOTE_CONFIRM:-0}" != "1" ]]; then
+  # printed. GRANT-1: a valid human-created session grant satisfies this
+  # gate without the flag — that is the entire point of the grant.
+  if [[ "$confirmed" -ne 1 && "${PROMOTE_CONFIRM:-0}" != "1" && "$granted" -ne 1 ]]; then
     printf 'arbiter: promote REFUSED — promoting advances the base branch and is reserved for the human driver\n' >&2
     printf 'arbiter: required human action: run it yourself, exactly one of:\n' >&2
     printf 'arbiter:   bash lib/arbiter.sh promote --confirm\n' >&2
     printf 'arbiter:   PROMOTE_CONFIRM=1 bash lib/arbiter.sh promote\n' >&2
-    printf 'arbiter: agents must never pass --confirm or set PROMOTE_CONFIRM — main moves only by human promote\n' >&2
+    printf 'arbiter:   bash lib/arbiter.sh grant-session [--ttl N] — then promotes run unattended for the TTL\n' >&2
+    printf 'arbiter: agents must never pass --confirm, set PROMOTE_CONFIRM, or create a session grant — main moves only by human act\n' >&2
     return 1
   fi
 
@@ -407,6 +497,26 @@ arbiter_promote() {
   printf 'arbiter: promoted integration to %s\n' "$ARB_BASE" >&2
 }
 
+# arbiter_init_ref — the ONE-TIME, explicit creation of the canonical
+# integration branch (ARB-SLUG-1). Refuses if the ref already exists; never
+# runs implicitly from drain/enqueue paths.
+arbiter_init_ref() { # [BASE_COMMIT]
+  _arb_cfg
+  local base="${1:-$ARB_BASE}"
+  if git -C "$ARB_REPO" show-ref --verify --quiet "$ARB_REF"; then
+    printf 'arbiter: init refused — %s already exists at %s\n' \
+      "$ARB_REF" "$(git -C "$ARB_REPO" rev-parse "$ARB_REF")" >&2
+    return 1
+  fi
+  if ! git -C "$ARB_REPO" rev-parse -q --verify "${base}^{commit}" >/dev/null 2>&1; then
+    printf 'arbiter: init refused — base commit not found: %s\n' "$base" >&2
+    return 1
+  fi
+  git -C "$ARB_REPO" update-ref "$ARB_REF" "$base" ""
+  printf 'arbiter: initialized %s at %s\n' "$ARB_REF" \
+    "$(git -C "$ARB_REPO" rev-parse --short "$ARB_REF")"
+}
+
 # CLI dispatcher
 if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
   cmd="${1:-}"
@@ -415,9 +525,12 @@ if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
     enqueue) arbiter_enqueue_and_drain "$@" ;;   # PROVE-4: enqueue auto-drains
     drain)   arbiter_drain ;;
     promote) arbiter_promote "$@" ;;
+    grant-session)  arbiter_grant_session "$@" ;;
+    revoke-session) arbiter_revoke_session "$@" ;;
+    init-ref) arbiter_init_ref "${1:-}" ;;
     pr-body) arbiter_pr_body "${1:?out-file}" ;;
     *)
-      printf 'Usage: %s enqueue <ticket> <seat> <sha> | drain | promote [--pr] [--confirm] | pr-body <file>\n' "$0" >&2
+      printf 'Usage: %s enqueue <ticket> <seat> <sha> | drain | promote [--pr] [--confirm] | grant-session [--ttl s] | revoke-session | init-ref [base] | pr-body <file>\n' "$0" >&2
       printf '       enqueue also drains the queue in the same invocation (PROVE-4); drain remains for manual re-runs\n' >&2
       exit 1 ;;
   esac
