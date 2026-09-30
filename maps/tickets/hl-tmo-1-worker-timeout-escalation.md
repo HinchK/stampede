@@ -2,7 +2,7 @@
 id: HL-TMO-1
 title: "Worker wall-clock timeout is SIGTERM-only without -k escalation"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: lib/headless.sh,tests/test_async_gate.sh
 parent: maps/harden-headless-mode.md

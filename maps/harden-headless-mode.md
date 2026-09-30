@@ -26,7 +26,7 @@ Fix the three genuine defects and two hardening/ergonomic gaps discovered during
 - [Respect env overrides for headless knobs](tickets/hl-cfg-1-toml-env-override.md) (HL-CFG-1) —
   completed, `arch` (integrated @ `7d27c8a`). Implemented `emit_env_wins` in `lib/config.sh` and verified environment overrides in `tests/test_config.sh`.
 - [Escalate headless worker timeouts with SIGKILL](tickets/hl-tmo-1-worker-timeout-escalation.md) (HL-TMO-1) —
-  staged, `arch`. (Severity LOW: `-k` escalation for SIGTERM-ignoring workers; blocked on HL-RED-1 due to shared `lib/headless.sh`).
+  completed, `arch` (integrated @ `67d1824`). Hard wall-clock bound with -k kill-grace and rc=124 normalization.
 - [Document sandbox requirements and honest dead-letter reasons](tickets/hl-docs-1-dead-letter-reasons-and-brief-sandbox.md) (HL-DOCS-1) —
   released, `arch`. (Severity LOW: log pointers, code diagnostics, and external_directory sandbox docs).
 
