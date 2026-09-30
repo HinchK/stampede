@@ -6,6 +6,9 @@ status: resolved
 assignee: agy-docs
 owns: docs/audits/,STATE.md
 parent: maps/universal-herdr-swarm.md
+github_issue: 81
+github_url: "https://github.com/HinchK/stampede/issues/81"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # INCIDENT-1 — incident record

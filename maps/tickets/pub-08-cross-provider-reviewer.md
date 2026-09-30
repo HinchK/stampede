@@ -7,6 +7,9 @@ assignee: arch
 owns: briefs/reviewer.in.md,docs/user-guide.md
 parent: maps/public-multi-provider.md
 blocked_by: PUB-3
+github_issue: 97
+github_url: "https://github.com/HinchK/stampede/issues/97"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # PUB-8 — Cross-provider review lane (Wave 11)

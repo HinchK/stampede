@@ -15,6 +15,9 @@ resolution:
   reviewer_verdict: PASS
   review_file: .herdr-swarm/reviews/HEADLESS-5-7f97e6ec1eb5e2c0b4f0c58a6a6248e116eda653.md
   channel_report: .herdr-swarm/channel/arch-1-hinchk-stampede-1790235693-27393.md
+github_issue: 78
+github_url: "https://github.com/HinchK/stampede/issues/78"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # HEADLESS-5 — safety hardening (Slice 4)

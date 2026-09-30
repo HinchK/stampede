@@ -7,6 +7,9 @@ assignee: arch
 owns: VERSION,CHANGELOG.md,lib/cli/stampede-version.sh
 parent: maps/public-multi-provider.md
 blocked_by: PUB-1
+github_issue: 94
+github_url: "https://github.com/HinchK/stampede/issues/94"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # PUB-5 — Version + changelog discipline (Wave 9)

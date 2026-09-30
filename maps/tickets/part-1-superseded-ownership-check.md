@@ -6,6 +6,9 @@ status: backlog
 assignee: arch
 owns: lib/partition.sh,tests/test_partition.sh
 parent: maps/close-the-gaps.md
+github_issue: 82
+github_url: "https://github.com/HinchK/stampede/issues/82"
+synced_at: "2026-09-30T17:14:49Z"
 ---
 
 # PART-1 -- superseded status not recognized by ownership check

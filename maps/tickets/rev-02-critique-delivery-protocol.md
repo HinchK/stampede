@@ -7,6 +7,9 @@ assignee: arch-1
 owns: briefs/arch.in.md,briefs/arch.md,docs/user-guide.md
 parent: maps/autonomous-reviewer-loop.md
 blocked_by: [REV-1]
+github_issue: 103
+github_url: "https://github.com/HinchK/stampede/issues/103"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # REV-2 — Critique delivery protocol: implementer refinement on existing worktree branch (Wave 2)

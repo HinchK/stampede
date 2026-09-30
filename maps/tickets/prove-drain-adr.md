@@ -7,6 +7,9 @@ assignee: agy-docs
 blocked_by: PROVE-4
 owns: docs/adr/,README.md
 parent: maps/prove-and-reconcile.md
+github_issue: 84
+github_url: "https://github.com/HinchK/stampede/issues/84"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # PROVE-5 — Drain automation ADR (Wave 1)

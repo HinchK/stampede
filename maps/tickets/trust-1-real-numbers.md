@@ -12,6 +12,9 @@ resolution:
   trace_dataset: .herdr-swarm/traces/swarm-20260919-114508.jsonl
   verdicts_dataset: .herdr-swarm/session-verdicts.jsonl
   integration_dataset: .herdr-swarm/integration.jsonl
+github_issue: 109
+github_url: "https://github.com/HinchK/stampede/issues/109"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # TRUST-1 — Real trust-tax measurement (from the 9/21 public-readiness review)

@@ -7,6 +7,9 @@ assignee: arch
 owns: herdr-loop-swarm.sh,lib/config.sh,swarm.config.toml,tests/test_config.sh,lib/providers.sh,lib/cli/stampede-doctor.sh,tests/test_providers.sh,tests/test_cli_doctor.sh,Makefile
 parent: maps/public-multi-provider.md
 blocked_by: PUB-2
+github_issue: 95
+github_url: "https://github.com/HinchK/stampede/issues/95"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 > owns amended at execution (receipted): added `lib/providers.sh` (chain

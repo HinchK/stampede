@@ -20,12 +20,12 @@ documented/synced/proven" gap that's opened up across `agy-docs`, `agy-gh`, and 
 ## Decisions so far
 
 - PART-1 found during dispatch (superseded status not recognized by ownership check, blocking `docs/findings/`); PROVE-HEADLESS-1 staged behind PART-1 pending its integration.
+- [Backfill GitHub issue sync](tickets/sync-1-gh-issue-backfill.md) (SYNC-1, resolved): Backfilled 44 GitHub issues (#66–#109) with 41 closed and 3 backlog open (`CONTEXT-1` #69, `PART-1` #82, `PROVE-HEADLESS-1` #88), establishing 100% parity (98/98 tickets in sync) between local tickets and upstream GitHub Issues.
 
 ## Active Frontier
 
 - [Partition superseded status handling](tickets/part-1-superseded-ownership-check.md) (PART-1) — released, `arch`.
 - [Expand CONTEXT.md vocabulary](tickets/context-1-vocabulary-expansion.md) (CONTEXT-1) — released, `agy-docs`.
-- [Backfill GitHub issue sync](tickets/sync-1-gh-issue-backfill.md) (SYNC-1) — released, `agy-gh`.
 - [Prove headless batch mode on a real run](tickets/prove-headless-1-real-batch-run.md) (PROVE-HEADLESS-1) —
   staged, `arch` (blocked pending PART-1 integration: real lease conflict via `docs/findings/`).
 

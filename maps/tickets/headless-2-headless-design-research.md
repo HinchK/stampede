@@ -10,6 +10,9 @@ parent: maps/universal-herdr-swarm.md
 resolution:
   commit: aad1b88
   findings_file: docs/findings/headless-mode-design.md
+github_issue: 75
+github_url: "https://github.com/HinchK/stampede/issues/75"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # HEADLESS-2 — headless run mode design research

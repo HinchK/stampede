@@ -8,6 +8,9 @@ assignee: arch
 owns: scripts/repo-state.sh,CLAUDE.md
 parent: maps/public-readiness.md
 blocked_by: []
+github_issue: 101
+github_url: "https://github.com/HinchK/stampede/issues/101"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # DOG-17 — scripts/repo-state.sh: single-command git/gh state summary (Wave DX-1)

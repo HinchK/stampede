@@ -7,6 +7,9 @@ assignee: agy-docs
 blocked_by: HEADLESS-6
 owns: docs/adr/
 parent: maps/headless-run-mode.md
+github_issue: 80
+github_url: "https://github.com/HinchK/stampede/issues/80"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # HEADLESS-7 — ADR (Wave, blocked by HEADLESS-6)

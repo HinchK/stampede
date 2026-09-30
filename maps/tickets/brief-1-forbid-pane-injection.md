@@ -7,6 +7,9 @@ commit: 32dc565
 assignee: arch-1
 owns: briefs/looper.in.md
 parent: maps/universal-herdr-swarm.md
+github_issue: 67
+github_url: "https://github.com/HinchK/stampede/issues/67"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # BRIEF-1 — explicit anti-bypass line in briefs

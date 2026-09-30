@@ -6,6 +6,9 @@ status: backlog
 assignee: arch-2
 owns: docs/findings/
 parent: maps/close-the-gaps.md
+github_issue: 88
+github_url: "https://github.com/HinchK/stampede/issues/88"
+synced_at: "2026-09-30T17:14:49Z"
 ---
 
 # PROVE-HEADLESS-1 — real headless batch run

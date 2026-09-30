@@ -7,6 +7,9 @@ assignee: arch
 owns: lib/cli/stampede-init.sh,tests/test_cli_init.sh,swarm.config.toml
 parent: maps/public-multi-provider.md
 blocked_by: PUB-2,PUB-6
+github_issue: 96
+github_url: "https://github.com/HinchK/stampede/issues/96"
+synced_at: "2026-09-30T17:16:14Z"
 ---
 
 # PUB-7 — `stampede init`: from probe to working config (Wave 11)
