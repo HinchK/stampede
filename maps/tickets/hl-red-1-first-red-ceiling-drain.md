@@ -2,7 +2,7 @@
 id: HL-RED-1
 title: "First-RED ticket exits 0 and kills critique turn, leaving ceiling unreachable and batch undrained"
 type: wayfinder:defect
-status: backlog
+status: resolved
 assignee: arch
 owns: lib/headless.sh,lib/cli/stampede-headless.sh,tests/test_async_gate.sh
 parent: maps/harden-headless-mode.md
