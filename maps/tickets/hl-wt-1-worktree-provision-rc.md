@@ -4,7 +4,7 @@ title: "worktree_provision ignores _wt_add_with_retry rc, causing phantom worktr
 type: wayfinder:defect
 status: backlog
 assignee: arch
-owns: lib/worktree.sh,tests/test_worktree.sh
+owns: lib/worktree.sh,tests/test_worktree.sh,lib/headless.sh
 parent: maps/harden-headless-mode.md
 ---
 
