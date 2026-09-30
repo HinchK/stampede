@@ -22,7 +22,7 @@ Fix the three genuine defects and two hardening/ergonomic gaps discovered during
 - [Close first-RED critique termination and undrained queue gap](tickets/hl-red-1-first-red-ceiling-drain.md) (HL-RED-1) —
   released, `arch`. (Severity MED-HIGH: allow critique turns below ceiling; auto-drain/release in-batch; non-zero exit on failure).
 - [Propagate worktree_provision exit status](tickets/hl-wt-1-worktree-provision-rc.md) (HL-WT-1) —
-  released, `arch`. (Severity MED: propagate `_wt_add_with_retry` failure rc, guard `headless_spawn` cd).
+  completed, `arch` (integrated @ `b95b383`). Propagated failure rc from `_wt_add_with_retry`, guarded `headless_spawn` cd, and added hermetic regression test case 16.
 - [Respect env overrides for headless knobs](tickets/hl-cfg-1-toml-env-override.md) (HL-CFG-1) —
   staged, `arch`. (Severity LOW-MED: emit `CONFIG_HEADLESS_*` only when unset).
 - [Escalate headless worker timeouts with SIGKILL](tickets/hl-tmo-1-worker-timeout-escalation.md) (HL-TMO-1) —

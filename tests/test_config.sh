@@ -191,9 +191,9 @@ cat > "$C7" <<'TOML'
 name = "x"
 TOML
 check "7a" "no [headless] table → max attempts default 2" \
-  'eval "$(config_dump_env x "$C7")" && [[ $CONFIG_HEADLESS_MAX_ATTEMPTS == "2" ]]'
+  'unset CONFIG_HEADLESS_MAX_ATTEMPTS CONFIG_HEADLESS_WORKER_TIMEOUT_S; eval "$(config_dump_env x "$C7")" && [[ $CONFIG_HEADLESS_MAX_ATTEMPTS == "2" ]]'
 check "7b" "no [headless] table → worker timeout default 600" \
-  'eval "$(config_dump_env x "$C7")" && [[ $CONFIG_HEADLESS_WORKER_TIMEOUT_S == "600" ]]'
+  'unset CONFIG_HEADLESS_MAX_ATTEMPTS CONFIG_HEADLESS_WORKER_TIMEOUT_S; eval "$(config_dump_env x "$C7")" && [[ $CONFIG_HEADLESS_WORKER_TIMEOUT_S == "600" ]]'
 C7B="$TEST_DIR/headless-set.toml"
 cat > "$C7B" <<'TOML'
 [headless]
@@ -201,7 +201,7 @@ max_verdict_attempts = 3
 worker_timeout_s = 900
 TOML
 check "7c" "explicit ceilings bind" \
-  'eval "$(config_dump_env x "$C7B")" && [[ $CONFIG_HEADLESS_MAX_ATTEMPTS == "3" && $CONFIG_HEADLESS_WORKER_TIMEOUT_S == "900" ]]'
+  'unset CONFIG_HEADLESS_MAX_ATTEMPTS CONFIG_HEADLESS_WORKER_TIMEOUT_S; eval "$(config_dump_env x "$C7B")" && [[ $CONFIG_HEADLESS_MAX_ATTEMPTS == "3" && $CONFIG_HEADLESS_WORKER_TIMEOUT_S == "900" ]]'
 C7C="$TEST_DIR/headless-bad.toml"
 cat > "$C7C" <<'TOML'
 [headless]
@@ -215,7 +215,16 @@ max_verdict_attempts = 0
 TOML
 check "7e" "zero attempts fail closed" '! config_dump_env x "$C7D" >/dev/null 2>&1'
 check "7f" "shipped config binds the headless ceilings" \
-  'eval "$(config_dump_env x "$SHIPPED")" && [[ $CONFIG_HEADLESS_MAX_ATTEMPTS == "2" && $CONFIG_HEADLESS_WORKER_TIMEOUT_S == "600" ]]'
+  'unset CONFIG_HEADLESS_MAX_ATTEMPTS CONFIG_HEADLESS_WORKER_TIMEOUT_S; eval "$(config_dump_env x "$SHIPPED")" && [[ $CONFIG_HEADLESS_MAX_ATTEMPTS == "2" && $CONFIG_HEADLESS_WORKER_TIMEOUT_S == "600" ]]'
+
+# ── 7b. environment overrides configuration for headless knobs (HL-CFG-1) ──
+# The gate_concurrency hierarchy: env wins, the dump must not clobber it.
+check "7g" "env CONFIG_HEADLESS_MAX_ATTEMPTS survives the dump" \
+  'export CONFIG_HEADLESS_MAX_ATTEMPTS=1; eval "$(config_dump_env x "$C7B")"; v=$CONFIG_HEADLESS_MAX_ATTEMPTS; unset CONFIG_HEADLESS_MAX_ATTEMPTS; [[ $v == 1 ]]'
+check "7h" "env CONFIG_HEADLESS_WORKER_TIMEOUT_S survives the dump" \
+  'export CONFIG_HEADLESS_WORKER_TIMEOUT_S=120; eval "$(config_dump_env x "$C7B")"; v=$CONFIG_HEADLESS_WORKER_TIMEOUT_S; unset CONFIG_HEADLESS_WORKER_TIMEOUT_S; [[ $v == 120 ]]'
+check "7i" "unset env still binds the TOML value (no regression)" \
+  'unset CONFIG_HEADLESS_MAX_ATTEMPTS CONFIG_HEADLESS_WORKER_TIMEOUT_S; eval "$(config_dump_env x "$C7B")" && [[ $CONFIG_HEADLESS_MAX_ATTEMPTS == "3" && $CONFIG_HEADLESS_WORKER_TIMEOUT_S == "900" ]]'
 
 C6C="$TEST_DIR/reviewer-badloop.toml"
 cat > "$C6C" <<'TOML'
