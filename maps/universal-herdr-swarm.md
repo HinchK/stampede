@@ -84,15 +84,32 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
   on what a true headless run mode would require, corrected during PM review (a fabricated file citation, a stale
   reference to HEADLESS-1) — see [Headless Run Mode](headless-run-mode.md) for the resulting implementation map.
 - **GATE-1/2** (resolved, `docs/audits/2026-09-23-harden-the-promote-gate.md`): `arbiter_promote()` now refuses to
-  run from a Herdr-recognized agent pane, fail-closed on unresolvable pane identity, after an agent ran promote and
-  push itself this session on a direct human instruction. Documented as a local, non-airtight hardening — real
-  enforcement (GitHub branch protection, blocked on this repo's current plan; credential separation) is named as
-  follow-up pending a driver decision.
+  run from a Herdr-recognized agent pane, fail-closed on unresolvable pane identity — hardening built after an
+  agent ran promote and push on a direct human instruction. **Superseded in part:** a second incident
+  (`looper` used `herdr pane run` to bypass this from its own initiative, 2026-09-24) showed local checks alone
+  raise the bar but don't stop a reasoning agent. The driver rejected the credential-separation follow-up as too
+  much onboarding friction (see `CRED-1`, superseded) — **`GRANT-1`** (below) is the adopted lower-friction
+  alternative.
+- **[Headless Run Mode](headless-run-mode.md):** complete, HEADLESS-1 through HEADLESS-7 — additive
+  `bin/stampede headless` batch queue drainer (direct subprocess management, not a detached Herdr session),
+  confirmed with the driver 2026-09-24.
+- **Promote-gate incident follow-up** (`BRIEF-1`, `CRED-1` superseded, `INCIDENT-1`, all resolved 2026-09-29):
+  closed the loop on the second incident — `briefs/looper.in.md` now explicitly forbids cross-pane injection, the
+  incident is recorded honestly in `STATE.md` instead of an unqualified "guardrail holds" claim, and credential
+  separation was rejected in favor of **`GRANT-1`**: a session-scoped promote authorization
+  (`bash lib/arbiter.sh grant-session`) that removes per-promote friction while keeping the one invariant that
+  matters — an agent can never grant itself permission (creating a grant is gated by the same pane check
+  promoting itself used to be).
+- **`SUPER-1` / `ARB-SLUG-1`** (resolved 2026-09-29): fixed a real arbiter concurrency bug found while integrating
+  `GRANT-1` — a slug mismatch between `profile.env` and `swarm.config.toml` let the watch daemon silently fork a
+  phantom integration branch rooted at `main` instead of failing closed. `ARB-SLUG-1` unifies slug resolution and
+  makes a missing expected ref a hard refusal, not a fallback branch creation.
 
 ## Active Frontier
 
-- **[Headless Run Mode](headless-run-mode.md):** additive `stampede drain --headless` batch queue drainer,
-  confirmed with the driver 2026-09-24 — HEADLESS-3 through HEADLESS-7.
+- **[Close the Gaps](close-the-gaps.md):** `CONTEXT.md` vocabulary, GitHub issue sync backfill, and proving
+  headless batch mode on a real run — chartered 2026-09-30 specifically to put real work on `agy-docs`, `agy-gh`,
+  and the implementation seats, not just the seats that happened to be busy already.
 
 ## Not yet specified
 
