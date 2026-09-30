@@ -209,6 +209,36 @@ _partition_ticket_active() {
   esac
 }
 
+# ── shared: active-ticket ownership scan (PART-2) ──────────────────────────
+# The exact rule `check` enforces against ticket FILES, factored so
+# lease_acquire enforces it too — no narrower command may launder a BLOCKED
+# verdict into a lease. Prints the BLOCKED lines, rc 1 when any conflict.
+_partition_active_conflicts() { # OWNS_SET EXCLUSIVE(0|1) REPO [INTEG_FILE] [SKIP_ID]
+  local owns="$1" exclusive="$2" repo="$3" integ="${4:-$3/.herdr-swarm/integration.jsonl}" skip="${5:-}"
+  local tf tid tstatus thas_owns towns blocked=0
+  for tf in "$repo"/maps/tickets/*.md; do
+    [[ -f "$tf" ]] || continue
+    tid=$(sed -nE 's/^id:[[:space:]]*(.+)$/\1/p' "$tf" | head -n1 | tr -d '"')
+    tstatus=$(sed -nE 's/^status:[[:space:]]*(.+)$/\1/p' "$tf" | head -n1 | tr -d '"')
+    [[ -n "$tid" && -n "$tstatus" ]] || continue
+    # SKIP_ID: lease_acquire excludes the ticket being acquired — leasing
+    # your OWN in-progress ticket is the normal dispatch flow, never a
+    # self-conflict (check never needs this: candidates are not active).
+    [[ -n "$skip" && "$tid" == "$skip" ]] && continue
+    thas_owns=$(grep -c '^owns:' "$tf" 2>/dev/null || true)
+    _partition_ticket_active "$tid" "$tstatus" "$integ" || continue
+    towns=""
+    [[ "$thas_owns" -gt 0 ]] && towns=$(owns_parse_ticket "$tf" 2>/dev/null || true)
+    if (( exclusive )) || { [[ -n "$owns" && -n "$towns" ]] && owns_overlaps "$owns" "$towns" "$repo" >/dev/null; }; then
+      printf 'BLOCKED by active ticket %s (status=%s)\n' "$tid" "$tstatus" >&2
+      [[ -n "$owns" && -n "$towns" ]] && owns_overlaps "$owns" "$towns" "$repo" | sed 's/^/  /' >&2
+      blocked=1
+    fi
+  done
+  (( blocked )) && return 1
+  return 0
+}
+
 # ── partition check: candidate vs live leases + active tickets ─────────────
 # rc 0 = dispatchable (owns present, disjoint)
 # rc 2 = dispatchable EXCLUSIVELY (no owns — serialized fallback)
@@ -250,23 +280,10 @@ partition_check() { # CANDIDATE_TICKET_FILE [REPO_DIR]
     done < <(jq -r '.leases[]? | "\(.ticket)\t\(.exclusive)\t\((.owns // []) | join(","))"' "$state/leases.json" 2>/dev/null)
   fi
 
-  # active ticket files
-  local tf tid tstatus thas_owns towns
-  for tf in "$repo"/maps/tickets/*.md; do
-    [[ -f "$tf" ]] || continue
-    tid=$(sed -nE 's/^id:[[:space:]]*(.+)$/\1/p' "$tf" | head -n1 | tr -d '"')
-    tstatus=$(sed -nE 's/^status:[[:space:]]*(.+)$/\1/p' "$tf" | head -n1 | tr -d '"')
-    [[ -n "$tid" && -n "$tstatus" ]] || continue
-    thas_owns=$(grep -c '^owns:' "$tf" 2>/dev/null || true)
-    _partition_ticket_active "$tid" "$tstatus" "$integ" || continue
-    towns=""
-    [[ "$thas_owns" -gt 0 ]] && towns=$(owns_parse_ticket "$tf" 2>/dev/null || true)
-    if (( exclusive )) || { [[ -n "$owns" && -n "$towns" ]] && owns_overlaps "$owns" "$towns" "$repo" >/dev/null; }; then
-      printf 'BLOCKED by active ticket %s (status=%s)\n' "$tid" "$tstatus" >&2
-      [[ -n "$owns" && -n "$towns" ]] && owns_overlaps "$owns" "$towns" "$repo" | sed 's/^/  /' >&2
-      blocked=1
-    fi
-  done
+  # active ticket files — the shared rule (PART-2 factored it out)
+  if ! _partition_active_conflicts "$owns" "$exclusive" "$repo" "$integ"; then
+    blocked=1
+  fi
 
   (( blocked )) && return 1
   (( exclusive )) && return 2
@@ -340,6 +357,15 @@ lease_acquire() {
     owns=$(owns_parse_line "$owns_arg") || return 1
   fi
   (( owns_rc == 2 )) && exclusive=1 && owns=""
+
+  # PART-2: `check`'s active-ticket rule enforced HERE too, before any state
+  # mutation — a ticket BLOCKED by an active ownership claim must not be
+  # leasable via this narrower command. check's verdict is authoritative;
+  # nothing may route around it.
+  if ! _partition_active_conflicts "$owns" "$exclusive" "$repo" "" "$ticket"; then
+    printf 'lease: %s BLOCKED by active ticket ownership (same rule as partition check) — no lease written\n' "$ticket" >&2
+    return 1
+  fi
 
   _lease_lock "$state" || return 1
   local conflict=0
