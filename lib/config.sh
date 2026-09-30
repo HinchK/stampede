@@ -107,7 +107,7 @@ config_dump_env() {
   [[ -n "$slug" ]] && slug=$(slugify "$slug")
 
   "$PYTHON_BIN" - "$slug" "$toml_path" <<'PYCODE'
-import sys, tomllib, shlex
+import sys, tomllib, shlex, os
 
 slug = sys.argv[1]
 toml_path = sys.argv[2]
@@ -117,6 +117,14 @@ with open(toml_path, 'rb') as f:
 
 def emit(key, val):
     print(f'export {key}={shlex.quote(str(val))}')
+
+# HL-CFG-1: environment overrides configuration — the gate_concurrency
+# hierarchy, extended to the headless knobs. A key already present in the
+# environment (per-run tuning: CI overrides, test fixtures, `VAR=x … headless`)
+# is left untouched; the TOML value binds only when the env slot is empty.
+def emit_env_wins(key, val):
+    if key not in os.environ:
+        emit(key, val)
 
 swarm = cfg.get('swarm', {})
 proxy = cfg.get('proxy', {})
@@ -154,8 +162,8 @@ if not isinstance(hl_attempts, int) or isinstance(hl_attempts, bool) or hl_attem
 hl_timeout = headless.get('worker_timeout_s', 600)
 if not isinstance(hl_timeout, int) or isinstance(hl_timeout, bool) or hl_timeout < 1:
     sys.exit("config error: headless.worker_timeout_s must be an integer >= 1")
-emit('CONFIG_HEADLESS_MAX_ATTEMPTS', hl_attempts)
-emit('CONFIG_HEADLESS_WORKER_TIMEOUT_S', hl_timeout)
+emit_env_wins('CONFIG_HEADLESS_MAX_ATTEMPTS', hl_attempts)
+emit_env_wins('CONFIG_HEADLESS_WORKER_TIMEOUT_S', hl_timeout)
 emit('PROXY_ENABLED', str(proxy.get('enabled', False)).lower())
 # No localhost fallbacks (DOG-7): a config without [proxy] endpoint/health
 # keys binds empty; the only live proxy URLs live in swarm.config.toml.
