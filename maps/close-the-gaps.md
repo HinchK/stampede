@@ -12,6 +12,7 @@ documented/synced/proven" gap that's opened up across `agy-docs`, `agy-gh`, and 
 - Three independent tickets, one per underused seat, confirmed with the driver 2026-09-30 specifically to make
   sure `agy-gh`, `agy-docs`, and the OpenCode (`arch-1`/`arch-2`) panes are all doing real work, not just the
   implementation seats.
+- Arch Seat Balancing Convention: a ticket assigned the generic `arch` label resolves to whichever of `arch-1-hinchk-stampede` / `arch-2-hinchk-stampede` has the older (further behind) `state_change_seq` at dispatch time (i.e. whichever has sat idle longest), not always `arch-1`. Check `herdr agent list` at dispatch time to decide.
 - No blocking between them — disjoint `owns:`, safe to dispatch all three at once.
 - Core Invariant, unchanged: promote/push stay human-only unless a valid session grant exists (`GRANT-1`); no
   cross-pane injection; never trust a self-reported "done" without independent verification.

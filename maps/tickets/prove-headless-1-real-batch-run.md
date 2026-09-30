@@ -3,7 +3,7 @@ id: PROVE-HEADLESS-1
 title: "Prove bin/stampede headless on a real batch run"
 type: wayfinder:task
 status: backlog
-assignee: arch
+assignee: arch-2
 owns: docs/findings/
 parent: maps/close-the-gaps.md
 ---
