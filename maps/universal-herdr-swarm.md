@@ -78,11 +78,11 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - **TRUST-1** (`maps/tickets/trust-1-real-numbers.md`, resolved): published real trust-tax numbers from telemetry
   (`docs/findings/trust-tax-telemetry-measurements.md`), replacing reliance on the retrospective's modelled 80%
   claim.
-- **HEADLESS-1/2** (resolved): HEADLESS-1 disproved its own premise — this installed `herdr` (0.9.1) has no
-  `--no-focus` option on `agent prompt` and prompting an idle agent doesn't steal focus, documented in
-  `docs/findings/herdr-semantics.md`. HEADLESS-2 produced `docs/findings/headless-mode-design.md`, a research doc
-  on what a true headless run mode would require, corrected during PM review (a fabricated file citation, a stale
-  reference to HEADLESS-1) — see [Headless Run Mode](headless-run-mode.md) for the resulting implementation map.
+- **[Headless Run Mode](headless-run-mode.md)** (complete, HEADLESS-1 through HEADLESS-7): additive
+  `bin/stampede headless` batch queue drainer (direct subprocess management, not a detached Herdr session),
+  confirmed with the driver 2026-09-24. HEADLESS-1 disproved its own premise along the way — this installed
+  `herdr` (0.9.1) has no `--no-focus` option and prompting an idle agent doesn't steal focus
+  (`docs/findings/herdr-semantics.md`).
 - **GATE-1/2** (resolved, `docs/audits/2026-09-23-harden-the-promote-gate.md`): `arbiter_promote()` now refuses to
   run from a Herdr-recognized agent pane, fail-closed on unresolvable pane identity, after an agent ran promote and
   push itself this session on a direct human instruction. Documented as a local, non-airtight hardening — real
@@ -102,13 +102,15 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - **SUPER-1** (resolved, `maps/tickets/super-1-isolated-type-normalization.md`): Supervisor ledger isolated type normalization
   across `resolve_seat_gate`, `gate_spawn`, and `gate_reap`, plus launcher boolean emission. Robustly handles both boolean and legacy
   integer ledger shapes. Reviewed PASS and integrated on real integration branch `swarm/stampede/integration` at `611cc4e`.
+- **ARB-SLUG-1** (resolved, `maps/tickets/arb-slug-1-fail-closed-integration-ref.md`): Canonical slug resolution chain
+  (`PROJECT_SLUG` > `SWARM_CONFIG_NAME` > `basename`), fail-closed missing ref refusal in `arbiter_drain`, and explicit `arbiter_init_ref`.
+  Reviewed PASS and integrated on `swarm/stampede/integration` at `3bb01bd`.
 
 ## Active Frontier
 
-- **[ARB-SLUG-1](tickets/arb-slug-1-fail-closed-integration-ref.md):** Arbiter silently creates a phantom integration branch
-  instead of failing closed on slug mismatch (`lib/arbiter.sh`, `tests/test_arbiter.sh`).
-- **[Headless Run Mode](headless-run-mode.md):** additive `stampede drain --headless` batch queue drainer,
-  confirmed with the driver 2026-09-24 — HEADLESS-3 through HEADLESS-7.
+- **[Close the Gaps](close-the-gaps.md):** `CONTEXT.md` vocabulary, GitHub issue sync backfill, and proving
+  headless batch mode on a real run — chartered 2026-09-30 specifically to put real work on `agy-docs`, `agy-gh`,
+  and the implementation seats, not just whichever seat happened to be busy already.
 
 ## Not yet specified
 
