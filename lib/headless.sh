@@ -91,6 +91,12 @@ headless_spawn() {
     return 1
   fi
   local tmo="${CONFIG_HEADLESS_WORKER_TIMEOUT_S:-${HEADLESS_WORKER_TIMEOUT_S:-600}}"
+  # HL-TMO-1: the wall clock must be HARD. timeout(1) sends only SIGTERM by
+  # default and waits forever on a child that traps or ignores it (probed:
+  # a TERM-ignoring worker evaded the bound for its full runtime) —
+  # -k escalates to SIGKILL after a grace period, preserving rc=124.
+  # Both resolver-accepted binaries are GNU timeout (timeout/gtimeout).
+  local kill_grace="${HL_KILL_GRACE_S:-5}"
 
   # Double-spawn guard: a live pid for this worker means one subprocess per
   # worktree is already enforced — refuse rather than pile a second vendor
@@ -137,11 +143,15 @@ headless_spawn() {
     trap '_hl_signal HUP 1'  HUP
     rc=0
     case "$kind" in
-      claude)   "$TIMEOUT_BIN" "$tmo" claude -p "$prompt"    & child=$! ;;
-      opencode) "$TIMEOUT_BIN" "$tmo" opencode run "$prompt" & child=$! ;;
-      agy)      "$TIMEOUT_BIN" "$tmo" agy -p "$prompt"      & child=$! ;;
+      claude)   "$TIMEOUT_BIN" -k "$kill_grace" "$tmo" claude -p "$prompt"    & child=$! ;;
+      opencode) "$TIMEOUT_BIN" -k "$kill_grace" "$tmo" opencode run "$prompt" & child=$! ;;
+      agy)      "$TIMEOUT_BIN" -k "$kill_grace" "$tmo" agy -p "$prompt"      & child=$! ;;
     esac
     wait "$child" || rc=$?
+    # The direct child IS the timeout process; 137 (128+SIGKILL) off it means
+    # the -k escalation shot the worker — normalize to the wall-clock
+    # signature 124 so a hard eviction reads identically to a TERM eviction.
+    [[ "$rc" == 137 ]] && rc=124
     printf '\n[_exit_ rc=%s]\n' "$rc"
     exit "$rc"
   ) >"$log" 2>&1 &

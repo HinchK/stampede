@@ -200,8 +200,21 @@ if source "$SCRIPT_DIR/lib/common.sh" && resolve_timeout; then
     || bad "7b hung worker: $(headless_status worker-hang)"
   unset CONFIG_HEADLESS_WORKER_TIMEOUT_S
   export HL_STUB_SLEEP=0.3
-else
-  printf '  · [7b] skipped — no runnable timeout(1) on this machine\n' >&2
+
+  # 7b2 (HL-TMO-1): a worker that IGNORES SIGTERM must still die at the
+  # wall clock — timeout escalates to SIGKILL after the kill-grace, and the
+  # rc stays 124. Stub traps TERM and keeps sleeping; without -k this evaded
+  # the bound for its full sleep 30 (PROVE-HEADLESS-1 Finding F8).
+  IGN_BIN="$TEST_DIR/ign-bin"; mkdir -p "$IGN_BIN"
+  printf '#!/bin/sh\ntrap "" TERM\nsleep 30\n' > "$IGN_BIN/opencode"
+  chmod +x "$IGN_BIN/opencode"
+  export HL_KILL_GRACE_S=2 CONFIG_HEADLESS_WORKER_TIMEOUT_S=1
+  PATH="$IGN_BIN:$PATH" headless_spawn worker-ign "$TEST_DIR/brief.md" "$WT" opencode >/dev/null
+  sleep 5
+  [[ "$(headless_status worker-ign)" == "exited rc=124" ]] \
+    && ok "7b2 TERM-ignoring worker SIGKILL-evicted at the bound (rc=124 preserved)" \
+    || bad "7b2 TERM-ignoring worker: $(headless_status worker-ign)"
+  unset CONFIG_HEADLESS_WORKER_TIMEOUT_S HL_KILL_GRACE_S
 fi
 
 # headless_reap: stale pidfiles (dead holder) evicted on the next pass,
