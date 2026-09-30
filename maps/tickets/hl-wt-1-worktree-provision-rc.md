@@ -2,7 +2,7 @@
 id: HL-WT-1
 title: "worktree_provision ignores _wt_add_with_retry rc, causing phantom worktree and green no-op"
 type: wayfinder:defect
-status: backlog
+status: resolved
 assignee: arch
 owns: lib/worktree.sh,tests/test_worktree.sh,lib/headless.sh
 parent: maps/harden-headless-mode.md
@@ -42,3 +42,11 @@ Receipt quote (Finding F3):
 bash tests/test_worktree.sh
 bash tests/test_headless.sh
 ```
+
+## Resolution
+
+- **Author:** `arch-1-hinchk-stampede` (commit `3dc233364beb588a91d33321242affffea9dd3cd`)
+- **Review:** `reviewer-hinchk-stampede` Round 1/2 PASS (`.herdr-swarm/reviews/HL-WT-1-3dc233364beb588a91d33321242affffea9dd3cd.md`)
+- **Integrated:** `b95b3836504edd37e2846d82451c0116f0d35f03` onto `swarm/stampede/integration`
+- **Summary:** Propagated `_wt_add_with_retry` failure rc in `lib/worktree.sh` so phantom paths are never emitted when provisioning fails, guarded `cd "$wt"` in `lib/headless.sh` to name missing worktree paths clearly, and added case 16 reproducing the exact stale-entry incident in `tests/test_worktree.sh` (46/46 passed).
+
