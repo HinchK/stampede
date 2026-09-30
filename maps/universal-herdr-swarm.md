@@ -78,38 +78,39 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - **TRUST-1** (`maps/tickets/trust-1-real-numbers.md`, resolved): published real trust-tax numbers from telemetry
   (`docs/findings/trust-tax-telemetry-measurements.md`), replacing reliance on the retrospective's modelled 80%
   claim.
-- **HEADLESS-1/2** (resolved): HEADLESS-1 disproved its own premise — this installed `herdr` (0.9.1) has no
-  `--no-focus` option on `agent prompt` and prompting an idle agent doesn't steal focus, documented in
-  `docs/findings/herdr-semantics.md`. HEADLESS-2 produced `docs/findings/headless-mode-design.md`, a research doc
-  on what a true headless run mode would require, corrected during PM review (a fabricated file citation, a stale
-  reference to HEADLESS-1) — see [Headless Run Mode](headless-run-mode.md) for the resulting implementation map.
-- **GATE-1/2** (resolved, `docs/audits/2026-09-23-harden-the-promote-gate.md`): `arbiter_promote()` now refuses to
-  run from a Herdr-recognized agent pane, fail-closed on unresolvable pane identity — hardening built after an
-  agent ran promote and push on a direct human instruction. **Superseded in part:** a second incident
-  (`looper` used `herdr pane run` to bypass this from its own initiative, 2026-09-24) showed local checks alone
-  raise the bar but don't stop a reasoning agent. The driver rejected the credential-separation follow-up as too
-  much onboarding friction (see `CRED-1`, superseded) — **`GRANT-1`** (below) is the adopted lower-friction
-  alternative.
-- **[Headless Run Mode](headless-run-mode.md):** complete, HEADLESS-1 through HEADLESS-7 — additive
+- **[Headless Run Mode](headless-run-mode.md)** (complete, HEADLESS-1 through HEADLESS-7): additive
   `bin/stampede headless` batch queue drainer (direct subprocess management, not a detached Herdr session),
-  confirmed with the driver 2026-09-24.
-- **Promote-gate incident follow-up** (`BRIEF-1`, `CRED-1` superseded, `INCIDENT-1`, all resolved 2026-09-29):
-  closed the loop on the second incident — `briefs/looper.in.md` now explicitly forbids cross-pane injection, the
-  incident is recorded honestly in `STATE.md` instead of an unqualified "guardrail holds" claim, and credential
-  separation was rejected in favor of **`GRANT-1`**: a session-scoped promote authorization
-  (`bash lib/arbiter.sh grant-session`) that removes per-promote friction while keeping the one invariant that
-  matters — an agent can never grant itself permission (creating a grant is gated by the same pane check
-  promoting itself used to be).
-- **`SUPER-1` / `ARB-SLUG-1`** (resolved 2026-09-29): fixed a real arbiter concurrency bug found while integrating
-  `GRANT-1` — a slug mismatch between `profile.env` and `swarm.config.toml` let the watch daemon silently fork a
-  phantom integration branch rooted at `main` instead of failing closed. `ARB-SLUG-1` unifies slug resolution and
-  makes a missing expected ref a hard refusal, not a fallback branch creation.
+  confirmed with the driver 2026-09-24. HEADLESS-1 disproved its own premise along the way — this installed
+  `herdr` (0.9.1) has no `--no-focus` option and prompting an idle agent doesn't steal focus
+  (`docs/findings/herdr-semantics.md`).
+- **GATE-1/2** (resolved, `docs/audits/2026-09-23-harden-the-promote-gate.md`): `arbiter_promote()` now refuses to
+  run from a Herdr-recognized agent pane, fail-closed on unresolvable pane identity, after an agent ran promote and
+  push itself this session on a direct human instruction. Documented as a local, non-airtight hardening — real
+  enforcement (GitHub branch protection, blocked on this repo's current plan; credential separation) is named as
+  follow-up pending a driver decision.
+- **CRED-1** (superseded by GRANT-1, `maps/tickets/cred-1-credential-separation-research.md`): Evaluated four credential mechanisms
+  (fine-grained PATs, GitHub App tokens, machine-user collaborator, SSH deploy keys) and established that none support
+  branch-level push restriction without server-side branch protection. Disproved that branch protection is currently
+  blocked on GitHub Free: the repo is currently PUBLIC, making branch protection and rulesets available at $0/month.
+  Documented the two-layer architecture (server-side push restriction on `main` for `HinchK` only + dedicated machine-user
+  agent credential) in `docs/findings/credential-separation-design.md` (`cd70a74`). Superseded 2026-09-29: driver rejected
+  multi-account credential separation as excessive onboarding friction; replaced by session-scoped promote grant (`maps/tickets/grant-1-session-promote-authorization.md`).
+- **GRANT-1** (resolved, `maps/tickets/grant-1-session-promote-authorization.md`): Session-scoped promote authorization
+  (`grant-session [--ttl s]`, `revoke-session`) preserving the GATE-1 pane check so agents cannot self-grant. When a
+  valid unexpired grant exists in `.herdr-swarm/promote-grant.json`, `arbiter_promote` proceeds flagless without `--confirm`.
+  Reviewed PASS and integrated on `swarm/stampede/integration` at `c7d8367`.
+- **SUPER-1** (resolved, `maps/tickets/super-1-isolated-type-normalization.md`): Supervisor ledger isolated type normalization
+  across `resolve_seat_gate`, `gate_spawn`, and `gate_reap`, plus launcher boolean emission. Robustly handles both boolean and legacy
+  integer ledger shapes. Reviewed PASS and integrated on real integration branch `swarm/stampede/integration` at `611cc4e`.
+- **ARB-SLUG-1** (resolved, `maps/tickets/arb-slug-1-fail-closed-integration-ref.md`): Canonical slug resolution chain
+  (`PROJECT_SLUG` > `SWARM_CONFIG_NAME` > `basename`), fail-closed missing ref refusal in `arbiter_drain`, and explicit `arbiter_init_ref`.
+  Reviewed PASS and integrated on `swarm/stampede/integration` at `3bb01bd`.
 
 ## Active Frontier
 
 - **[Close the Gaps](close-the-gaps.md):** `CONTEXT.md` vocabulary, GitHub issue sync backfill, and proving
   headless batch mode on a real run — chartered 2026-09-30 specifically to put real work on `agy-docs`, `agy-gh`,
-  and the implementation seats, not just the seats that happened to be busy already.
+  and the implementation seats, not just whichever seat happened to be busy already.
 
 ## Not yet specified
 
