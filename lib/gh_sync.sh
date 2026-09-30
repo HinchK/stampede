@@ -341,7 +341,11 @@ for t in local_tickets:
             continue
             
         r_state = remote_issue.get("state", "OPEN").upper()
-        local_is_closed = t_st in ("resolved", "closed", "done")
+        # SYNC-2: superseded is closed-equivalent — the ticket was dropped by
+        # an explicit decision and its issue belongs closed. The canonical
+        # status stays canonical; the sync adapts to the vocabulary, never
+        # the reverse (no hand-patching statuses to satisfy this set).
+        local_is_closed = t_st in ("resolved", "closed", "done", "superseded")
         remote_is_closed = (r_state == "CLOSED")
         
         if local_is_closed and not remote_is_closed:
