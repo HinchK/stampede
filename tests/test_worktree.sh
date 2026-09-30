@@ -338,6 +338,44 @@ SALV9=$(find "$REPO/.herdr-swarm/salvage" -maxdepth 1 -type d -name 'iso-seat-*'
 check "root checkout untouched by teardown" \
   '[[ -z "$(git -C "$REPO" status --porcelain | grep -v "^?? .herdr-swarm")" ]]'
 
+# ── 16. failed provision is a failure, not a phantom success (HL-WT-1) ─────
+# The incident shape from PROVE-HEADLESS-1 F3: a prior run's LOCKED worktree
+# entry survives while its directory is gone (state wiped between runs) —
+# `git worktree add` refuses (locked stale entry), _wt_add_with_retry fails,
+# and the caller uses the headless form `if ! prov=$(…)` where set -e is
+# suspended. The rc must still propagate; no phantom path may print.
+HL_REPO="$TEST_DIR/hl-repo"
+mkdir -p "$HL_REPO"
+git -C "$HL_REPO" init -q -b main >/dev/null
+git -C "$HL_REPO" -c user.email=t@t -c user.name=t commit -q --allow-empty -m base
+printf '.herdr-swarm/\n' > "$HL_REPO/.gitignore"
+git -C "$HL_REPO" add -A && git -C "$HL_REPO" -c user.email=t@t -c user.name=t commit -qm ignore
+# build the stale locked entry: real worktree → lock → delete the directory
+# behind git's back, keeping the branch (0 commits ahead — the stale-branch
+# gate must NOT be what refuses; the locked entry is)
+git -C "$HL_REPO" worktree add -q "$HL_REPO/.herdr-swarm/worktrees/ghost-seat" -b swarm/hl/ghost-seat >/dev/null 2>&1
+git -C "$HL_REPO" worktree lock --reason "seated: ghost-seat" "$HL_REPO/.herdr-swarm/worktrees/ghost-seat" >/dev/null 2>&1
+rm -rf "$HL_REPO/.herdr-swarm/worktrees/ghost-seat"
+git -C "$HL_REPO" worktree list --porcelain | grep -q "^locked" \
+  && ok "16pre locked stale entry in place (fixture sanity)" \
+  || bad "16pre fixture missing locked entry"
+HL_PROV=""
+if ! HL_PROV=$(REPO_DIR="$HL_REPO" worktree_provision ghost-seat hl main "$HL_REPO" 2>/dev/null); then
+  ok "16a failed provision returns non-zero inside if ! prov=\$() (set -e suspended)"
+else
+  bad "16a failed provision read as success (rc swallowed)"
+fi
+[[ -z "$HL_PROV" ]] \
+  && ok "16b no phantom path printed on failure" \
+  || bad "16b phantom success shape: $(printf '%s' "$HL_PROV" | head -1)"
+if worktree_provision ghost-seat hl main "$HL_REPO" >/dev/null 2>&1; then
+  bad "16c bare call also fails (belt and braces)"
+else
+  ok "16c bare call also fails (belt and braces)"
+fi
+git -C "$HL_REPO" worktree unlock "$HL_REPO/.herdr-swarm/worktrees/ghost-seat" >/dev/null 2>&1 || true
+git -C "$HL_REPO" worktree prune >/dev/null 2>&1 || true
+
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))

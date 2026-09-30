@@ -67,6 +67,10 @@ headless_spawn() {
   # set -e quiet).
   [[ -f "$brief" ]] || { printf 'headless: brief file not found: %s\n' "$brief" >&2; return 1; }
   brief=$(cd "$(dirname "$brief")" && pwd)/$(basename "$brief")
+  if [[ ! -d "$wt" ]]; then
+    printf 'headless: worktree dir not found: %s\n' "$wt" >&2
+    return 1
+  fi
   wt=$(cd "$wt" && pwd)
   [[ -d "$wt" ]] || { printf 'headless: worktree dir not found: %s\n' "$wt" >&2; return 1; }
   case "$kind" in

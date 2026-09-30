@@ -148,7 +148,14 @@ worktree_provision() {
 
   # Idempotent add: re-evaluates branch existence per attempt (see
   # _wt_add_with_retry) instead of repeating the same -b command.
-  _wt_add_with_retry "$wt_path" "$branch" "$base_ref" "$target_dir"
+  # HL-WT-1: the rc is LOAD-BEARING. Callers run this inside
+  # `if ! prov=$(worktree_provision …)` where set -e is suspended — an
+  # ignored failure here prints a phantom path and reads as success all the
+  # way up (a fully green-looking no-op). Fail loudly, print no shape.
+  if ! _wt_add_with_retry "$wt_path" "$branch" "$base_ref" "$target_dir"; then
+    printf 'worktree: provision failed for %s — not printing a path\n' "$branch" >&2
+    return 1
+  fi
 
   # Lock = live-seat marker: survives `git worktree prune`, refuses remove.
   git -C "$target_dir" worktree lock --reason "seated: $seat" "$wt_path" >/dev/null
