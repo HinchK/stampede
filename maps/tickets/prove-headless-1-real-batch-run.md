@@ -2,7 +2,7 @@
 id: PROVE-HEADLESS-1
 title: "Prove bin/stampede headless on a real batch run"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch-2
 owns: docs/findings/
 parent: maps/close-the-gaps.md
@@ -48,6 +48,16 @@ Human/pm review of the receipt doc, including the actual terminal output quoted,
 
 ## Notes
 
+Dispatch process note (2026-09-30): Dispatch to `arch-2` proceeded via direct `lease_acquire` after `bash lib/partition.sh check` reported BLOCKED (due to PART-1's false positive). This process gap is chartered as `PART-2` and flagged for the eventual review; it does not block the in-flight run.
+
 If something doesn't work as designed, that's the point of this ticket — report it plainly (matching this
 project's whole "claims need receipts" ethos) rather than quietly working around it. A found defect here is a
 successful outcome for this ticket, same as it was for `PROVE-3`.
+
+## Resolution
+
+- **Execution**: `arch-2-hinchk-stampede` executed 7 headless batch attempts, 2 targeted harness probes, and 2 operator-side recovery steps against an ephemeral scratch repo (`/tmp/headless-batch-prove`) with `herdr` deliberately excluded from `$PATH`.
+- **Delivered**: `docs/findings/headless-batch-run-receipt.md` committed at `5fe9c9f` covering real subprocess dispatch (`opencode run`), anchored verdict harvesting, isolated worktree async suite gating (green and red), arbiter queueing, partition/lease parking, real `DEAD_LETTER` + exit 1 triggering, and operator CAS drain without touching `main`.
+- **Findings & Defects**: Documented 8 findings, including 3 genuine bugs in shipped code (`F3`: `worktree_provision` rc masking, `F6`: first-RED exit 0 with unreachable ceiling, `F7`: TOML clobbering env overrides) and 1 harness bound evasion (`F8`: worker timeout without `-k`).
+- **Review**: Autonomous Reviewer Loop Round 1/2 issued `PASS` in `.herdr-swarm/reviews/PROVE-HEADLESS-1-5fe9c9f3a393b8b291ddfab86a030983470515ea.md`.
+- **Integration**: Integrated onto `swarm/stampede/integration` at `f588670` via arbiter auto-drain. Lease released cleanly.

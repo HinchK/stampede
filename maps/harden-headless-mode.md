@@ -1,0 +1,35 @@
+# Wayfinder Map: Harden Headless Mode
+
+## Destination
+
+Fix the three genuine defects and two hardening/ergonomic gaps discovered during the live headless batch proof (`PROVE-HEADLESS-1`), ensuring `bin/stampede headless` reliably handles worktree provisioning failures, drives RED multi-attempt critique cycles to the ceiling with non-zero exit on failure, auto-drains queues without self-wedging, respects runtime environment overrides, and escalates timeouts with SIGKILL.
+
+## Notes
+
+- Domain: headless batch drainer (`lib/cli/stampede-headless.sh`), worktree lifecycle (`lib/worktree.sh`), unattended safety harness (`lib/headless.sh`), configuration dump (`lib/config.sh`), documentation (`docs/findings/headless-mode-design.md`).
+- Source: Empirical proof findings in `docs/findings/headless-batch-run-receipt.md` (commit `5fe9c9f`, integrated on `swarm/stampede/integration` at `f588670`).
+- Priority / Sequencing:
+  - `HL-RED-1` (Severity MED-HIGH): Highest priority defect — unblocks proper critique loops, in-batch drain, and honest failure exit codes.
+  - `HL-WT-1` (Severity MED): Fixes silent no-op phantom worktree provisioning. Disjoint from `HL-RED-1` and `SYNC-2`.
+  - `HL-CFG-1` (Severity LOW-MED): Fixes TOML clobbering env overrides in `lib/config.sh`.
+  - `HL-TMO-1` (Severity LOW): Hardens wall-clock timeout with `-k` escalation. Owns `lib/headless.sh`; cannot dispatch concurrently with `HL-RED-1`.
+  - `HL-DOCS-1` (Severity LOW): Documentation and honest dead-letter reasons with log pointers; assigned to `agy-docs`.
+- Arch Seat Balancing Convention: implementation tickets assigned to `arch` dispatch to whichever arch seat has sat idle longest (`state_change_seq`), verifying partition disjointness before leasing.
+- Core Invariants: Human-only promote boundary; fail-closed partition checks; zero cross-pane injection.
+
+## Active Frontier
+
+- [Close first-RED critique termination and undrained queue gap](tickets/hl-red-1-first-red-ceiling-drain.md) (HL-RED-1) —
+  released, `arch`. (Severity MED-HIGH: allow critique turns below ceiling; auto-drain/release in-batch; non-zero exit on failure).
+- [Propagate worktree_provision exit status](tickets/hl-wt-1-worktree-provision-rc.md) (HL-WT-1) —
+  released, `arch`. (Severity MED: propagate `_wt_add_with_retry` failure rc, guard `headless_spawn` cd).
+- [Respect env overrides for headless knobs](tickets/hl-cfg-1-toml-env-override.md) (HL-CFG-1) —
+  staged, `arch`. (Severity LOW-MED: emit `CONFIG_HEADLESS_*` only when unset).
+- [Escalate headless worker timeouts with SIGKILL](tickets/hl-tmo-1-worker-timeout-escalation.md) (HL-TMO-1) —
+  staged, `arch`. (Severity LOW: `-k` escalation for SIGTERM-ignoring workers; blocked on HL-RED-1 due to shared `lib/headless.sh`).
+- [Document sandbox requirements and honest dead-letter reasons](tickets/hl-docs-1-dead-letter-reasons-and-brief-sandbox.md) (HL-DOCS-1) —
+  staged, `agy-docs`. (Severity LOW: log pointers and external_directory sandbox docs).
+
+## Decisions so far
+
+- Headless batch mode proven live end-to-end on ephemeral scratch repo in PROVE-HEADLESS-1 (`f588670`), discovering 8 concrete findings and 3 defects in shipped code.
