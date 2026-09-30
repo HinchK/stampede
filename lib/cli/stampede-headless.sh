@@ -235,16 +235,34 @@ EOF
       printf 'headless: #%s UNCONCLUDED (last state: %s)\n' "$tid" "$final" >&2
     fi
     if [[ -z "$concluded" ]]; then
-      local reason
+      local reason wst wlog
+      wlog="${STATE_DIR}/logs/${seat_name}.log"
+      # The honest cause lives in the durable worker log (HL-DOCS-1, receipt
+      # F2): the wrapper's exit marker names the vendor CLI's real exit
+      # status. headless_status is useless here — the pass-level reaper has
+      # already evicted the dead worker's pidfile by the time we report, so
+      # the pidfile-based status reads "untracked".
+      wst=""
+      if [[ -f "$wlog" ]]; then
+        wst=$(sed -nE 's/^\[_exit_ rc=([0-9]+)\]$/exited rc=\1/p' "$wlog" 2>/dev/null | tail -n1)
+        [[ -n "$wst" ]] || wst="dead (no exit marker)"
+      else
+        wst="untracked (no worker log)"
+      fi
       case "$final:$broke" in
         *:deadline)
-          reason="batch wall clock exhausted before a verdict" ;;
+          reason="batch wall clock exhausted before a verdict (last state: ${final}; worker: ${wst})" ;;
         RED:*|invalidated:*|stale:*)
           reason="critique turn ended without a concluding re-verdict (last: ${final})" ;;
         *)
-          reason="worker ended without a verdict (no session record)" ;;
+          # "worker exited rc=N without a verdict" — provider errors, invalid
+          # configs, and sandbox rejections all surface through this shape,
+          # with the log pointer carrying the actual error text.
+          reason="worker ${wst} without a verdict" ;;
       esac
+      reason="${reason} — worker log: ${wlog}"
       printf 'headless: #%s did not conclude — dead-lettering: %s\n' "$tid" "$reason" >&2
+      _headless_notice "#${tid} DEAD_LETTER: ${reason}"
       dead_letter_record "$tid" "$(git -C "$dir" rev-parse --short HEAD 2>/dev/null || printf unknown)" \
         "$reason" "$SESSION_ID"
       lease_release "$tid" >/dev/null 2>&1 || true

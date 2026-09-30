@@ -311,5 +311,42 @@ EOF
     && ok "all leases released at batch end" || bad "leases held: $(cat "$HR4/.herdr-swarm/leases.json" 2>/dev/null)"
 fi
 
+# [13] HL-DOCS-1: honest dead-letter reasons with log pointers — a worker
+# that exits without a verdict names its real exit status and the worker
+# log in both the batch output and dead-letter.jsonl (receipt F2: the old
+# generic "batch wall clock exhausted" hid provider/sandbox failures).
+if [[ -e "$HB_BIN/timeout" ]]; then
+  HR5=$(mktemp -d "$SCRATCH/hr5.XXXXXX")
+  git -C "$HR5" init -q -b main
+  git -C "$HR5" config user.email t@t; git -C "$HR5" config user.name t
+  git -C "$HR5" remote add origin https://github.com/t/scratch5.git
+  printf '.herdr-swarm/\n' > "$HR5/.gitignore"
+  printf 'test:\n\t@true\n' > "$HR5/Makefile"
+  mkdir -p "$HR5/maps/tickets"
+  printf 'x\n' > "$HR5/f.txt"; git -C "$HR5" add -A; git -C "$HR5" commit -qm base
+  printf -- '---\nid: T-NOVERDICT\nstatus: backlog\n---\nbody\n' > "$HR5/maps/tickets/tnv.md"
+  git -C "$HR5" add -A; git -C "$HR5" commit -qm tickets
+  # the worker crashes instantly, no verdict line — the exact shape of the
+  # PROVE-HEADLESS-1 attempt-1 failures (stale model, sandbox rejection)
+  printf '#!/bin/sh\nexit 7\n' > "$HB_BIN/opencode"; chmod +x "$HB_BIN/opencode"
+  PATH="$HB_PATH" "$REPO_ROOT/bin/stampede" headless "$HR5" --max-tickets 1 --timeout 45 >"$SCRATCH/hl-nv.out" 2>&1; rc=$?
+  [[ "$rc" == 1 ]] \
+    && ok "no-verdict batch exits 1" || bad "T-NOVERDICT rc=$rc: $(tail -3 "$SCRATCH/hl-nv.out")"
+  jq -e -s 'any(.[]; .ticket == "T-NOVERDICT" and ((.reason // "") | contains("worker exited rc=7 without a verdict")))' \
+    "$HR5/.herdr-swarm/dead-letter.jsonl" >/dev/null 2>&1 \
+    && ok "dead-letter reason names the real exit status (rc=7)" \
+    || bad "reason: $(cat "$HR5/.herdr-swarm/dead-letter.jsonl" 2>/dev/null)"
+  jq -e -s 'any(.[]; .ticket == "T-NOVERDICT" and ((.reason // "") | contains("worker log:")) and ((.reason // "") | contains(".herdr-swarm/logs/")))' \
+    "$HR5/.herdr-swarm/dead-letter.jsonl" >/dev/null 2>&1 \
+    && ok "dead-letter record carries the worker-log pointer" || bad "no log pointer in record"
+  grep -q "worker log:.*logs/.*\.log" "$SCRATCH/hl-nv.out" \
+    && ok "batch output points at logs/<seat>.log" || bad "no pointer in output: $(tail -2 "$SCRATCH/hl-nv.out")"
+  grep -q "T-NOVERDICT DEAD_LETTER" "$HR5/.herdr-swarm/headless-notices.log" 2>/dev/null \
+    && ok "durable headless notice carries the honest reason" || bad "no durable notice"
+  jq -e -s 'any(.[]; (.ticket|tostring) == "T-NOVERDICT")' \
+    "$HR5/.herdr-swarm/session-verdicts.jsonl" >/dev/null 2>&1 \
+    && bad "phantom session record invented" || ok "no session record (worker never verdicted)"
+fi
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

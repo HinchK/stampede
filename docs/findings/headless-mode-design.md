@@ -230,3 +230,80 @@ Rather than jumping directly to implementation, author a dedicated Wayfinder Map
    - Adapt `loop-bot-herd.sh` to harvest verdicts from response channels when running in headless mode.
 4. **Slice 4: Unattended Safety Hardening**:
    - Implement execution timeouts, per-ticket re-verdict caps, dead-letter logging, and stale lease eviction.
+
+---
+
+## 8. Target Repository Requirements (operational — learned in the first real run)
+
+Slices 1–4 shipped, and `PROVE-HEADLESS-1` then ran `stampede headless` for real against a bare scratch
+repo (full receipt: `docs/findings/headless-batch-run-receipt.md`). A target repo is NOT headless-ready
+by default. These are the requirements every operator must know (HL-DOCS-1):
+
+### 8.1 OpenCode project configuration (`.opencode/opencode.json` in the target repo)
+
+**Model pinning.** A worker spawned in a repo without project-level OpenCode config inherits the
+machine's *global* default model — which can be stale. In the receipt's first run, every worker died in
+~2s with the provider error visible only in the worker log:
+
+```
+Error: ProviderModelNotFoundError: Model not found: zai-coding-plan/glm-4.6.
+Did you mean: glm-4.7, glm-5-turbo, glm-5.2?
+```
+
+Pin the model in the target repo so workers never depend on `~/.config/opencode/opencode.json`:
+
+```json
+{ "model": "zai-coding-plan/<a-model-that-exists>" }
+```
+
+**Sandbox permissions.** The worker's cwd is the isolated worktree (`.herdr-swarm/worktrees/<seat>`),
+but its brief lives in the root checkout (`maps/tickets/…`) — an *external directory* to OpenCode, which
+auto-rejects in run mode:
+
+```
+! permission requested: external_directory (/repo/maps/tickets/*); auto-rejecting
+✗ Read /repo/maps/tickets/<ticket>.md failed
+Error: The user rejected permission to use this specific tool call.
+```
+
+Without `permission.external_directory: "allow"`, every headless worker dies unread. Note the schema:
+permission values are `PermissionActionConfig` (`"allow" | "ask" | "deny"`), **not** the older glob
+strings (`"*"` is a hard config error in OpenCode ≥ 1.18). A working minimal config:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "zai-coding-plan/glm-5.2",
+  "permission": {
+    "bash": "allow",
+    "edit": "allow",
+    "write": "allow",
+    "external_directory": "allow"
+  }
+}
+```
+
+### 8.2 Ignore the swarm state directory
+
+`.herdr-swarm/` must be in the target repo's `.gitignore`: the suite gate treats *untracked* files as
+tree drift (`gate_tree_matches`), so un-ignored state files would invalidate every verdict as `stale`.
+
+### 8.3 Honest dead-letter reasons and where the truth lives (HL-DOCS-1)
+
+A ticket that fails to conclude is dead-lettered with a reason that names the actual failure mode, and
+every reason carries an explicit pointer to the worker log where the root cause is recorded:
+
+- `worker exited rc=<status> without a verdict — worker log: <repo>/.herdr-swarm/logs/<seat>.log`
+  — the vendor CLI's real exit status (provider errors, invalid config, sandbox rejections all take
+  this shape; the error text is in the log).
+- `worker dead (no exit marker) without a verdict — …` — the worker was killed (e.g. wall clock)
+  without reporting an exit.
+- `critique turn ended without a concluding re-verdict (last: RED|invalidated|stale) — …`
+  — the gate failed, the critique re-verdict turn died before re-verdicting.
+- `batch wall clock exhausted before a verdict (…)` — the batch's own `--timeout` ran out first.
+
+The same reason text lands in three places: the batch's stderr, `.herdr-swarm/dead-letter.jsonl` (the
+`reason` field), and `.herdr-swarm/headless-notices.log` (the durable notice channel). The historical
+behavior — every failure recorded as "batch wall clock exhausted before a verdict" with no log pointer —
+is what made the receipt's first run undiagnosable from batch output alone.
+
