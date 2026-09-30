@@ -377,6 +377,11 @@ sleep 0.6; gate_reap >/dev/null 2>&1
 [[ "$(last_suite_of H-2)" == "RED" ]] \
   && assert_ok 14b "headless RED recorded by the same gate" || assert_bad 14b "headless RED ($(last_suite_of H-2))"
 CRIT_BRIEF="$STATE/briefs/seat-b-H-2-${SHA_H2}-red.md"
+# the critique turn is a BACKGROUND spawn — give the vendor stub a beat to
+# exec and record its argv before asserting on it (race observed 2026-09-24:
+# identical code flaked here purely on scheduling; settle per 0813c5c on
+# swarm/stampede/integration — identical hunk, merges clean when promoted)
+sleep 0.5
 [[ -f "$CRIT_BRIEF" ]] \
   && assert_ok 14b2 "RED feedback written as a critique brief" || assert_bad 14b2 "no critique brief at $CRIT_BRIEF"
 grep -q "ARCH DONE #H-2" "$CRIT_BRIEF" && grep -q "suite is RED" "$CRIT_BRIEF" \
@@ -428,6 +433,30 @@ jq -e -s 'any(.[]; .ticket == "H-4" and .reason != "")' "$STATE/dead-letter.json
 [[ ! -s "$TEST_DIR/hb-argv.log" ]] \
   && assert_ok 14e6 "no critique spawn past the ceiling" || assert_bad 14e6 "spawned anyway: $(cat "$TEST_DIR/hb-argv.log")"
 unset CONFIG_HEADLESS_MAX_ATTEMPTS
+
+# [14f] in-batch drain + lease release (HL-RED-1, receipt F5): greens must
+# not sit queued and leases must not outlive integration — the step the
+# headless batch now runs after every concluded ticket (and the CLI e2e in
+# tests/test_cli.sh exercises through the full batch).
+printf '#!/bin/sh\nexit 0\n' > "$WTB/gate.sh"
+git -C "$WTB" add -A; git -C "$WTB" -c user.email=t@t -c user.name=t commit -q -m gate0
+# clean queue first: earlier sections left stale queued records whose
+# fixture trees conflict head-of-line (drain stops there, by design — that
+# is the parked arbiter-batch-integration ticket's concern, not this step's)
+if [[ -f "$Q" ]]; then
+  jq -s -c 'map(select(.status != "queued")) | .[]' "$Q" > "$Q.tmp" && mv "$Q.tmp" "$Q"
+fi
+SHA_H9=$(git -C "$WTB" rev-parse HEAD)
+arbiter_enqueue H-9 seat-b "$SHA_H9" >/dev/null 2>&1
+printf '{"version":1,"leases":[{"ticket":"H-9","seat":"seat-b","paths":[]}]}\n' > "$STATE/leases.json"
+out14f=$(headless_drain_and_release 2>&1 || true)
+h9st=$(jq -r -s --arg t H-9 '[.[] | select((.ticket|tostring) == $t)] | .[-1].status // "none"' "$Q" 2>/dev/null)
+[[ "$h9st" == "integrated" ]] \
+  && assert_ok 14f "in-batch step drains queued records to integrated" || assert_bad 14f "H-9 status: $h9st"
+! grep -q '"ticket":"H-9"' "$STATE/leases.json" 2>/dev/null \
+  && assert_ok 14f2 "integrated lease released in the same step" || assert_bad 14f2 "lease still held"
+grep -q "arbiter: #H-9 integrated" <<<"$out14f" \
+  && assert_ok 14f3 "drain outcome surfaced in the step output" || assert_bad 14f3 "no drain line: $out14f"
 
 # [14d] pane mode untouched by all of the above
 unset HEADLESS_MODE
