@@ -122,6 +122,14 @@ chmod +x "$HB_BIN/opencode"
 # machine's own if present, else the e2e degrades to the skip note below.
 if command -v gtimeout >/dev/null 2>&1; then ln -s "$(command -v gtimeout)" "$HB_BIN/timeout"
 elif command -v timeout >/dev/null 2>&1; then ln -s "$(command -v timeout)" "$HB_BIN/timeout"; fi
+# jq must be on the stripped HB_PATH too: when pyenv resolves to a python
+# outside /opt/homebrew/bin (e.g. ~/.local/bin/python3.14), HB_PATH loses
+# the homebrew dir entirely and the batch's jq-dependent steps (seats.json
+# ledger, queue reads) fail under the batch shell's set -e.
+if command -v jq >/dev/null 2>&1; then ln -s "$(command -v jq)" "$HB_BIN/jq"; fi
+# git as well: Apple's /usr/bin/git shim is present, but keep the invocation
+# environment identical to a real one when homebrew git exists.
+if command -v git >/dev/null 2>&1 && [[ "$(command -v git)" != /usr/bin/* ]]; then ln -s "$(command -v git)" "$HB_BIN/git"; fi
 # The supervisor source-time needs a tomllib-capable interpreter (DOG-1) —
 # the stripped PATH must carry the one this repo resolves.
 HB_PY=$(bash "$REPO_ROOT/lib/pyenv.sh" 2>/dev/null || true)
@@ -136,9 +144,27 @@ printf 'test:\n\t@true\n' > "$HR_REPO/Makefile"
 mkdir -p "$HR_REPO/maps/tickets"
 printf 'x\n' > "$HR_REPO/f.txt"; git -C "$HR_REPO" add -A; git -C "$HR_REPO" commit -qm base
 printf -- '---\nid: T-RESOLVED\nstatus: resolved\nowns: f.txt\n---\nbody\n' > "$HR_REPO/maps/tickets/t0.md"
-printf -- '---\nid: T-1\nstatus: backlog\nowns: f.txt\n---\nbody one\n' > "$HR_REPO/maps/tickets/t1.md"
-printf -- '---\nid: T-2\nstatus: backlog\n---\nbody two\n' > "$HR_REPO/maps/tickets/t2.md"
-git -C "$HR_REPO" add -A; git -C "$HR_REPO" commit -qm tickets
+  printf -- '---\nid: T-1\nstatus: backlog\nowns: f.txt\n---\nbody one\n' > "$HR_REPO/maps/tickets/t1.md"
+  printf -- '---\nid: T-2\nstatus: backlog\n---\nbody two\n' > "$HR_REPO/maps/tickets/t2.md"
+  git -C "$HR_REPO" add -A; git -C "$HR_REPO" commit -qm tickets
+  # slugify for the ARB-SLUG-1 init-ref below (the ref must be created under
+  # the same slug the batch itself resolves from the profile REPO).
+  # set +e/+o pipefail: lib/common.sh runs `set -euo pipefail` at its top —
+  # without the restore, the leak flips this suite (written for set -u only)
+  # into fail-abort mode, and any later non-zero command (e.g. [10]'s
+  # deliberately-failing batch) kills the whole suite before rc capture.
+  # shellcheck disable=SC1091
+  source "$REPO_ROOT/lib/common.sh"
+  set +e +o pipefail
+  # ARB-SLUG-1 (arrived via integration): drain refuses when the canonical
+  # integration ref is missing — one-time explicit init, exactly the setup a
+  # real repo gets, with the slug the batch itself will resolve (profile
+  # REPO "t/scratch" → slugify).
+  PROJECT_SLUG="$(slugify t/scratch)" REPO_DIR="$HR_REPO" STATE_DIR="$HR_REPO/.herdr-swarm" \
+    BASE_BRANCH=main PATH="$HB_PATH" bash "$REPO_ROOT/lib/arbiter.sh" init-ref >/dev/null 2>&1 || true
+  git -C "$HR_REPO" show-ref --verify --quiet "refs/heads/swarm/$(slugify t/scratch)/integration" \
+    && ok "integration ref initialized (ARB-SLUG-1 one-time setup)" || bad "init-ref failed"
+
 if [[ -e "$HB_BIN/timeout" ]]; then
   out=$(PATH="$HB_PATH" "$REPO_ROOT/bin/stampede" headless "$HR_REPO" --max-tickets 1 2>&1); rc=$?
   [[ "$rc" == 0 ]] && ok "headless e2e rc=0 without herdr on PATH" || bad "e2e rc=$rc: $(printf '%s' "$out" | tail -3)"
@@ -151,9 +177,14 @@ if [[ -e "$HB_BIN/timeout" ]]; then
   jq -e -s 'any(.[]; (.ticket|tostring) == "T-RESOLVED")' \
     "$HR_REPO/.herdr-swarm/session-verdicts.jsonl" >/dev/null 2>&1 \
     && bad "resolved ticket dispatched" || ok "resolved tickets skipped"
-  jq -e -s 'any(.[]; (.ticket|tostring) == "T-1" and .status == "queued")' \
+  jq -e -s 'any(.[]; (.ticket|tostring) == "T-1" and .status == "integrated")' \
     "$HR_REPO/.herdr-swarm/integration.jsonl" >/dev/null 2>&1 \
-    && ok "green verdict enqueued for arbiter" || bad "no arbiter enqueue"
+    && ok "green verdict drained to integrated IN-BATCH (HL-RED-1)" || bad "T-1 not integrated in-batch: $(tail -3 "$HR_REPO/.herdr-swarm/integration.jsonl" 2>/dev/null)"
+  jq -e -s 'any(.[]; ((.ticket|tostring) == "T-1") and .status == "queued")' \
+    "$HR_REPO/.herdr-swarm/integration.jsonl" >/dev/null 2>&1 \
+    && bad "T-1 left queued (undrained)" || ok "nothing left queued after the batch"
+  jq -e '(.leases | length) == 0' "$HR_REPO/.herdr-swarm/leases.json" >/dev/null 2>&1 \
+    && ok "lease released after in-batch integration" || bad "lease still held: $(cat "$HR_REPO/.herdr-swarm/leases.json" 2>/dev/null)"
   ls "$HR_REPO/.herdr-swarm/channel"/*.md >/dev/null 2>&1 \
     && ok "reply channel opened for the worker" || bad "no channel file"
   grep -lq 'ARCH DONE #T-1' "$HR_REPO"/.herdr-swarm/logs/*.log 2>/dev/null \
@@ -184,6 +215,100 @@ if [[ -e "$HB_BIN/timeout" ]]; then
     && ok "unconcluded ticket dead-lettered" || bad "no dead-letter for T-HANG"
   [[ -z "$(ls "$HR2/.herdr-swarm/pids" 2>/dev/null)" ]] \
     && ok "worker killed + pidfile cleaned at batch end" || bad "pidfile left: $(ls "$HR2/.herdr-swarm/pids")"
+fi
+
+# [11] HL-RED-1: first-RED no longer concludes a ticket — the critique turn
+# runs (empty-commit re-verdict), the ceiling is reachable in-batch, the
+# dead letter names it, the lease frees, and the batch exits 1.
+if [[ -e "$HB_BIN/timeout" ]]; then
+  HR3=$(mktemp -d "$SCRATCH/hr3.XXXXXX")
+  git -C "$HR3" init -q -b main
+  git -C "$HR3" config user.email t@t; git -C "$HR3" config user.name t
+  git -C "$HR3" remote add origin https://github.com/t/scratch3.git
+  printf '.herdr-swarm/\n' > "$HR3/.gitignore"
+  printf 'test:\n\t@exit 1\n' > "$HR3/Makefile"          # the gate is RED, always
+  mkdir -p "$HR3/maps/tickets"
+  printf 'x\n' > "$HR3/f.txt"; git -C "$HR3" add -A; git -C "$HR3" commit -qm base
+  printf -- '---\nid: T-RED\nstatus: backlog\n---\nbody\n' > "$HR3/maps/tickets/tred.md"
+  git -C "$HR3" add -A; git -C "$HR3" commit -qm tickets
+  cat > "$HB_BIN/opencode" <<'EOF'
+#!/bin/sh
+brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
+reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete response to ([^ ]+) and.*/\1/p')
+[ -n "$reply" ] && printf 'worker reply\n' > "$reply"
+if grep -q 'headless critique turn' "$brief" 2>/dev/null; then
+  tid=$(sed -nE 's/^ARCH DONE #([A-Za-z0-9_.-]+).*/\1/p' "$brief" | head -n1)
+  git commit -q --allow-empty -m "critique re-verdict" 2>/dev/null
+  printf 'ARCH DONE #%s %s\n' "$tid" "$(git rev-parse HEAD)"
+else
+  tid=$(sed -nE 's/^id:[[:space:]]*//p' "$brief" | head -n1 | tr -d '[:space:]')
+  printf 'ARCH DONE #%s %s\n' "$tid" "$(git rev-parse HEAD)"
+fi
+EOF
+  chmod +x "$HB_BIN/opencode"
+  PATH="$HB_PATH" "$REPO_ROOT/bin/stampede" headless "$HR3" --max-tickets 1 --timeout 90 >"$SCRATCH/hl-red.out" 2>&1; rc=$?
+  [[ "$rc" == 1 ]] \
+    && ok "RED-to-ceiling batch exits 1 (was 0)" || bad "T-RED batch rc=$rc: $(tail -3 "$SCRATCH/hl-red.out")"
+  nrec=$(jq -s '[.[] | select((.ticket|tostring) == "T-RED")] | length' \
+    "$HR3/.herdr-swarm/session-verdicts.jsonl" 2>/dev/null)
+  nred=$(jq -s '[.[] | select((.ticket|tostring) == "T-RED" and (.suite == "RED" or .suite == "invalidated"))] | length' \
+    "$HR3/.herdr-swarm/session-verdicts.jsonl" 2>/dev/null)
+  twoshas=$(jq -r -s '[.[] | select((.ticket|tostring) == "T-RED")] | ([.[].sha] | unique | length)' \
+    "$HR3/.herdr-swarm/session-verdicts.jsonl" 2>/dev/null)
+  [[ "$nred" -ge 1 && "$nrec" -ge 2 && "$twoshas" == 2 ]] \
+    && ok "critique cycle ran both attempts (${nrec} records at ${twoshas} shas; ceiling attempt records as dead_letter)" \
+    || bad "attempts: nrec=$nrec nred=$nred shas=$twoshas"
+  jq -e -s 'any(.[]; (.ticket|tostring) == "T-RED" and .suite == "dead_letter")' \
+    "$HR3/.herdr-swarm/session-verdicts.jsonl" >/dev/null 2>&1 \
+    && ok "ceiling reached: DEAD_LETTER recorded" || bad "no dead_letter record"
+  jq -e -s 'any(.[]; .ticket == "T-RED" and ((.reason // "") | contains("re-verdict ceiling")))' \
+    "$HR3/.herdr-swarm/dead-letter.jsonl" >/dev/null 2>&1 \
+    && ok "dead-letter reason names the ceiling" || bad "reason wrong: $(cat "$HR3/.herdr-swarm/dead-letter.jsonl" 2>/dev/null)"
+  jq -e '(.leases | length) == 0' "$HR3/.herdr-swarm/leases.json" >/dev/null 2>&1 \
+    && ok "dead-lettered ticket's lease released" || bad "lease held: $(cat "$HR3/.herdr-swarm/leases.json" 2>/dev/null)"
+fi
+
+# [12] HL-RED-1: in-batch drain+release un-wedges later no-owns tickets —
+# two whole-repo tickets through ONE batch (pre-fix, the first green's
+# lease parked the second forever).
+if [[ -e "$HB_BIN/timeout" ]]; then
+  HR4=$(mktemp -d "$SCRATCH/hr4.XXXXXX")
+  git -C "$HR4" init -q -b main
+  git -C "$HR4" config user.email t@t; git -C "$HR4" config user.name t
+  git -C "$HR4" remote add origin https://github.com/t/scratch4.git
+  printf '.herdr-swarm/\n' > "$HR4/.gitignore"
+  printf 'test:\n\t@true\n' > "$HR4/Makefile"
+  mkdir -p "$HR4/maps/tickets"
+  printf 'x\n' > "$HR4/f.txt"; git -C "$HR4" add -A; git -C "$HR4" commit -qm base
+  printf -- '---\nid: T-A\nstatus: backlog\n---\nbody a\n' > "$HR4/maps/tickets/ta.md"
+  printf -- '---\nid: T-B\nstatus: backlog\n---\nbody b\n' > "$HR4/maps/tickets/tb.md"
+  git -C "$HR4" add -A; git -C "$HR4" commit -qm tickets
+  # ARB-SLUG-1: same one-time init as [9], slug matching the batch's resolve
+  # (profile REPO "t/scratch4")
+  PROJECT_SLUG="$(slugify t/scratch4)" REPO_DIR="$HR4" STATE_DIR="$HR4/.herdr-swarm" \
+    BASE_BRANCH=main PATH="$HB_PATH" bash "$REPO_ROOT/lib/arbiter.sh" init-ref >/dev/null 2>&1 || true
+  cat > "$HB_BIN/opencode" <<'EOF'
+#!/bin/sh
+brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
+tid=$(sed -nE 's/^id:[[:space:]]*//p' "$brief" 2>/dev/null | head -n1 | tr -d '[:space:]')
+sha=$(git rev-parse HEAD 2>/dev/null || printf 0000000000000000000000000000000000000000)
+reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete response to ([^ ]+) and.*/\1/p')
+[ -n "$reply" ] && printf 'worker reply for %s\n' "${tid:-unknown}" > "$reply"
+printf 'ARCH DONE #%s %s\n' "${tid:-unknown}" "$sha"
+EOF
+  chmod +x "$HB_BIN/opencode"
+  PATH="$HB_PATH" "$REPO_ROOT/bin/stampede" headless "$HR4" --max-tickets 2 --timeout 90 >"$SCRATCH/hl-uw.out" 2>&1; rc=$?
+  [[ "$rc" == 0 ]] && ok "two no-owns tickets, one batch, rc=0" || bad "unwedge batch rc=$rc: $(tail -3 "$SCRATCH/hl-uw.out")"
+  for T in T-A T-B; do
+    jq -e -s "any(.[]; (.ticket|tostring) == \"$T\" and .suite == \"green\")" \
+      "$HR4/.herdr-swarm/session-verdicts.jsonl" >/dev/null 2>&1 \
+      && ok "$T dispatched and gated green (no wedge)" || bad "$T not processed"
+    jq -e -s "any(.[]; (.ticket|tostring) == \"$T\" and .status == \"integrated\")" \
+      "$HR4/.herdr-swarm/integration.jsonl" >/dev/null 2>&1 \
+      && ok "$T integrated in-batch" || bad "$T not integrated"
+  done
+  jq -e '(.leases | length) == 0' "$HR4/.herdr-swarm/leases.json" >/dev/null 2>&1 \
+    && ok "all leases released at batch end" || bad "leases held: $(cat "$HR4/.herdr-swarm/leases.json" 2>/dev/null)"
 fi
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"

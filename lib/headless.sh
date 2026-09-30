@@ -262,6 +262,29 @@ headless_deadletter_count() { # [SESSION] [DEADLETTER_FILE] → prints count
   jq -r -s --arg s "$session" '[.[] | select(.session == $s)] | length' "$f" 2>/dev/null || printf '0'
 }
 
+# headless_drain_and_release — in-batch integration step (HL-RED-1, receipt F5).
+# The interactive supervisor drains via cmd_once's arbiter_auto_drain and
+# frees leases via lease_release_integrated; the headless batch historically
+# called neither, so greens sat queued and leases stayed held forever — one
+# green no-owns ticket parked every later ticket, across runs. Blocking is
+# correct here, unlike the supervisor's poll pass (P3-3 §2.2): the batch is
+# a sequential consumer already waiting per ticket. Requires a caller that
+# has the supervisor (and thus the arbiter + partition libs) sourced; a
+# bare context is a no-op, never an error.
+headless_drain_and_release() {
+  command -v arbiter_queued_count >/dev/null 2>&1 || return 0
+  command -v lease_release_integrated >/dev/null 2>&1 || return 0
+  local queued
+  queued=$(arbiter_queued_count 2>/dev/null || printf '0')
+  [[ "$queued" =~ ^[0-9]+$ ]] || queued=0
+  if (( queued > 0 )); then
+    printf 'headless: auto-drain: %s queued record(s) for integration\n' "$queued"
+    arbiter_drain 2>&1 || true
+  fi
+  lease_release_integrated 2>&1 || true
+  return 0
+}
+
 # CLI dispatcher (library siblings' convention; also keeps `bash -n` honest)
 if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
   cmd="${1:-}"

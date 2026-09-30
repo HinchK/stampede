@@ -433,6 +433,35 @@ jq -e -s 'any(.[]; .ticket == "H-4" and .reason != "")' "$STATE/dead-letter.json
   && assert_ok 14e6 "no critique spawn past the ceiling" || assert_bad 14e6 "spawned anyway: $(cat "$TEST_DIR/hb-argv.log")"
 unset CONFIG_HEADLESS_MAX_ATTEMPTS
 
+# [14f] in-batch drain + lease release (HL-RED-1, receipt F5): greens must
+# not sit queued and leases must not outlive integration — the step the
+# headless batch now runs after every concluded ticket (and the CLI e2e in
+# tests/test_cli.sh exercises through the full batch).
+printf '#!/bin/sh\nexit 0\n' > "$WTB/gate.sh"
+git -C "$WTB" add -A; git -C "$WTB" -c user.email=t@t -c user.name=t commit -q -m gate0
+# clean queue first: earlier sections left stale queued records whose
+# fixture trees conflict head-of-line (drain stops there, by design — that
+# is the parked arbiter-batch-integration ticket's concern, not this step's)
+if [[ -f "$Q" ]]; then
+  jq -s -c 'map(select(.status != "queued")) | .[]' "$Q" > "$Q.tmp" && mv "$Q.tmp" "$Q"
+fi
+# ARB-SLUG-1 (arrived via integration): drain no longer silently creates the
+# integration ref from the base — it refuses. One-time explicit init, the
+# same function a real repo's setup would run, in-process so the slug
+# binding matches the enqueue and the drain below.
+arbiter_init_ref >/dev/null 2>&1 || true
+SHA_H9=$(git -C "$WTB" rev-parse HEAD)
+arbiter_enqueue H-9 seat-b "$SHA_H9" >/dev/null 2>&1
+printf '{"version":1,"leases":[{"ticket":"H-9","seat":"seat-b","paths":[]}]}\n' > "$STATE/leases.json"
+out14f=$(headless_drain_and_release 2>&1 || true)
+h9st=$(jq -r -s --arg t H-9 '[.[] | select((.ticket|tostring) == $t)] | .[-1].status // "none"' "$Q" 2>/dev/null)
+[[ "$h9st" == "integrated" ]] \
+  && assert_ok 14f "in-batch step drains queued records to integrated" || assert_bad 14f "H-9 status: $h9st"
+! grep -q '"ticket":"H-9"' "$STATE/leases.json" 2>/dev/null \
+  && assert_ok 14f2 "integrated lease released in the same step" || assert_bad 14f2 "lease still held"
+grep -q "arbiter: #H-9 integrated" <<<"$out14f" \
+  && assert_ok 14f3 "drain outcome surfaced in the step output" || assert_bad 14f3 "no drain line: $out14f"
+
 # [14d] pane mode untouched by all of the above
 unset HEADLESS_MODE
 VERDICT_A=""

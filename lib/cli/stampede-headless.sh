@@ -17,8 +17,10 @@
 #   --max-tickets stop after N dispatched tickets (default 5; the design
 #                 doc's session cap — a batch, never an infinite loop)
 #   --timeout     whole-batch wall clock in seconds (default 1800)
-# Exit: 0 batch completed · 1 usage/config/dead-letter present · 3 a
-# dispatched ticket hit the wall clock unconcluded.
+# Exit: 0 batch completed with every dispatched ticket green · 1 usage/
+# config error, any dead letter, or any ticket concluding RED/DEAD_LETTER
+# (HL-RED-1) · 3 a dispatched ticket hit the wall clock unconcluded with
+# no dead-letterable failure.
 
 stampede_cmd_headless() {
   local root dir="" max_tickets=5 batch_timeout=1800
@@ -147,7 +149,17 @@ EOF
     return 0
   fi
 
-  local deadline=$(( SECONDS + batch_timeout )) dispatched=0 timed_out=0 tid concluded
+  # A ticket's LATEST session record decides its state (HL-RED-1): RED is
+  # only ever an intermediate outcome — conclusion means the latest record
+  # is green or dead_letter.
+  _hl_latest_suite() { # TID
+    jq -r -s --arg t "$1" \
+      '[.[] | select((.ticket|tostring) == $t)] | .[-1].suite // "none"' \
+      "$SESSION_LOG" 2>/dev/null || printf 'none'
+  }
+
+  local deadline=$(( SECONDS + batch_timeout )) dispatched=0 timed_out=0 tid concluded final
+  local dispatched_ids=()
   for f in "${tickets[@]}"; do
     (( dispatched >= max_tickets )) && break
     if (( SECONDS >= deadline )); then
@@ -178,64 +190,98 @@ EOF
       continue
     fi
     dispatched=$((dispatched + 1))
+    dispatched_ids+=("$tid")
 
-    # Wait for THIS ticket to conclude: harvest + reap until the session
-    # log carries its record, the worker dies AND no gate job remains in
-    # flight, or the batch budget runs out. Gates and enqueues happen inside
-    # those passes — the async gate job may outlive the worker's exit, so
-    # "worker gone" alone is not a conclusion.
-    concluded=""
+    # Wait for THIS ticket to conclude. HL-RED-1: a RED/invalidated/stale
+    # record is NOT a conclusion while re-verdict attempts remain below
+    # max_verdict_attempts — worker_feedback spawns a critique turn on those
+    # outcomes, and this loop must let it run. The pre-fix loop treated any
+    # record as conclusive, instantly killed the critique turn, made the
+    # ceiling unreachable in-batch, and exited 0 on a failed ticket.
+    # Conclusion now means: the ticket's LATEST record is green or
+    # dead_letter.
+    concluded="" final="none" broke=""
     while :; do
       harvest_verdicts >/dev/null 2>&1 || true
       gate_reap >/dev/null 2>&1 || true
-      if jq -e -s --arg t "$tid" 'any(.[]; (.ticket|tostring) == $t)' \
-           "$SESSION_LOG" >/dev/null 2>&1; then
-        concluded=1
-        break
-      fi
-      if (( SECONDS >= deadline )); then break; fi
+      final=$(_hl_latest_suite "$tid")
+      case "$final" in
+        green|dead_letter) concluded=1; break ;;
+      esac
+      if (( SECONDS >= deadline )); then broke=deadline; break; fi
       local hl_st
       hl_st=$(headless_status "$seat_name" 2>/dev/null || true)
       case "$hl_st" in
-        running*) ;;   # still working — keep waiting
+        running*) ;;   # worker or critique turn still working — keep waiting
         *)
-          # The verdict anchor may have landed in the log after this
-          # iteration's harvest but before the worker's exit — one more
-          # pass before giving up.
+          # Not running: one settling pass (a verdict may have landed at the
+          # worker's very exit), then give up only when nothing changed and
+          # no gate job is in flight. A critique turn that died without
+          # re-verdicting also ends here: its remaining attempts can never
+          # run, so waiting would only burn the batch budget.
           harvest_verdicts >/dev/null 2>&1 || true
           gate_reap >/dev/null 2>&1 || true
-          if jq -e -s --arg t "$tid" 'any(.[]; (.ticket|tostring) == $t)' \
-               "$SESSION_LOG" >/dev/null 2>&1; then
-            concluded=1
-            break
-          fi
-          # That pass may have just spawned the gate job — an in-flight
-          # job keeps the ticket alive; give up only with nothing running.
-          [[ -n "$(ls "${STATE_DIR}/gates"/*.job 2>/dev/null)" ]] || break
+          local settle
+          settle=$(_hl_latest_suite "$tid")
+          [[ "$settle" != "$final" ]] && continue
+          [[ -n "$(ls "${STATE_DIR}/gates"/*.job 2>/dev/null)" ]] || { broke=stalled; break; }
           ;;
       esac
       sleep 2
     done
+    if [[ -n "$concluded" ]]; then
+      printf 'headless: #%s concluded %s\n' "$tid" "$final"
+    else
+      printf 'headless: #%s UNCONCLUDED (last state: %s)\n' "$tid" "$final" >&2
+    fi
     if [[ -z "$concluded" ]]; then
-      printf 'headless: #%s did not conclude within the batch budget — dead-lettering\n' "$tid" >&2
+      local reason
+      case "$final:$broke" in
+        *:deadline)
+          reason="batch wall clock exhausted before a verdict" ;;
+        RED:*|invalidated:*|stale:*)
+          reason="critique turn ended without a concluding re-verdict (last: ${final})" ;;
+        *)
+          reason="worker ended without a verdict (no session record)" ;;
+      esac
+      printf 'headless: #%s did not conclude — dead-lettering: %s\n' "$tid" "$reason" >&2
       dead_letter_record "$tid" "$(git -C "$dir" rev-parse --short HEAD 2>/dev/null || printf unknown)" \
-        "batch wall clock exhausted before a verdict" "$SESSION_ID"
+        "$reason" "$SESSION_ID"
       lease_release "$tid" >/dev/null 2>&1 || true
       timed_out=1
     fi
-    # Park or clean up the worker for the next sequential dispatch.
+    # Park or clean up the worker for the next sequential dispatch — only
+    # after a true conclusion (HL-RED-1): below-ceiling REDs left the
+    # critique turn running on purpose.
     headless_kill "$seat_name" >/dev/null 2>&1 || true
+    # In-batch integration (HL-RED-1, receipt F5): drain queued records and
+    # free integrated leases NOW, not in an operator's `once` pass — later
+    # tickets in this batch must not park on a lease the batch itself
+    # holds, and greens must not sit queued after the batch exits.
+    headless_drain_and_release
   done
 
-  # Final drain of in-flight gate jobs, then the batch verdict.
+  # Final drain of in-flight gate jobs, then drain+release once more (late
+  # gates can enqueue after the last ticket's step), then the batch verdict.
   sleep 1
   gate_reap >/dev/null 2>&1 || true
-  local dl
+  headless_drain_and_release
+  local dl failed=0 t
+  # Contract check (HL-RED-1): every dispatched ticket's LATEST record must
+  # be green. Anything else — a leftover RED, a dead_letter — fails the run
+  # even if no dead-letter entry survived to be counted below.
+  for t in ${dispatched_ids[@]+"${dispatched_ids[@]}"}; do
+    case "$(_hl_latest_suite "$t")" in
+      green) ;;
+      *) failed=1 ;;
+    esac
+  done
   dl=$(headless_deadletter_count "$SESSION_ID")
   printf 'headless: batch done — %d dispatched, %d dead-letter record(s) this session\n' \
     "$dispatched" "$dl"
-  if (( dl > 0 )); then
-    printf 'headless: DEAD LETTERS present — see %s\n' "${STATE_DIR}/dead-letter.jsonl" >&2
+  if (( dl > 0 || failed )); then
+    (( dl > 0 )) && printf 'headless: DEAD LETTERS present — see %s\n' "${STATE_DIR}/dead-letter.jsonl" >&2
+    (( failed )) && printf 'headless: batch has ticket(s) that did not conclude green\n' >&2
     return 1
   fi
   if (( timed_out )); then
