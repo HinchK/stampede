@@ -105,12 +105,12 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - **ARB-SLUG-1** (resolved, `maps/tickets/arb-slug-1-fail-closed-integration-ref.md`): Canonical slug resolution chain
   (`PROJECT_SLUG` > `SWARM_CONFIG_NAME` > `basename`), fail-closed missing ref refusal in `arbiter_drain`, and explicit `arbiter_init_ref`.
   Reviewed PASS and integrated on `swarm/stampede/integration` at `3bb01bd`.
+- **[Close the Gaps](close-the-gaps.md):** complete. PART-1 (`lib/partition.sh` inactive ticket exclusion), PART-2 (`lib/partition.sh lease acquire` fail-closed pre-check enforcement), PROVE-HEADLESS-1 (headless mode end-to-end rehearsal on scratch repo, uncovering five findings F1-F5), and SYNC-2 (`lib/gh_sync.sh` superseded state handling). All integrated and promoted to `main`.
+- **[Harden Headless Mode](harden-headless-mode.md):** complete. HL-WT-1 (worktree isolation and fail-closed targeting in batch mode), HL-CFG-1 (`config_dump_env` emit_env_wins hierarchy for headless knobs), HL-RED-1 (fail-closed exit on RED tickets, exit code 1, test_cli restoration), HL-TMO-1 (hard wall-clock timeout with `-k` grace and 124 exit normalization), and HL-DOCS-1 (accurate dead-letter exit markers and target repo requirements). All integrated and promoted to `main`.
 
 ## Active Frontier
 
-- **[Close the Gaps](close-the-gaps.md):** `CONTEXT.md` vocabulary, GitHub issue sync backfill, and proving
-  headless batch mode on a real run — chartered 2026-09-30 specifically to put real work on `agy-docs`, `agy-gh`,
-  and the implementation seats, not just whichever seat happened to be busy already.
+- **[Next Horizon](next-horizon.md):** close the incident class (DECISION-1 / CRED-1 superseded record), prove headless live on this repo's real backlog (HORIZON-2, staged), address the batch no-review boundary (HORIZON-3, staged), deliver user-facing headless docs (HORIZON-4), maintain public surface truth and quota discipline (QUOTA-1), and triaged parked queue (HORIZON-5).
 
 ## Not yet specified
 
