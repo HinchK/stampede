@@ -23,7 +23,34 @@ set -euo pipefail
 # opencode, agy, pi). No seat-kind CLI exposes a parseable local usage
 # surface at landing, so every kind answers `unknown` — an unregistered
 # kind gets the same honest answer. Never a fabricated 0.
-quota_probe_kind() { # KIND
+quota_probe_kind() { # KIND [SEAT_NAME]
+  local kind="$1" seat="${2:-}"
+  case "$kind" in
+    agy)
+      # QUOTA-1: Antigravity/Gemini surfaces an account-level quota wall in
+      # the seat's own pane output ("Individual quota reached … Resets in
+      # 1h26m33s."). Read-only pane scan — no throttling, no rerouting, no
+      # writes; the no-signal contract is unchanged: nothing parseable in
+      # recent output → unknown, never a fabricated 0.
+      if [[ -z "$seat" ]]; then
+        printf 'unknown\n'
+        return 0
+      fi
+      local out dur h=0 m=0 s=0
+      out=$(herdr agent read "$seat" --source recent-unwrapped 2>/dev/null || true)
+      [[ -n "$out" ]] || { printf 'unknown\n'; return 0; }
+      # most recent marker wins (scrollback may carry several)
+      dur=$(printf '%s\n' "$out" \
+        | sed -nE 's/.*Individual quota reached.*Resets in ([0-9]+[hms]+[0-9hms]*)\..*/\1/p' \
+        | tail -n1)
+      [[ -n "$dur" ]] || { printf 'unknown\n'; return 0; }
+      [[ "$dur" =~ ([0-9]+)h ]] && h=${BASH_REMATCH[1]}
+      [[ "$dur" =~ ([0-9]+)m ]] && m=${BASH_REMATCH[1]}
+      [[ "$dur" =~ ([0-9]+)s ]] && s=${BASH_REMATCH[1]}
+      printf 'ok:%ss\n' "$(( h * 3600 + m * 60 + s ))"
+      return 0
+      ;;
+  esac
   printf 'unknown\n'
 }
 

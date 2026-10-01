@@ -67,6 +67,59 @@ done
 [[ "$(quota_probe_kind brand-new-llm)" == "unknown" ]] \
   && ok "unregistered kind answers unknown" || bad "unregistered kind: $out"
 
+# ── agy probe: read-only pane scan for the quota wall (QUOTA-1) ────────────
+# herdr stub: serves $QUOTA_HERDR_FIXTURE for `agent read <name>
+# --source recent-unwrapped`, logs argv for read-only assertions.
+QUOTA_HERDR_LOG="$SCRATCH/herdr.log"; : > "$QUOTA_HERDR_LOG"
+herdr() {
+  printf '%s\n' "$*" >> "$QUOTA_HERDR_LOG"
+  if [[ "${1:-}" == "agent" && "${2:-}" == "read" && "${4:-}" == "--source" ]]; then
+    [[ -f "${QUOTA_HERDR_FIXTURE:-}" ]] && cat "${QUOTA_HERDR_FIXTURE:-}"
+    return 0
+  fi
+  return 0
+}
+q_fixture() { printf '%s' "$1" > "$SCRATCH/pane.txt"; export QUOTA_HERDR_FIXTURE="$SCRATCH/pane.txt"; }
+
+q_fixture 'working on the ticket…
+⚠ Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 1h26m33s.
+'
+[[ "$(quota_probe_kind agy quota-seat-x)" == "ok:5193s" ]] \
+  && ok "agy: receipt message (1h26m33s) → ok:5193s" || bad "agy receipt: $(quota_probe_kind agy quota-seat-x)"
+q_fixture '⚠ Individual quota reached. Resets in 45s.
+'
+[[ "$(quota_probe_kind agy s1)" == "ok:45s" ]] && ok "agy: 45s → ok:45s" || bad "agy 45s: $(quota_probe_kind agy s1)"
+q_fixture 'quota wall. Resets in 2h — enjoy
+'
+[[ "$(quota_probe_kind agy s1)" == "unknown" ]] \
+  && ok "agy: unrelated 'Resets in' line without the quota marker stays unknown" \
+  || bad "agy false positive: $(quota_probe_kind agy s1)"
+q_fixture '⚠ Individual quota reached. Resets in 2h.
+later: ⚠ Individual quota reached. Resets in 10m.
+'
+[[ "$(quota_probe_kind agy s1)" == "ok:600s" ]] \
+  && ok "agy: most recent quota message wins" || bad "agy last-wins: $(quota_probe_kind agy s1)"
+q_fixture 'normal pane output, no quota message at all
+just agent chatter
+'
+[[ "$(quota_probe_kind agy s1)" == "unknown" ]] \
+  && ok "agy: no signal → unknown (no fabrication)" || bad "agy no-match: $(quota_probe_kind agy s1)"
+herdr() { printf '%s\n' "$*" >> "$QUOTA_HERDR_LOG"; return 1; }
+[[ "$(quota_probe_kind agy s1)" == "unknown" ]] \
+  && ok "agy: herdr failure → unknown" || bad "agy herdr-fail: $(quota_probe_kind agy s1)"
+[[ "$(quota_probe_kind agy)" == "unknown" ]] \
+  && ok "agy: no seat name → unknown" || bad "agy seatless: $(quota_probe_kind agy)"
+unset -f herdr
+grep -q '^agent read quota-seat-x --source recent-unwrapped$' "$QUOTA_HERDR_LOG" \
+  && ok "agy probe is read-only: exactly one agent read, nothing else per call" \
+  || bad "herdr calls: $(sort -u "$QUOTA_HERDR_LOG" | head -3)"
+if grep -qv '^agent read ' "$QUOTA_HERDR_LOG"; then
+  bad "agy probe issued non-read herdr traffic: $(grep -v '^agent read ' "$QUOTA_HERDR_LOG" | head -2)"
+else
+  ok "no non-read herdr traffic issued"
+fi
+unset QUOTA_HERDR_FIXTURE
+
 # ── openrouter probe: configuration matrix ─────────────────────────────────
 [[ "$(quota_probe_openrouter "")" == "unknown" ]] \
   && ok "no config, no env → unknown" || bad "no-config: $(quota_probe_openrouter "")"

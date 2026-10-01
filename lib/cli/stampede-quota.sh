@@ -94,7 +94,7 @@ EOF
     IFS=',' read -ra chain <<<"$kinds"
     for k in "${chain[@]}"; do
       [[ -n "$k" ]] || continue
-      probe=$(quota_probe_kind "$k")
+      probe=$(quota_probe_kind "$k" "$seat")
       _quota_row "$seat" "$k" "$probe"
     done
   done < <(providers_seats_from_config "$config")
