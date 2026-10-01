@@ -104,6 +104,20 @@ EOF
   local seat_name="arch_1" seat_kind="opencode" name_var="SEAT_NAME_${seat_key}" kind_var="SEAT_KIND_${seat_key}"
   [[ -n "${!name_var:-}" ]] && seat_name=${!name_var}
   [[ -n "${!kind_var:-}" ]] && seat_kind=${!kind_var}
+  # HL-LEDGER-1: the headless worker MUST NOT share a ledger name with a
+  # live interactive seat. The roster binds seat_name to the interactive
+  # swarm's own namespaced name (e.g. arch-1-<slug>); a ledger upsert under
+  # that name would clobber the live entry — pane erased to "", worktree_dir
+  # and branch repointed at the headless worktree — corrupting the
+  # supervisor's gate routing and teardown. The `headless-` prefix
+  # namespaces every record this batch touches (ledger entry, pidfile, log,
+  # lease holder, gate job ids) and can never collide with a roster name:
+  # roster names are slug-derived, never prefixed.
+  seat_name="headless-${seat_name}"
+  # Harvest scans EXPECTED_SEATS (roster names); the namespaced worker must
+  # be in that loop for its log to be read and its verdicts gated. Adding a
+  # roster-less name is additive only — interactive seats are unaffected.
+  EXPECTED_SEATS+=("$seat_name")
 
   # Isolated worktree for the worker (the same architecture the interactive
   # launcher seats): the worker commits to swarm/<slug>/<seat>, the suite
@@ -120,7 +134,9 @@ EOF
   fi
   wt_dir=$(sed -n 1p <<<"$prov"); wt_branch=$(sed -n 2p <<<"$prov")
   # Ledger entry (seats.json v2): what makes resolve_seat_gate treat the
-  # worker as isolated and gate/enqueue against the worktree.
+  # worker as isolated and gate/enqueue against the worktree. The unique
+  # headless-<name> key means this upsert only ever appends (or refreshes a
+  # prior headless entry), never an interactive seat's record.
   mkdir -p "$STATE_DIR"
   local ledger="$STATE_DIR/seats.json" rec
   rec=$(jq -cn --arg n "$seat_name" --arg k "$seat_kind" --arg w "$wt_dir" --arg b "$wt_branch" \
