@@ -245,6 +245,95 @@ you read the findings files and rule.
 - `bin/stampede down <dir> --yes` — selective teardown: closes only
   panes the swarm opened, salvages anything dirty, prunes worktrees.
 
+## 11. Headless batch mode (unattended queue drain)
+
+When you have a backlog of pre-scoped tickets with declared `owns:` paths and want to drain them without babysitting terminal panes or keeping a display open, reach for **headless batch mode**:
+
+```bash
+bin/stampede headless /path/to/repo [--max-tickets N] [--timeout M]
+```
+
+### When to reach for it
+- **Unattended / Overnight runs**: Drain an unblocked ticket queue in the background without needing terminal multiplexer (`herdr`) panes or manual prompt dispatch.
+- **CI/CD pipelines & remote boxes**: Runs cleanly in headless Linux containers or GitHub Actions runners where no display server, GUI, or interactive multiplexer exists.
+- **Strictly disjoint batches**: Safely runs batch jobs knowing the partition manager will refuse and bypass tickets with conflicting or held file leases.
+
+### How it works: a worked example
+
+Suppose `/tmp/demo` has three backlog tickets (`DEMO-1`, `DEMO-2`, `DEMO-3`) in `maps/tickets/`:
+
+```bash
+# Drain up to 3 tickets, with a 20-minute batch timeout ceiling
+bin/stampede headless /tmp/demo --max-tickets 3 --timeout 1200
+```
+
+Under the hood, `stampede headless` executes an automated pipeline per ticket:
+1. **Intake & Partition Check**: Scans `maps/tickets/` for `status: backlog` or `status: queued`. Verifies that the ticket's `owns:` declaration does not overlap with any active ticket or existing lease in `.herdr-swarm/leases/`.
+2. **Ephemeral Worktree Provisioning**: Creates an isolated worktree at `.herdr-swarm/worktrees/<seat>` rooted on a fresh branch `swarm/<slug>/<seat>`.
+3. **Subprocess Dispatch**: Spawns the vendor CLI directly as a background subprocess (no Herdr pane). Delivers the ticket brief via argv pointer (`.herdr-swarm/state/channel/<seat>-brief.md`).
+4. **Suite Gate & In-Batch Critique**: Once the worker commits and emits `ARCH DONE #<ticket> <sha>`, the supervisor runs your real test suite. If the test fails (`RED`), headless mode feeds the error back to the worker in an automated critique turn (up to `max_verdict_attempts`, default 2).
+5. **CAS Arbiter Drain**: When the suite passes (`GREEN`), the arbiter acquires `.arbiter-drain.lock`, compare-and-swap merges the commit into `swarm/<slug>/integration`, releases the partition lease, and advances to the next ticket.
+
+### Command flags and configuration
+
+| Flag / Option | Default | Description |
+|---|---|---|
+| `[dir]` | `$PWD` | Target repository path |
+| `--max-tickets N` | `5` | Stop after draining $N$ tickets, even if more remain in the queue |
+| `--timeout M` | `1800` (30 min) | Whole-batch wall-clock timeout in seconds (POSIX exit code `124` or `3`) |
+| `--mode M` | `sequential` | Queue processing strategy |
+
+Environment variable overrides (`emit_env_wins`) take precedence over `swarm.config.toml`:
+- `CONFIG_HEADLESS_MAX_ATTEMPTS`: Re-verdict retry ceiling before dead-lettering (default: `2`).
+- `CONFIG_HEADLESS_WORKER_TIMEOUT_S`: Per-worker wall-clock timeout in seconds (default: `900`).
+- `HL_KILL_GRACE_S`: Grace period between SIGTERM and SIGKILL escalation (default: `5`).
+
+### Exit codes (fail-closed CI contract)
+
+The command exits with deterministic status codes so automated pipelines can halt or alert immediately:
+- **`0`**: Success. All eligible tickets were drained green, or the backlog was already empty.
+- **`1`**: Dead-letter / failure. At least one ticket failed tests beyond the retry budget, crashed, or hit an unresolvable error.
+- **`3` / `124`**: Batch timeout. The whole-batch `--timeout` expired before completion.
+
+### Dead-letter handling & diagnostics
+
+When a worker crashes, tests remain red past the retry budget, or a ticket cannot be verified, `stampede headless` **never swallows the error**:
+1. The ticket's partition lease is released so other tasks are not starved.
+2. A structured incident record is appended to `.herdr-swarm/dead-letter.jsonl`:
+   ```json
+   {"ticket":"DEMO-1","seat":"arch-1","reason":"worker exited rc=1 without a verdict — worker log: /tmp/demo/.herdr-swarm/logs/arch-1.log","timestamp":1727730000}
+   ```
+3. A human-readable alert is written to `.herdr-swarm/headless-notices.log` and printed to stderr.
+4. The exact failure reason and path to the raw vendor output log (`.herdr-swarm/logs/<seat>.log`) are displayed, allowing immediate root-cause inspection.
+
+### Target repository requirements
+
+Before running headless batch mode against a target repository, ensure three operational prerequisites are met:
+
+1. **Model Pinning in Vendor Config**:
+   Workers running in headless mode must not inherit stale global defaults. In `.opencode/opencode.json` (or your provider's config), explicitly pin a valid model:
+   ```json
+   {
+     "$schema": "https://opencode.ai/config.json",
+     "model": "zai-coding-plan/glm-5.2"
+   }
+   ```
+2. **Sandbox External Directory Permissions**:
+   Because workers run inside isolated worktrees (`.herdr-swarm/worktrees/<seat>`), but read ticket briefs and write channels in the root repository (`maps/tickets/`), sandbox permissions must allow external directory access:
+   ```json
+   {
+     "permission": {
+       "bash": "allow",
+       "edit": "allow",
+       "write": "allow",
+       "external_directory": "allow"
+     }
+   }
+   ```
+   *(Note: OpenCode ≥ 1.18 requires `"allow"` \| `"ask"` \| `"deny"`; older wildcard strings like `"*"` cause config syntax errors).*
+3. **Ignore the Swarm State Directory**:
+   Add `.herdr-swarm/` to the target repository's `.gitignore`. The supervisor's suite gate checks for untracked files (`gate_tree_matches`); if runtime state files are untracked, every verdict will be rejected as tree drift (`stale`).
+
 ## Troubleshooting (every failure is fail-closed on purpose)
 
 | Symptom | Cause | Fix |
@@ -257,6 +346,9 @@ you read the findings files and rule.
 | `verify` times out | agent still booting | re-run with a bigger timeout: `verify <dir> 60000` |
 | nothing integrates after a GREEN | arbiter is operator-invoked | run `lib/arbiter.sh drain` |
 | `promote` refuses | by design | read the prompt, then `--confirm` if you mean it |
+| headless worker dies in ~2s (`ProviderModelNotFoundError`) | target repo lacks model pin | set `"model"` in target repo `.opencode/opencode.json` |
+| headless worker fails (`auto-rejecting external_directory`) | sandbox rejects reading root `maps/tickets/` | set `"permission": {"external_directory": "allow"}` in `.opencode/opencode.json` |
+| headless tickets rejected as `stale` tree drift | `.herdr-swarm/` untracked | add `.herdr-swarm/` to target repo `.gitignore` |
 
 ## Where to go next
 

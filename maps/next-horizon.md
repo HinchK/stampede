@@ -33,7 +33,7 @@ protocol.
 3. **Headless mode has been proven on a scratch repo** (PROVE-HEADLESS-1) and hardened against everything it found (Harden Headless Mode epic: HL-WT-1/HL-CFG-1/HL-RED-1/HL-TMO-1/HL-DOCS-1, all integrated) -- but never proven live on this repo's own real backlog against the POST-FIX code. **HORIZON-2** (staged, blocked on promote) closes this.
 4. **The batch's no-review boundary question** (**HORIZON-3**) is still open, staged behind HORIZON-2 as originally planned.
 5. **Parked-queue triage is done** (**HORIZON-5**, this round) -- three tickets closed as superseded, one kept parked, one closed-with-narrower-re-release (**QUOTA-1**).
-6. **Public surface truth:** **HORIZON-4** (dispatched) closes the user-doc gap. Separately, CHANGELOG.md's current top entry (0.5.0) has zero mention of anything shipped this entire session (GRANT-1 through HL-DOCS-1) -- that's HORIZON-4's job to fix, called out explicitly in its brief.
+6. **Public surface truth:** **HORIZON-4** is done. User-facing headless batch mode documentation is published in [`docs/user-guide.md`](docs/user-guide.md#11-headless-batch-mode-unattended-queue-drain) §11 and [`README.md`](README.md#two-run-modes), and [`CHANGELOG.md`](CHANGELOG.md#050--in-development-multi-provider-ux-review-loop-and-headless-batch-drain) [0.5.0] documents all capabilities shipped this session (GRANT-1 through HL-DOCS-1 and headless batch mode).
 
 ## Destination
 
@@ -51,7 +51,7 @@ the truth about what exists** (HORIZON-4, HORIZON-5, QUOTA-1).
 | HORIZON-1 | human | — | Integrate BRIEF-1, promote integration → `main`, push (DONE, commit 32dc565 on main) |
 | HORIZON-2 | arch (resolve to concrete idle-longest seat per the Arch Seat Balancing Convention at actual release/dispatch time) | HORIZON-1 (lands the brief the batch reads) | Prove `stampede headless` live: dispatch one real backlog ticket through the batch, receipts in a findings doc (STAGED) |
 | HORIZON-3 | arch (resolve to concrete idle-longest seat per the Arch Seat Balancing Convention at actual release/dispatch time) | HORIZON-2 | Headless reviewer rounds in batch mode — or a written accepted-limit decision (STAGED) |
-| HORIZON-4 | agy-docs | HORIZON-1, DECISION-1 | User-facing headless docs (user guide section, README, CHANGELOG entry naming the version) (RELEASED) |
+| HORIZON-4 | agy-docs | HORIZON-1, DECISION-1 | User-facing headless docs (user guide section, README, CHANGELOG entry naming the version) (DONE, docs/user-guide.md §11, README.md, CHANGELOG.md) |
 | HORIZON-5 | pm | — | Parked-queue triage audit: keep/kill each of the five, cross-checking supersession (DONE, docs/audits/2026-09-30-parked-queue-triage.md) |
 | DECISION-1 | agy-docs | — | Correct INCIDENT-1's stale CRED-1 reference; record CRED-1-to-GRANT-1 decision (DONE, docs/audits/2026-09-30-cred-1-superseded-by-grant-1.md) |
 | QUOTA-1 | arch (resolve to concrete idle-longest seat per the Arch Seat Balancing Convention at actual release/dispatch time) | — | Probe `agy` token consumption in lib/quota.sh with tests (RELEASED) |
@@ -68,3 +68,4 @@ the truth about what exists** (HORIZON-4, HORIZON-5, QUOTA-1).
 - 2026-09-30 (triage): HORIZON-5 completed; parked queue triaged (3 superseded deleted, 1 kept parked, 1 re-released as QUOTA-1).
 - 2026-09-30 (dispatch): DECISION-1 and QUOTA-1 released; HORIZON-4 released from staged. HORIZON-2/3 remain staged until post-fix promote and sequencing.
 - 2026-09-30 (decision): DECISION-1 resolved; incident class closed with written decision record codifying GRANT-1 over CRED-1 in docs/audits/2026-09-30-cred-1-superseded-by-grant-1.md.
+- 2026-09-30 (docs): HORIZON-4 resolved; public surface updated with headless user guide, run-mode comparison, and 0.5.0 changelog.
