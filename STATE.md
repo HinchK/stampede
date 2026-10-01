@@ -152,10 +152,16 @@
    - **HL-DOCS-1 (INTEGRATED & RESOLVED)**: In `lib/cli/stampede-headless.sh`, updated dead-letter reporting to extract real exit status (`worker exited rc=N without a verdict`) from wrapper log markers and append explicit `logs/<seat>.log` pointers across batch stderr, `dead-letter.jsonl`, and `headless-notices.log`. Added Section 8 "Target Repository Requirements" in `docs/findings/headless-mode-design.md` detailing model pinning, sandbox `permission.external_directory: "allow"`, and `.herdr-swarm/` gitignore rules. Added test [13] in `tests/test_cli.sh` (51/51 passing). Reviewed by `reviewer-hinchk-stampede` (Round 1/2 PASS) in [`.herdr-swarm/reviews/HL-DOCS-1-492b04b292fac91b696c7f2eb1e2c7cb63e28880.md`](.herdr-swarm/reviews/HL-DOCS-1-492b04b292fac91b696c7f2eb1e2c7cb63e28880.md). Integrated onto `swarm/stampede/integration` at `f357e47`. Lease released cleanly. Ticket resolved.
    - Map `maps/harden-headless-mode.md` destination fully achieved.
 6. **Reconciliation & Human Promotion**:
-   - 12 integrated tickets are linear ancestors of `swarm/stampede/integration`: `GRANT-1`, `SUPER-1`, `ARB-SLUG-1`, `PART-1` (`c4603eb`), `PART-2` (`9905b54`), `PROVE-HEADLESS-1` (`f588670`), `SYNC-2` (`0276187`), `HL-WT-1` (`b95b383`), `HL-CFG-1` (`7d27c8a`), `HL-RED-1` (`af62507`), `HL-TMO-1` (`67d1824`), and `HL-DOCS-1` (`f357e47`).
-   - Standing promote and push guardrails remain human-only: awaiting human driver to execute `bash lib/arbiter.sh promote --confirm` and `git push origin main`.
-7. **Next Horizon Roadmap**:
-   - 5 tickets staged in `maps/tickets-staged/` (`horizon-1` through `horizon-5`) charted in [`maps/next-horizon.md`](maps/next-horizon.md).
+   - The 12 session tickets (`GRANT-1`, `SUPER-1`, `ARB-SLUG-1`, `PART-1`, `PART-2`, `PROVE-HEADLESS-1`, `SYNC-2`, `HL-WT-1`, `HL-CFG-1`, `HL-RED-1`, `HL-TMO-1`, and `HL-DOCS-1`) were promoted and pushed to `origin/main` by the human operator at commit `755227a`.
+   - Standing promote and push guardrails remain strictly human-only.
+7. **Next Horizon Epic (IN PROGRESS)**:
+   - **HORIZON-5 (Parked-Queue Triage)**: Triage audit completed by PM in `docs/audits/2026-09-30-parked-queue-triage.md` (`266e3e7`). 4 superseded tickets cleaned up, `arbiter-batch-integration.md` kept parked.
+   - **DECISION-1 (RESOLVED)**: `agy-docs` authored decision record in `docs/audits/2026-09-30-cred-1-superseded-by-grant-1.md` documenting CRED-1 supersession by GRANT-1, corrected `INCIDENT-1`, and closed incident class (`65dacf3`).
+   - **QUOTA-1 (INTEGRATED & RESOLVED)**: `arch-1` implemented read-only `agy` quota probing in `lib/quota.sh` and tests in `tests/test_quota.sh` (37/37 passing). Reviewed PASS by `reviewer-hinchk-stampede` (Round 1/2) in `.herdr-swarm/reviews/QUOTA-1-0684b3f639ed7f666dd3ea02443d33b35d0445fd.md`. Integrated onto `swarm/stampede/integration` at `0684b3f`. Lease released. Marked resolved at `a40b454`.
+   - **HORIZON-4 (RESOLVED)**: `agy-docs` authored user-facing documentation for headless batch mode in `docs/user-guide.md`, updated `README.md`, and backfilled `CHANGELOG.md` under 0.5.0 (`f312b60`). `make version-check` and `make check` pass. Lease released.
+   - **HORIZON-2 (STAGED)**: Pre-flight safety note appended (`4492616`). Staged behind integration promote.
+   - **HORIZON-3 (STAGED)**: Staged behind HORIZON-2.
+   - **Total Test Suite Health**: All 19 suites green (`make check`), 0 ShellCheck warnings, tree clean.
 
 
 
