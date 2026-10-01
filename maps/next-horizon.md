@@ -29,7 +29,7 @@ protocol.
 ## What is actually unresolved
 
 1. **HORIZON-1 is done** (BRIEF-1 integrated and on main, commit 32dc565 confirmed ancestor of main).
-2. **CRED-1 was superseded by GRANT-1** (driver's explicit friction/safety-tradeoff call, 2026-09-2x) -- **DECISION-1** (new, dispatched) records this properly; until it lands, the incident class is still technically "unresolved" per this map's own destination criteria.
+2. **CRED-1 superseded by GRANT-1 is closed** -- **DECISION-1** completed. The driver's friction vs safety tradeoff call (multi-account GitHub strategy rejected as excessive onboarding friction; session-scoped promote grant adopted instead) is codified in [`docs/audits/2026-09-30-cred-1-superseded-by-grant-1.md`](docs/audits/2026-09-30-cred-1-superseded-by-grant-1.md), `INCIDENT-1`, and `STATE.md`. The 2026-09-24 incident class is formally closed.
 3. **Headless mode has been proven on a scratch repo** (PROVE-HEADLESS-1) and hardened against everything it found (Harden Headless Mode epic: HL-WT-1/HL-CFG-1/HL-RED-1/HL-TMO-1/HL-DOCS-1, all integrated) -- but never proven live on this repo's own real backlog against the POST-FIX code. **HORIZON-2** (staged, blocked on promote) closes this.
 4. **The batch's no-review boundary question** (**HORIZON-3**) is still open, staged behind HORIZON-2 as originally planned.
 5. **Parked-queue triage is done** (**HORIZON-5**, this round) -- three tickets closed as superseded, one kept parked, one closed-with-narrower-re-release (**QUOTA-1**).
@@ -53,7 +53,7 @@ the truth about what exists** (HORIZON-4, HORIZON-5, QUOTA-1).
 | HORIZON-3 | arch (resolve to concrete idle-longest seat per the Arch Seat Balancing Convention at actual release/dispatch time) | HORIZON-2 | Headless reviewer rounds in batch mode — or a written accepted-limit decision (STAGED) |
 | HORIZON-4 | agy-docs | HORIZON-1, DECISION-1 | User-facing headless docs (user guide section, README, CHANGELOG entry naming the version) (RELEASED) |
 | HORIZON-5 | pm | — | Parked-queue triage audit: keep/kill each of the five, cross-checking supersession (DONE, docs/audits/2026-09-30-parked-queue-triage.md) |
-| DECISION-1 | agy-docs | — | Correct INCIDENT-1's stale CRED-1 reference; record CRED-1-to-GRANT-1 decision (RELEASED) |
+| DECISION-1 | agy-docs | — | Correct INCIDENT-1's stale CRED-1 reference; record CRED-1-to-GRANT-1 decision (DONE, docs/audits/2026-09-30-cred-1-superseded-by-grant-1.md) |
 | QUOTA-1 | arch (resolve to concrete idle-longest seat per the Arch Seat Balancing Convention at actual release/dispatch time) | — | Probe `agy` token consumption in lib/quota.sh with tests (RELEASED) |
 
 ## Decisions so far
@@ -67,3 +67,4 @@ the truth about what exists** (HORIZON-4, HORIZON-5, QUOTA-1).
   implementation ticket for an unresearched mechanism is how theatre starts.
 - 2026-09-30 (triage): HORIZON-5 completed; parked queue triaged (3 superseded deleted, 1 kept parked, 1 re-released as QUOTA-1).
 - 2026-09-30 (dispatch): DECISION-1 and QUOTA-1 released; HORIZON-4 released from staged. HORIZON-2/3 remain staged until post-fix promote and sequencing.
+- 2026-09-30 (decision): DECISION-1 resolved; incident class closed with written decision record codifying GRANT-1 over CRED-1 in docs/audits/2026-09-30-cred-1-superseded-by-grant-1.md.
