@@ -2,7 +2,7 @@
 id: HL-LEDGER-1
 title: "stampede headless ledger upsert clobbers live interactive seat in seats.json"
 type: wayfinder:defect
-status: backlog
+status: resolved
 assignee: arch
 owns: lib/cli/stampede-headless.sh,tests/test_cli.sh
 parent: maps/next-horizon.md
@@ -51,3 +51,10 @@ if [[ -f "$ledger" ]]; then
 ```bash
 bash tests/test_cli.sh
 ```
+
+## Resolution
+
+- **Author:** `arch-2-hinchk-stampede` (commit `19135feca3569845988eb7d483428922cf3e0e84`)
+- **Review:** `reviewer-hinchk-stampede` Round 1/2 PASS (`.herdr-swarm/reviews/HL-LEDGER-1-19135feca3569845988eb7d483428922cf3e0e84.md`)
+- **Integrated:** `a9132d6` onto `swarm/stampede/integration` via `arbiter_enqueue_and_drain`
+- **Summary:** In `lib/cli/stampede-headless.sh`, namespaced headless workers with `headless-` prefix (`seat_name="headless-${seat_name}"`), isolating all batch artifacts (ledger entry, pidfile, log, lease holder ID, gate job tracking IDs) from interactive seats. Appended `headless-${seat_name}` to `EXPECTED_SEATS` so supervisor harvest and gate resolution locate the worker without mutating existing roster entries. Added scenario [14] in `tests/test_cli.sh` asserting live interactive entries in `seats.json` survive a headless batch byte-identical (56/56 passing); `make check` green (19 suites).
