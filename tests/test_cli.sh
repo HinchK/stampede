@@ -348,5 +348,57 @@ if [[ -e "$HB_BIN/timeout" ]]; then
     && bad "phantom session record invented" || ok "no session record (worker never verdicted)"
 fi
 
+# [14] HL-LEDGER-1: headless never clobbers live interactive seats — the
+# worker is namespaced (headless-<seat>), so a pre-existing interactive
+# entry with a live pane/worktree/branch is untouched while the batch still
+# gates and concludes through its own ledger record.
+if [[ -e "$HB_BIN/timeout" ]]; then
+  HR6=$(mktemp -d "$SCRATCH/hr6.XXXXXX")
+  git -C "$HR6" init -q -b main
+  git -C "$HR6" config user.email t@t; git -C "$HR6" config user.name t
+  git -C "$HR6" remote add origin https://github.com/t/scratch6.git
+  printf '.herdr-swarm/\n' > "$HR6/.gitignore"
+  printf 'test:\n\t@true\n' > "$HR6/Makefile"
+  mkdir -p "$HR6/maps/tickets"
+  printf 'x\n' > "$HR6/f.txt"; git -C "$HR6" add -A; git -C "$HR6" commit -qm base
+  printf -- '---\nid: T-L1\nstatus: backlog\n---\nbody\n' > "$HR6/maps/tickets/tl.md"
+  git -C "$HR6" add -A; git -C "$HR6" commit -qm tickets
+  # a live interactive swarm's ledger: a seated arch-1 with a real pane,
+  # worktree, and branch — exactly what `herdr-loop-swarm.sh up` writes
+  mkdir -p "$HR6/.herdr-swarm"
+  jq -cn '{version: 2, seats: [{name: "arch-1-t-scratch6", kind: "opencode", pane: "wX:p9",
+    worktree_dir: "/tmp/interactive-arch-1-wt", branch: "swarm/t-scratch6/arch-1", isolated: true}]}' \
+    > "$HR6/.herdr-swarm/seats.json"
+  LIVE_BEFORE=$(jq -c '.seats[] | select(.name == "arch-1-t-scratch6")' "$HR6/.herdr-swarm/seats.json")
+  cat > "$HB_BIN/opencode" <<'EOF'
+#!/bin/sh
+brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
+tid=$(sed -nE 's/^id:[[:space:]]*//p' "$brief" 2>/dev/null | head -n1 | tr -d '[:space:]')
+sha=$(git rev-parse HEAD 2>/dev/null || printf 0000000000000000000000000000000000000000)
+reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete response to ([^ ]+) and.*/\1/p')
+[ -n "$reply" ] && printf 'worker reply for %s\n' "${tid:-unknown}" > "$reply"
+printf 'ARCH DONE #%s %s\n' "${tid:-unknown}" "$sha"
+EOF
+  chmod +x "$HB_BIN/opencode"
+  PROJECT_SLUG="$(slugify t/scratch6)" REPO_DIR="$HR6" STATE_DIR="$HR6/.herdr-swarm" \
+    BASE_BRANCH=main PATH="$HB_PATH" bash "$REPO_ROOT/lib/arbiter.sh" init-ref >/dev/null 2>&1 || true
+  PATH="$HB_PATH" "$REPO_ROOT/bin/stampede" headless "$HR6" --max-tickets 1 --timeout 60 >"$SCRATCH/hl-ledger.out" 2>&1; rc=$?
+  [[ "$rc" == 0 ]] \
+    && ok "batch green alongside a live interactive swarm" || bad "ledger batch rc=$rc: $(tail -3 "$SCRATCH/hl-ledger.out")"
+  LIVE_AFTER=$(jq -c '.seats[] | select(.name == "arch-1-t-scratch6")' "$HR6/.herdr-swarm/seats.json")
+  [[ "$LIVE_BEFORE" == "$LIVE_AFTER" && -n "$LIVE_AFTER" ]] \
+    && ok "interactive seat record byte-identical after the batch" \
+    || bad "interactive seat mutated: $LIVE_BEFORE -> $LIVE_AFTER"
+  jq -e '.seats[] | select(.name == "arch-1-t-scratch6") | .pane == "wX:p9" and .worktree_dir == "/tmp/interactive-arch-1-wt" and .branch == "swarm/t-scratch6/arch-1"' \
+    "$HR6/.herdr-swarm/seats.json" >/dev/null 2>&1 \
+    && ok "interactive pane/worktree/branch all intact" || bad "interactive fields overwritten"
+  jq -e '.seats[] | select(.name == "headless-arch-1-t-scratch6") | .isolated == true' \
+    "$HR6/.herdr-swarm/seats.json" >/dev/null 2>&1 \
+    && ok "namespaced headless-<seat> ledger entry created" || bad "no headless-arch-1 entry: $(cat "$HR6/.herdr-swarm/seats.json")"
+  jq -e -s 'any(.[]; (.ticket|tostring) == "T-L1" and .suite == "green")' \
+    "$HR6/.herdr-swarm/session-verdicts.jsonl" >/dev/null 2>&1 \
+    && ok "namespaced worker still harvests and gates green" || bad "T-L1 not green"
+fi
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
