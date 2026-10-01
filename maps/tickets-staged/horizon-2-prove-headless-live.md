@@ -38,3 +38,14 @@ interactions with a real branch state.
 
 The findings doc quotes the batch's own summary line and the session-verdict
 JSON for the ticket it processed.
+
+## Pre-flight safety (added 2026-09-30, before release)
+
+1. Seat collision: the scratch-repo proof named its worker arch-1-<slug>. On this live repo that could literally
+   be arch-1-hinchk-stampede, a live interactive seat -- confirm headless worker naming can't collide with a live
+   seat name, and that headless doesn't write into the same .herdr-swarm/seats.json a live interactive seat uses.
+2. Ticket selection: dispatch with --max-tickets 1, and make the target ticket the ONLY backlog-status ticket in
+   maps/tickets/ at run time -- check whether headless filters by assignee; if it doesn't, any other released
+   ticket (e.g. HORIZON-4, QUOTA-1, DECISION-1) is fair game for accidental headless pickup.
+3. No double dispatch: whoever runs this must confirm looper is not also about to interactively dispatch the same
+   ticket through the normal herdr path.
