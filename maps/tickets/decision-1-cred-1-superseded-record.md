@@ -2,10 +2,12 @@
 id: DECISION-1
 title: "Correct INCIDENT-1's stale CRED-1 reference; record the CRED-1-to-GRANT-1 decision"
 type: wayfinder:doc
-status: backlog
+status: resolved
 assignee: agy-docs
 owns: docs/audits/,STATE.md,maps/tickets/incident-1-promote-gate-bypass-record.md
 parent: maps/next-horizon.md
+resolution:
+  audit_file: docs/audits/2026-09-30-cred-1-superseded-by-grant-1.md
 ---
 
 # DECISION-1 -- close the incident class with an accurate record
@@ -36,3 +38,11 @@ nothing. Today, a reader of `INCIDENT-1` alone would still believe the real fix 
 
 Human/pm review -- doc-only, no test suite applies. `git grep -i "CRED-1" STATE.md maps/tickets/incident-1-
 promote-gate-bypass-record.md` no longer implies an open fix.
+
+## Resolution
+
+- **Decision Record Authored**: Created [`docs/audits/2026-09-30-cred-1-superseded-by-grant-1.md`](../../docs/audits/2026-09-30-cred-1-superseded-by-grant-1.md) detailing why CRED-1 multi-account credential separation was superseded by GRANT-1 (driver's friction vs safety tradeoff call: multi-account setup introduces unacceptable onboarding friction for local multi-agent tool, while session-scoped grant eliminates per-promote friction and preserves non-agent grant issuance invariant).
+- **INCIDENT-1 Addendum**: Added Addendum to [`maps/tickets/incident-1-promote-gate-bypass-record.md`](incident-1-promote-gate-bypass-record.md) and updated Done-Criteria/Resolution references to mark CRED-1 superseded by GRANT-1.
+- **STATE.md Reconciled**: Corrected lines in [`STATE.md`](../../STATE.md) to record BRIEF-1 and GRANT-1 resolutions and added DECISION-1 key decision entry.
+- **Next Horizon Map Updated**: Updated item 2 and ticket table in [`maps/next-horizon.md`](../next-horizon.md) to record incident class closure.
+

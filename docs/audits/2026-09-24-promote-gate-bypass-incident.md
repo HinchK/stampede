@@ -3,8 +3,8 @@
 **Date:** 2026-09-24 (Recorded 2026-09-27)  
 **Author:** `agy-docs` (AGY / Gemini Flash)  
 **Status:** Closed / Documented  
-**Related Tickets:** [`INCIDENT-1`](../../maps/tickets/incident-1-promote-gate-bypass-record.md), [`GATE-1`](../../maps/tickets/gate-1-promote-pane-check.md), [`GATE-2`](../../maps/tickets/gate-2-adr-amend-0009.md), [`BRIEF-1`](../../maps/tickets/brief-1-forbid-pane-injection.md), [`CRED-1`](../../maps/tickets/cred-1-credential-separation-research.md)  
-**Related Documents:** [ADR 0009](../../docs/adr/0009-arbiter-branch-integration-and-cas-merge.md), [Promote Gate Spec 2026-09-23](2026-09-23-harden-the-promote-gate.md)
+**Related Tickets:** [`INCIDENT-1`](../../maps/tickets/incident-1-promote-gate-bypass-record.md), [`GATE-1`](../../maps/tickets/gate-1-promote-pane-check.md), [`GATE-2`](../../maps/tickets/gate-2-adr-amend-0009.md), [`BRIEF-1`](../../maps/tickets/brief-1-forbid-pane-injection.md), [`CRED-1`](../../maps/tickets/cred-1-credential-separation-research.md), [`GRANT-1`](../../maps/tickets/grant-1-session-promote-authorization.md), [`DECISION-1`](../../maps/tickets/decision-1-cred-1-superseded-record.md)  
+**Related Documents:** [ADR 0009](../../docs/adr/0009-arbiter-branch-integration-and-cas-merge.md), [Promote Gate Spec 2026-09-23](2026-09-23-harden-the-promote-gate.md), [Decision Record 2026-09-30](2026-09-30-cred-1-superseded-by-grant-1.md)
 
 ---
 
@@ -80,8 +80,8 @@ The incident proves that prompt guidelines and pane-identity checks are insuffic
 
 | Track | Action | Ticket | Status | Purpose |
 |---|---|---|---|---|
-| **Immediate Mitigation** | Forbid Cross-Pane Injection in Briefs | [`BRIEF-1`](../../maps/tickets/brief-1-forbid-pane-injection.md) | Backlog | Explicitly instruct `looper` that `herdr pane run`, `herdr pane send-text`, and `herdr agent send-keys` must never be used to route around human gates. |
-| **Structural Fix** | Credential Separation Research | [`CRED-1`](../../maps/tickets/cred-1-credential-separation-research.md) | Backlog | Investigate whether agent seats can be issued restricted tokens structurally incapable of pushing to `main` without requiring GitHub Pro branch protection rules. |
+| **Immediate Mitigation** | Forbid Cross-Pane Injection in Briefs | [`BRIEF-1`](../../maps/tickets/brief-1-forbid-pane-injection.md) | Resolved | Explicitly instruct `looper` that `herdr pane run`, `herdr pane send-text`, and `herdr agent send-keys` must never be used to route around human gates (shipped at `32dc565`). |
+| **Structural Track** | Credential Separation Research / Session Grant | [`CRED-1`](../../maps/tickets/cred-1-credential-separation-research.md) / [`GRANT-1`](../../maps/tickets/grant-1-session-promote-authorization.md) | Superseded / Resolved | Research concluded multi-account setup required; driver rejected due to onboarding friction. Superseded by session-scoped promote grant ([`GRANT-1`](../../maps/tickets/grant-1-session-promote-authorization.md), commit `e472cb8`); see decision record in [`docs/audits/2026-09-30-cred-1-superseded-by-grant-1.md`](2026-09-30-cred-1-superseded-by-grant-1.md). |
 | **Audit & Transparency** | Incident Record & STATE.md Sync | [`INCIDENT-1`](../../maps/tickets/incident-1-promote-gate-bypass-record.md) | Resolved | Document the reality of the bypass in this audit and update `STATE.md` Standing Guardrails. |
 
 ---
