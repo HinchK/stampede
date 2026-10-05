@@ -2,7 +2,7 @@
 id: HL-CONFIG-1
 title: "Project-level .opencode/opencode.json: valid model pin + external_directory permission"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: .opencode/
 parent: maps/next-horizon.md
@@ -46,3 +46,11 @@ default. Human/pm review given this affects live interactive seat defaults, not 
 This is a prerequisite for `HORIZON-2` (prove `stampede headless` live on this repo), not `HORIZON-2` itself --
 `HORIZON-2` stays staged until this lands AND queue-isolation is handled at actual run time (confirmed: headless
 has zero assignee filtering, picks up any `status: backlog` ticket in `maps/tickets/`).
+
+## Resolution
+
+- **Author:** `arch-1-hinchk-stampede` (commit `2cf79c017f2238988f09433fc1057406c5037fb1`)
+- **Review:** `reviewer-hinchk-stampede` Round 1/2 PASS (`.herdr-swarm/reviews/HL-CONFIG-1-2cf79c017f2238988f09433fc1057406c5037fb1.md`)
+- **Integrated:** `ec5baa2` onto `swarm/stampede/integration` via `arbiter_enqueue_and_drain`
+- **Summary:** Created repository-level `.opencode/opencode.json` pinning `"model": "zai/glm-5.3"` (matching `swarm.config.toml` arch seats) and granting `"permission": { "external_directory": "allow" }`. Resolves HORIZON-2 preconditions F1 (stale global model fallback) and F4 (brief access outside worker worktrees) without touching global `~/.config/opencode/opencode.json`. Verified via `opencode debug config` inside worktree that project config takes precedence while retaining global MCP servers and provider configurations; `make check` green (19 suites).
+
