@@ -49,3 +49,33 @@ JSON for the ticket it processed.
    ticket (e.g. HORIZON-4, QUOTA-1, DECISION-1) is fair game for accidental headless pickup.
 3. No double dispatch: whoever runs this must confirm looper is not also about to interactively dispatch the same
    ticket through the normal herdr path.
+
+## Corrected execution plan (added 2026-10-05, supersedes any instinct to release this ticket itself)
+
+HORIZON-2 is dispatched INTERACTIVELY to a concrete arch seat, exactly like any other ticket -- never released
+into maps/tickets/ as a backlog item. The seat that receives it does the following as its own work:
+
+1. Confirm both prerequisites are live on main (not just integration) before running anything:
+   - HL-LEDGER-1's fix (namespaced headless worker names) is an ancestor of main.
+   - HL-CONFIG-1's .opencode/opencode.json is an ancestor of main.
+   If either isn't on main yet, stop and report -- do not proceed on pre-fix code.
+2. Write ONE small, separate, real target ticket directly into maps/tickets/ with status: backlog -- small,
+   mechanical, provable by the suite gate alone (a doc fix, a one-line script change, something with an obvious
+   low-risk done-criteria), owns: disjoint from anything live or from HORIZON-2's own owns
+   (docs/findings/headless-live-proof.md). This is the actual headless proof target, not HORIZON-2 itself.
+3. Confirm maps/tickets/ contains ONLY that one target ticket at status:backlog/queued at run time -- re-check,
+   don't assume, since other tickets could have landed since this plan was written.
+4. Snapshot .herdr-swarm/seats.json and .herdr-swarm/leases.json BEFORE running.
+5. Run `bin/stampede headless <repo-root> --max-tickets 1` for real from the root checkout (post-promote main),
+   with herdr confirmed off PATH.
+6. Snapshot seats.json and leases.json AFTER running. Diff both snapshots -- this diff is the actual receipt
+   that HL-LEDGER-1 holds live, not just in its own test suite. Any live interactive seat's pane/worktree_dir/
+   branch must be byte-identical before and after.
+7. Write docs/findings/headless-live-proof.md: the command, elapsed time, session-verdict JSON, integration
+   queue entry, the seats.json/leases.json diff, and anything that broke that the hermetic suites couldn't see.
+8. The target ticket itself lands on the integration branch WITHOUT a reviewer pass (headless mode's own
+   documented boundary, HORIZON-3 is deciding whether that should change) -- note this explicitly in the
+   findings doc, don't present it as reviewed.
+9. Clean up: if the target ticket's own resolution needs anything beyond what headless itself did (doc updates,
+   etc.), handle that as normal afterward.
+
