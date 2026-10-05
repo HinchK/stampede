@@ -2,7 +2,7 @@
 id: QUOTA-1
 title: "Probe agy (Antigravity/Gemini) quota headroom via its own pane-output signal"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: lib/quota.sh,tests/test_quota.sh
 parent: maps/next-horizon.md
@@ -57,3 +57,10 @@ bash tests/test_quota.sh
 Keep this scoped to `agy` and to surfacing the number, not acting on it. If `loop-bot-herd.sh` should eventually
 pause dispatch on a seat with known-exhausted quota, that's a separate, future ticket informed by actually having
 this probe available first.
+
+## Resolution
+
+- **Author:** `arch-1-hinchk-stampede` (commit `0684b3f639ed7f666dd3ea02443d33b35d0445fd`)
+- **Review:** `reviewer-hinchk-stampede` Round 1/2 PASS (`.herdr-swarm/reviews/QUOTA-1-0684b3f639ed7f666dd3ea02443d33b35d0445fd.md`)
+- **Integrated:** `0684b3f` onto `swarm/stampede/integration` via `arbiter_enqueue_and_drain`
+- **Summary:** `quota_probe_kind agy [seat]` scans recent pane output (via `herdr agent read <seat> --source recent-unwrapped`) for the Antigravity quota wall (`Individual quota reached... Resets in <duration>`) and reports `ok:<seconds>s` computed from the most recent marker. Preserves strictly read-only contract without writes or throttling; answers `unknown` on absent markers, missing seats, or unreadable panes. Added 10 tests in `tests/test_quota.sh` (37/37 pass); `make check` green (19 suites).

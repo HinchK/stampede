@@ -109,6 +109,17 @@ For comprehensive architectural design and technical specifications, see:
 
 ---
 
+## Two Run Modes
+
+Stampede operates in two complementary run modes sharing the same fail-closed suite gate, partition leases, and CAS integration arbiter:
+
+| Run Mode | Entrypoint | Environment | Workflow | Key Guarantees |
+|---|---|---|---|---|
+| **Interactive Floor** | `stampede up [dir] [-m <mode>]` | Multiplexer panes (`herdr`), terminal UI | Human pairing, real-time sparring, ANSI telemetry stream in Ops pane | Post-seating readiness verification (`verify`), live supervisor harvesting, manual or session-granted promote |
+| **Headless Batch** | `stampede headless [dir] [flags]` | Background POSIX subprocesses (no display/daemon needed) | Unattended queue draining, nightly batch runs, CI/CD automated gates | Ephemeral worktree isolation, wall-clock timeout wrapping (rc 124), in-batch first-RED critique loop, structured `dead-letter.jsonl` (rc 1) |
+
+---
+
 ## CLI Usage and Subcommands
 
 The public entry point is [`bin/stampede`](bin/stampede):
@@ -180,11 +191,13 @@ Asserts that every agent defined in `.herdr-swarm/seats.json` is alive, responsi
 Drains `backlog` tickets from `maps/tickets/` without opening Herdr panes or requiring a display, spawning worker CLIs as direct background subprocesses ([ADR 0015](docs/adr/0015-headless-batch-drain-mode.md)):
 
 ```bash
-bin/stampede headless [dir] [--max-tickets N] [--timeout M]
+bin/stampede headless [dir] [--max-tickets N] [--timeout M] [--mode sequential]
 ```
-- Dispatches tickets sequentially into isolated worktrees with partition and lease checks.
-- Bounded by `--max-tickets` (default: 5) and whole-batch `--timeout` in seconds (default: 1800).
-- Exits non-zero (`1` on dead-letters, `3` on batch timeout) for automated CI failure detection.
+- **Automated Pipeline**: Scans for unblocked tickets, acquires partition leases, provisions isolated worktrees (`.herdr-swarm/worktrees/<seat>`), spawns worker subprocesses via CLI argv brief pointers, re-runs the test suite upon commit, runs an in-batch critique loop on first RED, and compare-and-swap drains passing commits to `swarm/<slug>/integration`.
+- **Bounded Safety Caps**: Bounded by `--max-tickets` (default: 5), whole-batch `--timeout` in seconds (default: 1800), and per-worker execution timeouts with SIGKILL escalation (`HL_KILL_GRACE_S`).
+- **Fail-Closed Exit Codes**: Exits `0` on clean drain, `1` on dead-letters or unresolvable failures, and `3`/`124` on batch timeout for reliable CI/CD automation.
+- **Durable Incident Logging**: All failed attempts append structured records to `.herdr-swarm/dead-letter.jsonl` with explicit pointers to vendor CLI logs (`.herdr-swarm/logs/<seat>.log`).
+- For complete operational guidance and target repository requirements, see the [Headless User Guide](docs/user-guide.md#11-headless-batch-mode-unattended-queue-drain).
 
 ---
 
@@ -262,7 +275,7 @@ stampede/
 │   └── tickets/            # Granular milestone prototype tickets
 └── docs/                   # ADRs, findings & audit archives
     ├── worktree-swarm.md   # Phase 2 Worktree Architecture Blueprint
-    ├── adr/                # Architecture Decision Records (0001–0014)
+    ├── adr/                # Architecture Decision Records (0001–0015)
     │   ├── README.md       # ADR catalog & index
     │   ├── 0001-fail-closed-profile-and-test-gating.md
     │   ├── 0002-exact-sha-supervisor-deduplication.md
@@ -277,7 +290,8 @@ stampede/
     │   ├── 0011-multi-worker-floor-topologies-and-concurrency.md
     │   ├── 0012-task-partitioning-and-disjoint-dispatches.md
     │   ├── 0013-asynchronous-supervisor-gate-jobs.md
-    │   └── 0014-arbiter-drain-automation.md
+    │   ├── 0014-arbiter-drain-automation.md
+    │   └── 0015-headless-batch-drain-mode.md
     ├── findings/           # Empirical semantics, schemas, and retrospective
     │   └── swarm-orchestration-retrospective.md
     └── audits/             # PM reviews, advisory, & dogfooding receipts

@@ -8,9 +8,39 @@ pre-1.0: the public surface is not frozen.
 `make version-check` fails when the top entry below disagrees with
 `VERSION`. Tagging is a human act — nothing in this repository pushes.
 
-## [0.5.0] — in development (multi-provider UX wave)
+## [0.5.0] — in development (multi-provider UX, review loop, and headless batch drain)
 
 ### Added
+- **Headless Batch Drain Mode** (`bin/stampede headless`): unattended queue
+  drainer running worker CLIs as direct background subprocesses in isolated
+  worktrees without opening Herdr panes or requiring display servers (HEADLESS-1..7,
+  ADR 0015).
+- **Headless Mode Safety & Hardening**: deterministic queue discovery over
+  backlog tickets, in-batch critique loop on first RED, wall-clock timeout
+  wrapping with SIGKILL escalation (rc 124), non-zero exit (rc 1) on dead
+  letters, structured `.herdr-swarm/dead-letter.jsonl` with explicit worker log
+  pointers, environment variable precedence (`emit_env_wins`), and worktree rc
+  verification (HL-WT-1, HL-CFG-1, HL-RED-1, HL-TMO-1, HL-DOCS-1, PROVE-HEADLESS-1).
+- **Autonomous Reviewer Loop**: multi-turn critique cycles (`[reviewer] loop = true`),
+  structured `REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>` anchors, durable
+  findings artifacts in `.herdr-swarm/reviews/<ticket>-<sha>.md`, and
+  `ALERT_BLOCKED` budget ceilings (REV-1..5, PROVE-2, PROVE-3).
+- **Session-Scoped Promote Authorization**: time-bounded human delegation
+  (`bash lib/arbiter.sh grant-session [--ttl SECONDS]`) with
+  `.herdr-swarm/promote-grant.json`, reusing `_arb_promote_pane_check()` to
+  ensure agent seats cannot self-authorize (GRANT-1, DECISION-1).
+- **Automated Arbiter Drain Pipeline**: `arbiter_enqueue_and_drain` background
+  drain automation in supervisor, child process PID logging, and crash-and-evict
+  stale lock recovery (PROVE-4, PROVE-5, PROVE-7, ADR 0014).
+- **Partition & Ref Integrity**: fail-closed integration ref verification
+  (`arbiter_init_ref [BASE]`) and canonical slug resolution (ARB-SLUG-1),
+  active-ticket conflict rejection in `lease_acquire()` (PART-2), and superseded
+  ticket handling (PART-1, SYNC-2).
+- **Developer Tooling & Sync**: `scripts/repo-state.sh` repository summary (DOG-17),
+  `scripts/ci-local.sh` with pinned ShellCheck version verification (DOG-18),
+  `stampede quota` provider quota probing (PUB-9), two-way GitHub issue
+  synchronization (SYNC-1, SYNC-2), and empirical trust-tax telemetry
+  measurements (TRUST-1).
 - `bin/stampede` unified entrypoint; lifecycle commands delegate to
   `herdr-loop-swarm.sh` unchanged, other commands dispatch by convention
   to `lib/cli/stampede-<cmd>.sh` (PUB-1).
@@ -20,6 +50,17 @@ pre-1.0: the public surface is not frozen.
 - `examples/demo-repo`: real test suite and a one-verified-verdict
   walkthrough (PUB-4).
 - `VERSION`, this changelog, and `stampede version` (PUB-5).
+- Rich status inspection (`stampede status`) with review loop aggregation (PUB-11).
+- Provider fallback chains and cross-provider reviewer seating (PUB-6, PUB-8).
+
+### Changed
+- Promotes and session grants enforce `_arb_promote_pane_check()`, refusing
+  execution from agent-occupied panes (GATE-1, GATE-2, ADR 0009).
+- Standing worker briefs explicitly prohibit cross-pane injection via
+  `herdr pane run`, `send-text`, or `send-keys` (BRIEF-1).
+- `CONTEXT.md` expanded with vocabulary and `_Avoid_` entries for all
+  seven post-Phase 1 architectural concepts (CONTEXT-1).
+- Ledger boolean normalization across launcher and supervisor (SUPER-1).
 
 ## [0.4.0] — public readiness (dogfood waves 1–5)
 
