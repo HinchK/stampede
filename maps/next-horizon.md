@@ -44,17 +44,23 @@ this repo** with receipts (HORIZON-2); the batch's no-review boundary is **featu
 accepted-limit, never silent** (HORIZON-3); and the parked queue and public docs **tell
 the truth about what exists** (HORIZON-4, HORIZON-5, QUOTA-1).
 
+## Active Frontier
+
+- **[Prove It Live & Ship 0.5.0](headless-live.md):** Continuation epic for the remainder of Next Horizon (`HORIZON-2` live proof per corrected plan, `HORIZON-3` review-boundary decision, and `REL-1` publish 0.5.0). All antecedent tickets (`HORIZON-1`, `DECISION-1`, `QUOTA-1`, `HORIZON-4`, `HORIZON-5`, `HL-LEDGER-1`, `HL-CONFIG-1`) are integrated, verified on `main`, and promoted.
+
 ## Tickets (charted; release/order is looper's call)
 
 | Ticket | Seat | Blocked by | Synopsis |
 |---|---|---|---|
 | HORIZON-1 | human | — | Integrate BRIEF-1, promote integration → `main`, push (DONE, commit 32dc565 on main) |
-| HORIZON-2 | arch (resolve to concrete idle-longest seat per the Arch Seat Balancing Convention at actual release/dispatch time) | HORIZON-1 (lands the brief the batch reads) | Prove `stampede headless` live: dispatch one real backlog ticket through the batch, receipts in a findings doc (STAGED) |
-| HORIZON-3 | arch (resolve to concrete idle-longest seat per the Arch Seat Balancing Convention at actual release/dispatch time) | HORIZON-2 | Headless reviewer rounds in batch mode — or a written accepted-limit decision (STAGED) |
-| HORIZON-4 | agy-docs | HORIZON-1, DECISION-1 | User-facing headless docs (user guide section, README, CHANGELOG entry naming the version) (DONE, docs/user-guide.md §11, README.md, CHANGELOG.md) |
-| HORIZON-5 | pm | — | Parked-queue triage audit: keep/kill each of the five, cross-checking supersession (DONE, docs/audits/2026-09-30-parked-queue-triage.md) |
+| HORIZON-2 | arch | HORIZON-1 | Prove `stampede headless` live per 2026-10-05 corrected plan (CONTINUED in `maps/headless-live.md`) |
+| HORIZON-3 | arch | HORIZON-2 | Headless reviewer rounds in batch mode — or written decision (CONTINUED in `maps/headless-live.md`) |
+| HORIZON-4 | agy-docs | HORIZON-1, DECISION-1 | User-facing headless docs (user guide section, README, CHANGELOG entry) (DONE, docs/user-guide.md §11, README.md, CHANGELOG.md) |
+| HORIZON-5 | pm | — | Parked-queue triage audit: keep/kill each of the five (DONE, docs/audits/2026-09-30-parked-queue-triage.md) |
 | DECISION-1 | agy-docs | — | Correct INCIDENT-1's stale CRED-1 reference; record CRED-1-to-GRANT-1 decision (DONE, docs/audits/2026-09-30-cred-1-superseded-by-grant-1.md) |
-| QUOTA-1 | arch (resolve to concrete idle-longest seat per the Arch Seat Balancing Convention at actual release/dispatch time) | — | Probe `agy` token consumption in lib/quota.sh with tests (RELEASED) |
+| QUOTA-1 | arch | — | Probe `agy` token consumption in lib/quota.sh with tests (DONE, commit 0684b3f on main) |
+| HL-LEDGER-1 | arch | — | Headless worker namespacing in seats.json to prevent interactive collision (DONE, commit 19135fe on main) |
+| HL-CONFIG-1 | arch | — | Project-level .opencode/opencode.json model pin & external_directory permission (DONE, commit 2cf79c0 on main) |
 
 ## Decisions so far
 
@@ -69,3 +75,7 @@ the truth about what exists** (HORIZON-4, HORIZON-5, QUOTA-1).
 - 2026-09-30 (dispatch): DECISION-1 and QUOTA-1 released; HORIZON-4 released from staged. HORIZON-2/3 remain staged until post-fix promote and sequencing.
 - 2026-09-30 (decision): DECISION-1 resolved; incident class closed with written decision record codifying GRANT-1 over CRED-1 in docs/audits/2026-09-30-cred-1-superseded-by-grant-1.md.
 - 2026-09-30 (docs): HORIZON-4 resolved; public surface updated with headless user guide, run-mode comparison, and 0.5.0 changelog.
+- 2026-10-01 (infrastructure): HL-LEDGER-1 resolved; namespaced headless workers (`headless-<seat>`) in seats.json, test_cli [14] proves live interactive seats survive a headless batch byte-identical.
+- 2026-10-05 (configuration): HL-CONFIG-1 resolved; created project-level .opencode/opencode.json with model `zai/glm-5.3` and `permission.external_directory: allow`, unblocking HORIZON-2 F1 and F4 preconditions.
+- 2026-10-05 (continuation): Remaining scope (HORIZON-2 live proof, HORIZON-3 review boundary, and REL-1 release) transitioned to continuation map `maps/headless-live.md` ("Prove It Live & Ship 0.5.0").
+
