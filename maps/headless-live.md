@@ -29,7 +29,7 @@ discipline green, tagged and pushed by the human).
 | Ticket | Seat | Blocked by | Synopsis |
 |---|---|---|---|
 | **HORIZON-2** (resolved, commit `b9cdc39`) | arch | — | The live proof run per its own execution plan: single mechanical target ticket, seats/leases snapshots diffed, findings doc; lands on integration without reviewer pass (the documented boundary) |
-| **HORIZON-3** (staged, current) | arch | — (HORIZON-2 resolved) | Review rounds in batch mode — implement or write the accepted-limit ADR |
+| **HORIZON-3** (in progress, arch-1) | arch | — (HORIZON-2 resolved) | Review rounds in batch mode — implement or write the accepted-limit ADR |
 | **HL-DL-1** (staged) | arch | HORIZON-3 | Per-batch scoping for headless dead-letter count — prevent historical dead letters from failing later green batches |
 | **REL-1** (staged) | human | HORIZON-3, HL-DL-1 | Publish 0.5.0: date the CHANGELOG entry, `make version-check`, human tag + push |
 

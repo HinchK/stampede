@@ -2,10 +2,10 @@
 id: HORIZON-3
 title: "Headless reviewer rounds in batch mode — feature or accepted limit"
 type: wayfinder:decision
-status: backlog
-assignee: arch
-owns: docs/adr
-parent: maps/next-horizon.md
+status: in_progress
+assignee: arch-1-hinchk-stampede
+owns: docs/adr,lib/cli/stampede-headless.sh
+parent: maps/headless-live.md
 blocked_by: [HORIZON-2]
 ---
 
@@ -13,21 +13,25 @@ blocked_by: [HORIZON-2]
 
 ## Intended Outcome
 
-Either (a) the batch runs reviewer rounds: greens route through
-`awaiting_review`, the reviewer is spawned headlessly with its own
-worktree/ledger entry, PASS→enqueue / BLOCK→critique-turn all in subprocess
-mode; or (b) an ADR records the accepted limit — batch quality = suite gate
-+ HEADLESS-5 ceilings, review stays an interactive-herd feature — with the
-reasoning. Today it is a code comment in lib/cli/stampede-headless.sh; a
-boundary this load-bearing belongs in a decision record, whichever way it
-goes.
+Driver decision settled: **Option (b) — accepted-limit ADR** recording that
+batch quality is enforced by the suite gate and HEADLESS-5 mechanical ceilings,
+while the reviewer loop remains an interactive-herd-only feature (`stampede headless`
+never spawns a reviewer).
+
+Author `docs/adr/0016-headless-batch-review-boundary.md` (indexed in `docs/adr/README.md`)
+and update the existing code comment in `lib/cli/stampede-headless.sh` to cite the ADR.
 
 ## Done-Criteria
 
-1. ADR written for (a) or (b), indexed in docs/adr/README.md.
-2. If (a): CONFIG_REVIEW_LOOP honored per config in batch mode, reviewer
-   provisioning in the CLI, coverage in test_cli's e2e.
-3. `make check` green.
+1. ADR written at `docs/adr/0016-headless-batch-review-boundary.md` citing full reasoning:
+   - Headless unattended zero-pane speed priority (reviewer subprocess doubling runtime/complexity).
+   - HORIZON-2 live proof findings (no demonstrated gap where review would catch a broken suite-green ticket).
+   - Headless scoped to small, mechanical, suite-gate-provable tickets.
+   - Consistency cost acknowledged (documented exception vs other tickets).
+   - Concrete revisit trigger specified.
+2. ADR indexed in `docs/adr/README.md`.
+3. Existing code comment in `lib/cli/stampede-headless.sh` updated to cite ADR 0016.
+4. `make check` green.
 
 ## Verification Step
 
