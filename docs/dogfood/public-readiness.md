@@ -37,9 +37,10 @@ every claim in the docs backed by something the repo can show.
    so `partition_check` treats all 38 historical tickets as active lease-holders
    and blocks everything. Harmless today because nothing calls it — see DOG-11,
    which must land before the planned dispatch-path wiring.
-3. **`arbiter_drain` and `arbiter_promote` are operator-invoked.** Green verdicts
-   enqueue automatically (`loop-bot-herd.sh:261`), then stop. If nothing seems to
-   integrate, that is why — run the drain.
+3. **`arbiter_drain` auto-runs after a successful enqueue; only promote is operator-invoked.** Green
+   verdicts enqueue and then drain automatically — in the supervisor's pass (PROVE-4) and inside headless
+   batches (HL-RED-1) — advancing only `swarm/<slug>/integration`. `arbiter_promote` to `main` remains
+   human-only (ADR 0009); manual `bash lib/arbiter.sh drain` is still available for re-runs.
 5. **DOG-1 edits the supervisor.** It changes `loop-bot-herd.sh`, `Makefile` and
    `lib/config.sh` in the target. Safe only because orchestration runs from a
    separate pinned source repo. Never point the launcher at its own directory.

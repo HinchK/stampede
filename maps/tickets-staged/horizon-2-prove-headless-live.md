@@ -2,7 +2,7 @@
 id: HORIZON-2
 title: "Prove stampede headless on a real ticket (live dogfood)"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: docs/findings/headless-live-proof.md
 parent: maps/next-horizon.md
@@ -78,4 +78,12 @@ into maps/tickets/ as a backlog item. The seat that receives it does the followi
    findings doc, don't present it as reviewed.
 9. Clean up: if the target ticket's own resolution needs anything beyond what headless itself did (doc updates,
    etc.), handle that as normal afterward.
+
+## Resolution
+
+- **Author:** `arch-2-hinchk-stampede` (commit `b9cdc39ee000b1cb14c38c3ca14bf722c043fd50`)
+- **Review:** `reviewer-hinchk-stampede` Round 1/2 PASS (`.herdr-swarm/reviews/HORIZON-2-b9cdc39ee000b1cb14c38c3ca14bf722c043fd50.md`)
+- **Integrated:** `b9cdc39` onto `swarm/stampede/integration` via `arbiter_enqueue_and_drain`
+- **Summary:** Executed live headless proof run against root repository on `main` with `herdr` off PATH. Run 1 caught a stale nested worktree holding slug-global branch `swarm/hinchk-stampede/arch_1`, validating `HL-WT-1` loud refusal. Run 2 dispatched real target ticket `HL-TGT-1` and honestly dead-lettered with real log pointer (`HL-DOCS-1` receipt), diagnosing model prefix drift in `.opencode/opencode.json` (`zai/glm-5.3` vs `zai-coding-plan/glm-5.3`) and fixing it on branch. Validated live ledger preservation (`HL-LEDGER-1` receipt): all 7 interactive seats byte-identical before and after. Comprehensive receipts recorded in `docs/findings/headless-live-proof.md`.
+
 
