@@ -28,8 +28,8 @@ discipline green, tagged and pushed by the human).
 
 | Ticket | Seat | Blocked by | Synopsis |
 |---|---|---|---|
-| **HORIZON-2** (staged, current — corrected plan 2026-10-05) | arch | — (promote backlog is 0; both prereqs verified on main above) | The live proof run per its own execution plan: single mechanical target ticket, seats/leases snapshots diffed, findings doc; lands on integration without reviewer pass (the documented boundary) |
-| **HORIZON-3** (staged, current) | arch | HORIZON-2 | Review rounds in batch mode — implement or write the accepted-limit ADR |
+| **HORIZON-2** (resolved, commit `b9cdc39`) | arch | — | The live proof run per its own execution plan: single mechanical target ticket, seats/leases snapshots diffed, findings doc; lands on integration without reviewer pass (the documented boundary) |
+| **HORIZON-3** (staged, current) | arch | — (HORIZON-2 resolved) | Review rounds in batch mode — implement or write the accepted-limit ADR |
 | **REL-1** (new, below) | human | HORIZON-3 | Publish 0.5.0: date the CHANGELOG entry, `make version-check`, human tag + push |
 
 No other open tickets exist: `maps/tickets/` is 96 resolved / 11 closed /
@@ -46,3 +46,5 @@ item (`arbiter-batch-integration`, kept per the HORIZON-5 triage).
   another headless run could pick it up.
 - 2026-10-05 (charting): REL-1 sequences behind HORIZON-3 so the release
   notes can state the review boundary truthfully either way.
+- 2026-10-05 (live proof): HORIZON-2 resolved; live proof executed against root repo on main with herdr off PATH. Run 1 surfaced stale nested worktree residue (HL-WT-1 loud refusal). Run 2 surfaced provider prefix drift in .opencode/opencode.json (zai-coding-plan/glm-5.3), verified with honest dead-letter with log pointer (HL-DOCS-1) and byte-identical interactive ledger preservation (HL-LEDGER-1). All receipts documented in docs/findings/headless-live-proof.md.
+
