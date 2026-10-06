@@ -30,12 +30,11 @@ discipline green, tagged and pushed by the human).
 |---|---|---|---|
 | **HORIZON-2** (resolved, commit `b9cdc39`) | arch | — | The live proof run per its own execution plan: single mechanical target ticket, seats/leases snapshots diffed, findings doc; lands on integration without reviewer pass (the documented boundary) |
 | **HORIZON-3** (resolved, commit `2dfa8bd`) | arch | — (HORIZON-2 resolved) | Review rounds in batch mode — accepted-limit ADR 0016 codified |
-| **HL-DL-1** (staged) | arch | — (HORIZON-3 resolved) | Per-batch scoping for headless dead-letter count — prevent historical dead letters from failing later green batches |
+| **HL-DL-1** (in progress, arch-2) | arch | — (HORIZON-3 resolved) | Per-batch scoping for headless dead-letter count — prevent historical dead letters from failing later green batches |
 | **REL-1** (unblocked, human ready) | human | — (HORIZON-3 resolved) | Publish 0.5.0: date the CHANGELOG entry, `make version-check`, human tag + push (ready for human operator) |
 
-No other open tickets exist: `maps/tickets/` is 96 resolved / 11 closed /
-2 done / 1 superseded / 0 backlog; the parked queue is one deliberately-parked
-item (`arbiter-batch-integration`, kept per the HORIZON-5 triage).
+No other open tickets exist: `maps/tickets/` has 1 in-progress (`HL-DL-1`);
+the parked queue is one deliberately-parked item (`arbiter-batch-integration`, kept per the HORIZON-5 triage).
 
 ## Decisions so far
 
