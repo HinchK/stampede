@@ -1,6 +1,6 @@
 # Swarm State Checkpoint: Universal Herdr Swarm (`herd-swarm`)
 
-**Updated:** 2026-09-27  
+**Updated:** 2026-10-05  
 **Plan of Record:** [maps/universal-herdr-swarm.md](maps/universal-herdr-swarm.md)  
 **Execution Roadmap:** [docs/reordered-plan.md](docs/reordered-plan.md)  
 **Orchestrator:** `looper` (wM:p1, AGY Flash)  
@@ -166,7 +166,7 @@
 8. **Prove It Live & Ship 0.5.0 Epic (IN PROGRESS)**:
    - **HORIZON-2 (INTEGRATED & RESOLVED)**: `arch-2` executed live headless proof from root checkout on `main` with `herdr` off PATH (`b9cdc39`). Run 1 proved `HL-WT-1` loud refusal on stale nested worktree residue. Run 2 dispatched real target ticket `HL-TGT-1` and proved `HL-DOCS-1` honest dead-letter with log pointer, catching provider prefix drift (`zai/glm-5.3` vs `zai-coding-plan/glm-5.3`) and fixing `.opencode/opencode.json` on branch. Proved `HL-LEDGER-1` live preservation: all 7 interactive seats byte-identical before and after. Reviewed PASS by `reviewer-hinchk-stampede` (Round 1/2). Integrated onto `swarm/stampede/integration` at `b9cdc39` via `arbiter_enqueue_and_drain`. Lease released cleanly. Ticket resolved at `effd5a4`. Full receipts in `docs/findings/headless-live-proof.md`.
    - **HORIZON-3 (INTEGRATED & RESOLVED)**: Driver decision Option (b) (accepted-limit ADR) implemented by `arch-1-hinchk-stampede` at commit `2dfa8bd`. Authored `docs/adr/0016-headless-batch-review-boundary.md` (all 4 reasoning lines, explicit revisit trigger), indexed in `docs/adr/README.md`, code comment updated in `lib/cli/stampede-headless.sh`. Autonomous review PASS verdict by `reviewer-hinchk-stampede` (Round 1/2). Integrated onto `swarm/stampede/integration` via `arbiter_enqueue_and_drain` and merged to `main`. Lease released cleanly. Ticket resolved.
-   - **HL-DL-1 (DISPATCHED TO ARCH-2)**: Released from staged into `maps/tickets/hl-dl-1-deadletter-batch-scoping.md` unchanged. Partition checked, lease acquired on `lib/headless.sh,lib/cli/stampede-headless.sh,tests/test_headless.sh`. Dispatched to `arch-2-hinchk-stampede` (idle-longest seat).
+   - **HL-DL-1 (INTEGRATED & RESOLVED)**: Implemented by `arch-2-hinchk-stampede` at commit `c1f8f1b15af6fdb26cbfb8c2fbe2fd5e730c8f30`. `headless_deadletter_count` in `lib/headless.sh` accepts an optional `SINCE_INDEX` parameter (default 0), slicing the append-only JSONL file past the baseline count; `stampede headless` snapshots baseline record count before dispatch and evaluates exit status against it, preserving Hazard 3 fail-closed safety while ignoring historical dead letters. Autonomous review PASS verdict by `reviewer-hinchk-stampede` (Round 1/2). Integrated onto `swarm/stampede/integration` via `arbiter_enqueue_and_drain` and merged to `main`. Lease released cleanly. Ticket resolved.
    - **REL-1 (UNBLOCKED, HUMAN)**: Publish 0.5.0; staged at `maps/tickets-staged/rel-1-publish-050.md`, assigned to `human`, unblocked by `HORIZON-3`. Ready for human operator execution (date changelog, version-check, tag, push).
    - **Total Test Suite Health**: All 19 suites green (`make check`), 0 ShellCheck warnings, tree clean.
 

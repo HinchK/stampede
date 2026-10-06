@@ -2,8 +2,8 @@
 id: HL-DL-1
 title: "Per-batch scoping for headless dead-letter count"
 type: wayfinder:defect
-status: backlog
-assignee: arch
+status: resolved
+assignee: arch-2-hinchk-stampede
 owns: lib/headless.sh,lib/cli/stampede-headless.sh,tests/test_headless.sh
 parent: maps/headless-live.md
 blocked_by: [HORIZON-3]
@@ -52,3 +52,12 @@ any long-lived repository does.
 Run `tests/test_headless.sh` and `tests/test_cli.sh` (or `make check`) verifying
 that historical dead-letter records do not fail subsequent green batches while new
 dead-letter records fail as expected.
+
+## Resolution
+
+Resolved at commit `c1f8f1b15af6fdb26cbfb8c2fbe2fd5e730c8f30`.
+- `headless_deadletter_count` in `lib/headless.sh` upgraded with an optional `SINCE_INDEX` parameter (default 0), slicing the append-only JSONL file past the baseline count.
+- `stampede headless` in `lib/cli/stampede-headless.sh` records baseline record count before dispatch and evaluates exit status against it, preserving Hazard 3 while ignoring historical records.
+- Comprehensive bidirectional tests in `tests/test_headless.sh` (8j-8j4) and `tests/test_cli.sh` ([15]).
+- Autonomous review PASS verdict by `reviewer-hinchk-stampede` (Round 1/2) in `.herdr-swarm/reviews/HL-DL-1-c1f8f1b15af6fdb26cbfb8c2fbe2fd5e730c8f30.md`.
+- Integrated onto `swarm/stampede/integration` via `arbiter_enqueue_and_drain` and merged to `main`. Lease released cleanly.

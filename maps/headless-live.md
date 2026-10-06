@@ -30,10 +30,10 @@ discipline green, tagged and pushed by the human).
 |---|---|---|---|
 | **HORIZON-2** (resolved, commit `b9cdc39`) | arch | — | The live proof run per its own execution plan: single mechanical target ticket, seats/leases snapshots diffed, findings doc; lands on integration without reviewer pass (the documented boundary) |
 | **HORIZON-3** (resolved, commit `2dfa8bd`) | arch | — (HORIZON-2 resolved) | Review rounds in batch mode — accepted-limit ADR 0016 codified |
-| **HL-DL-1** (in progress, arch-2) | arch | — (HORIZON-3 resolved) | Per-batch scoping for headless dead-letter count — prevent historical dead letters from failing later green batches |
+| **HL-DL-1** (resolved, commit `c1f8f1b`) | arch | — (HORIZON-3 resolved) | Per-batch scoping for headless dead-letter count — prevent historical dead letters from failing later green batches |
 | **REL-1** (unblocked, human ready) | human | — (HORIZON-3 resolved) | Publish 0.5.0: date the CHANGELOG entry, `make version-check`, human tag + push (ready for human operator) |
 
-No other open tickets exist: `maps/tickets/` has 1 in-progress (`HL-DL-1`);
+No other open tickets exist: all tickets in `maps/tickets/` are resolved; the staged queue carries `REL-1` (unblocked, human operator);
 the parked queue is one deliberately-parked item (`arbiter-batch-integration`, kept per the HORIZON-5 triage).
 
 ## Decisions so far
@@ -48,4 +48,5 @@ the parked queue is one deliberately-parked item (`arbiter-batch-integration`, k
   notes can state the review boundary truthfully either way.
 - 2026-10-05 (live proof): HORIZON-2 resolved; live proof found 2 real defects incl. the stale model id affecting the config you just had approved (fixed to `zai-coding-plan/glm-5.3`), HL-LEDGER-1 confirmed holding live via byte-identical ledger diff; full receipts in [docs/findings/headless-live-proof.md](docs/findings/headless-live-proof.md).
 - 2026-10-05 (review boundary): HORIZON-3 resolved; driver settled Option (b) accepted limit — batch quality is enforced by suite gate + HEADLESS-5 mechanical ceilings, never a reviewer pass; review remains interactive-only; stampede headless never spawns a reviewer; full rationale and revisit trigger codified in [docs/adr/0016-headless-batch-review-boundary.md](docs/adr/0016-headless-batch-review-boundary.md).
+- 2026-10-05 (dead-letter scoping): HL-DL-1 resolved; dead-letter counting scoped to active batch run via append-only since-index offset, preserving Hazard 3 while unblocking subsequent green runs on repos with historical failures.
 
