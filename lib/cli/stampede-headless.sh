@@ -176,6 +176,19 @@ EOF
       "$SESSION_LOG" 2>/dev/null || printf 'none'
   }
 
+  # HL-DL-1: scope dead-letter evaluation to THIS run. The telemetry
+  # $SESSION_ID is stable per project — session-only counting made every
+  # historical dead letter fail every later all-green batch on a long-lived
+  # repo (HORIZON-2 live finding). The file is append-only JSONL, so the
+  # record count at batch start is the run's baseline; the end-of-batch
+  # count reads only records past it. Any dead letter written during the
+  # run — by this loop or by the reaper's ceiling path — still counts
+  # (Hazard 3 unchanged).
+  local dl_base=0
+  if [[ -f "${STATE_DIR}/dead-letter.jsonl" ]]; then
+    dl_base=$(( $(wc -l < "${STATE_DIR}/dead-letter.jsonl" 2>/dev/null || echo 0) ))
+  fi
+
   local deadline=$(( SECONDS + batch_timeout )) dispatched=0 timed_out=0 tid concluded final
   local dispatched_ids=()
   for f in "${tickets[@]}"; do
@@ -312,8 +325,9 @@ EOF
       *) failed=1 ;;
     esac
   done
-  dl=$(headless_deadletter_count "$SESSION_ID")
-  printf 'headless: batch done — %d dispatched, %d dead-letter record(s) this session\n' \
+  # Records written after the baseline — this run only (HL-DL-1).
+  dl=$(headless_deadletter_count "$SESSION_ID" "" "$dl_base")
+  printf 'headless: batch done — %d dispatched, %d dead-letter record(s) this run\n' \
     "$dispatched" "$dl"
   if (( dl > 0 || failed )); then
     (( dl > 0 )) && printf 'headless: DEAD LETTERS present — see %s\n' "${STATE_DIR}/dead-letter.jsonl" >&2

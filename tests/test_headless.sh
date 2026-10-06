@@ -262,6 +262,23 @@ check 8f  "records carry session, ticket, sha, reason" \
   'jq -e -s ".[0] | .session == \"sess-test\" and .ticket == \"DL-1\" and .reason != \"\"" "$DL" >/dev/null'
 [[ $(headless_deadletter_count sess-test "$DL") == 2 ]] \
   && ok "8g per-run count filters by session" || bad "8g count: $(headless_deadletter_count sess-test "$DL")"
+# HL-DL-1: since-index scopes counting to records written after the marker —
+# the active-batch view. Records: [0]=DL-1 sess-test, [1]=DL-9 sess-test,
+# [2]=DL-3 sess-other.
+[[ $(headless_deadletter_count sess-test "$DL" 1) == 1 ]] \
+  && ok "8j since-index counts only records past the marker" \
+  || bad "8j since=1: $(headless_deadletter_count sess-test "$DL" 1)"
+[[ $(headless_deadletter_count sess-test "$DL" 2) == 0 ]] \
+  && ok "8j2 baseline beyond a prior run's records counts zero (all-green)" \
+  || bad "8j2 since=2: $(headless_deadletter_count sess-test "$DL" 2)"
+"$SCRIPT_DIR/lib/headless.sh" deadletter-check sess-test "$STATE_DIR" 2 >/dev/null 2>&1 \
+  && ok "8j3 deadletter-check with since-marker: clean when nothing new (all-green run)" \
+  || bad "8j3 marker check false-positive on history"
+if "$SCRIPT_DIR/lib/headless.sh" deadletter-check sess-test "$STATE_DIR" 0 >/dev/null 2>&1; then
+  bad "8j4 full-history check missed existing records"
+else
+  ok "8j4 deadletter-check without marker still sees full history (Hazard 3)"
+fi
 if "$SCRIPT_DIR/lib/headless.sh" deadletter-check sess-test "$STATE_DIR" >/dev/null 2>&1; then
   bad "8h deadletter-check exits non-zero when this run has entries"
 else

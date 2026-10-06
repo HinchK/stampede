@@ -400,5 +400,64 @@ EOF
     && ok "namespaced worker still harvests and gates green" || bad "T-L1 not green"
 fi
 
+# [15] HL-DL-1: dead-letter counting scopes to the ACTIVE run on a long-lived
+# repo — the stable per-project session id once made every historical dead
+# letter fail every later all-green batch (HORIZON-2 live finding). Both
+# directions on one repo WITH history present.
+if [[ -e "$HB_BIN/timeout" ]]; then
+  HR7=$(mktemp -d "$SCRATCH/hr7.XXXXXX")
+  git -C "$HR7" init -q -b main
+  git -C "$HR7" config user.email t@t; git -C "$HR7" config user.name t
+  git -C "$HR7" remote add origin https://github.com/t/scratch7.git
+  printf '.herdr-swarm/\n' > "$HR7/.gitignore"
+  printf 'test:\n\t@true\n' > "$HR7/Makefile"
+  mkdir -p "$HR7/maps/tickets"
+  printf 'x\n' > "$HR7/f.txt"; git -C "$HR7" add -A; git -C "$HR7" commit -qm base
+  printf -- '---\nid: T-G1\nstatus: backlog\n---\nbody\n' > "$HR7/maps/tickets/tg.md"
+  git -C "$HR7" add -A; git -C "$HR7" commit -qm tickets
+  PROJECT_SLUG="$(slugify t/scratch7)" REPO_DIR="$HR7" STATE_DIR="$HR7/.herdr-swarm" \
+    BASE_BRANCH=main PATH="$HB_PATH" bash "$REPO_ROOT/lib/arbiter.sh" init-ref >/dev/null 2>&1 || true
+  # long-lived repo: a stable session id + a PRIOR run's dead letter under
+  # that same session — exactly what session-only counting mis-attributed
+  mkdir -p "$HR7/.herdr-swarm"
+  printf 'swarm-longlived\n' > "$HR7/.herdr-swarm/telemetry-session"
+  jq -cn '{ts: 1, session: "swarm-longlived", ticket: "OLD-1", sha: "aaaaaaa", reason: "prior run failure"}' \
+    >> "$HR7/.herdr-swarm/dead-letter.jsonl"
+  cat > "$HB_BIN/opencode" <<'EOF'
+#!/bin/sh
+brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
+tid=$(sed -nE 's/^id:[[:space:]]*//p' "$brief" 2>/dev/null | head -n1 | tr -d '[:space:]')
+sha=$(git rev-parse HEAD 2>/dev/null || printf 0000000000000000000000000000000000000000)
+reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete response to ([^ ]+) and.*/\1/p')
+[ -n "$reply" ] && printf 'worker reply for %s\n' "${tid:-unknown}" > "$reply"
+printf 'ARCH DONE #%s %s\n' "${tid:-unknown}" "$sha"
+EOF
+  chmod +x "$HB_BIN/opencode"
+  PATH="$HB_PATH" "$REPO_ROOT/bin/stampede" headless "$HR7" --max-tickets 1 --timeout 60 >"$SCRATCH/hl-dl1.out" 2>&1; rc=$?
+  [[ "$rc" == 0 ]] \
+    && ok "all-green batch exits 0 despite the prior-run dead letter" \
+    || bad "green run failed rc=$rc: $(tail -3 "$SCRATCH/hl-dl1.out")"
+  grep -q "0 dead-letter record(s) this run" "$SCRATCH/hl-dl1.out" \
+    && ok "batch reports zero dead letters for this run" || bad "run-scoped count wrong: $(tail -3 "$SCRATCH/hl-dl1.out")"
+  jq -e -s 'any(.[]; (.ticket|tostring) == "T-G1" and .suite == "green")' \
+    "$HR7/.herdr-swarm/session-verdicts.jsonl" >/dev/null 2>&1 \
+    && ok "the green run itself was real (verdict + gate)" || bad "T-G1 not green"
+  # direction 2, same repo, history still present: a current-run dead letter
+  # (worker crashes without a verdict) MUST still fail the batch. T-G1 is
+  # retired first (queue hygiene, as after any green) so the batch dispatches
+  # the fresh T-G2 instead of re-concluding T-G1 from its green history.
+  sed -i.bak 's/^status: backlog/status: done/' "$HR7/maps/tickets/tg.md" && rm -f "$HR7/maps/tickets/tg.md.bak"
+  printf -- '---\nid: T-G2\nstatus: backlog\n---\nbody\n' > "$HR7/maps/tickets/tg2.md"
+  printf '#!/bin/sh\nexit 9\n' > "$HB_BIN/opencode"; chmod +x "$HB_BIN/opencode"
+  PATH="$HB_PATH" "$REPO_ROOT/bin/stampede" headless "$HR7" --max-tickets 1 --timeout 60 >"$SCRATCH/hl-dl2.out" 2>&1; rc=$?
+  [[ "$rc" == 1 ]] \
+    && ok "current-batch dead letter still exits 1 (Hazard 3 intact)" \
+    || bad "current-letter run rc=$rc: $(tail -3 "$SCRATCH/hl-dl2.out")"
+  grep -q "1 dead-letter record(s) this run" "$SCRATCH/hl-dl2.out" \
+    && ok "count names exactly this run's letter (history excluded)" || bad "scoping wrong: $(tail -3 "$SCRATCH/hl-dl2.out")"
+  [[ "$(wc -l < "$HR7/.herdr-swarm/dead-letter.jsonl" | tr -d ' ')" == 2 ]] \
+    && ok "dead-letter history preserved (append-only, 2 records)" || bad "history not preserved"
+fi
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

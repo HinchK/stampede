@@ -266,10 +266,22 @@ dead_letter_record() { # TICKET SHA REASON [SESSION] [STATE_DIR]
     >> "$sd/dead-letter.jsonl"
 }
 
-headless_deadletter_count() { # [SESSION] [DEADLETTER_FILE] → prints count
-  local session="${1:-none}" f="${2:-${STATE_DIR:-$PWD/.herdr-swarm}/dead-letter.jsonl}"
+# headless_deadletter_count [SESSION] [DEADLETTER_FILE] [SINCE_INDEX=0] → prints count
+# HL-DL-1: dead-letter evaluation is scoped to the ACTIVE BATCH, not the
+# stable per-project telemetry session — on a long-lived repo that session
+# never changes, so session-only filtering counted every historical record
+# into every later all-green run's exit code (HORIZON-2 live finding:
+# docs/findings/headless-live-proof.md). The file is append-only JSONL, so a
+# since-index (the record count at batch start) scopes counting to records
+# written during this run; session filtering still applies on top. The
+# default SINCE_INDEX=0 keeps the historical count-everything behavior for
+# callers that want a whole-history view (deadletter-check without a marker).
+headless_deadletter_count() {
+  local session="${1:-none}" f="${2:-${STATE_DIR:-$PWD/.herdr-swarm}/dead-letter.jsonl}" since="${3:-0}"
+  [[ "$since" =~ ^[0-9]+$ ]] || since=0
   [[ -f "$f" ]] || { printf '0\n'; return 0; }
-  jq -r -s --arg s "$session" '[.[] | select(.session == $s)] | length' "$f" 2>/dev/null || printf '0'
+  jq -r -s --arg s "$session" --argjson n "$since" \
+    '.[$n:] | map(select(.session == $s)) | length' "$f" 2>/dev/null || printf '0'
 }
 
 # headless_drain_and_release — in-batch integration step (HL-RED-1, receipt F5).
@@ -305,14 +317,16 @@ if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
     kill)   headless_kill "$@" ;;
     reap)   headless_reap "$@" ;;
     # Batch entrypoint helper: a headless run exits non-zero when its own
-    # session left anything in the dead-letter log (Hazard 3 — CI must see it).
+    # session left anything in the dead-letter log (Hazard 3 — CI must see
+    # it). SINCE_INDEX (HL-DL-1) scopes the check to records written after
+    # the marker — the active run, not the project's whole history.
     deadletter-check)
-      n=$(headless_deadletter_count "${1:-none}" "${2:+$2/dead-letter.jsonl}")
+      n=$(headless_deadletter_count "${1:-none}" "${2:+$2/dead-letter.jsonl}" "${3:-0}")
       printf '%s\n' "$n"
       (( n == 0 ))
       ;;
     *)
-      printf 'Usage: %s spawn <worker> <brief> <worktree> [kind] | status <worker> | kill <worker> [sig] | reap | deadletter-check <session> [state-dir]\n' "$0" >&2
+      printf 'Usage: %s spawn <worker> <brief> <worktree> [kind] | status <worker> | kill <worker> [sig] | reap | deadletter-check <session> [state-dir] [since-index]\n' "$0" >&2
       exit 1
       ;;
   esac
