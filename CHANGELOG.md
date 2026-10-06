@@ -8,7 +8,7 @@ pre-1.0: the public surface is not frozen.
 `make version-check` fails when the top entry below disagrees with
 `VERSION`. Tagging is a human act — nothing in this repository pushes.
 
-## [0.5.0] — in development (multi-provider UX, review loop, and headless batch drain)
+## [0.5.0] — 2026-10-05 (multi-provider UX, review loop, and headless batch drain)
 
 ### Added
 - **Headless Batch Drain Mode** (`bin/stampede headless`): unattended queue
@@ -21,6 +21,11 @@ pre-1.0: the public surface is not frozen.
   letters, structured `.herdr-swarm/dead-letter.jsonl` with explicit worker log
   pointers, environment variable precedence (`emit_env_wins`), and worktree rc
   verification (HL-WT-1, HL-CFG-1, HL-RED-1, HL-TMO-1, HL-DOCS-1, PROVE-HEADLESS-1).
+- **Headless Live-Seat Isolation**: headless workers are namespaced (`headless-<seat>`) so their ledger entry can never collide with a live interactive seat's record in `.herdr-swarm/seats.json` (HL-LEDGER-1).
+- **Headless Dead-Letter Batch Scoping**: dead-letter counting is scoped to the active batch run (a since-index on the append-only log) rather than the stable per-project session, so historical dead letters no longer fail later all-green batches (HL-DL-1).
+- **Headless Live Proof**: `stampede headless` proven end-to-end on this repository's own real backlog with full receipts, including two live-only defects found and fixed -- a stale nested worktree correctly refused, and a stale provider-model id in the project's `.opencode/opencode.json` (HORIZON-2, `docs/findings/headless-live-proof.md`).
+- **`stampede quota`'s Antigravity/Gemini (agy) kind probe**, read-only, via pane-output scanning (QUOTA-1).
+- **User-facing documentation for `stampede headless`** -- user guide section and README run-mode entry (HORIZON-4).
 - **Autonomous Reviewer Loop**: multi-turn critique cycles (`[reviewer] loop = true`),
   structured `REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>` anchors, durable
   findings artifacts in `.herdr-swarm/reviews/<ticket>-<sha>.md`, and
@@ -61,6 +66,7 @@ pre-1.0: the public surface is not frozen.
 - `CONTEXT.md` expanded with vocabulary and `_Avoid_` entries for all
   seven post-Phase 1 architectural concepts (CONTEXT-1).
 - Ledger boolean normalization across launcher and supervisor (SUPER-1).
+- **Headless batch review boundary formalized as an accepted limit**: batch quality is the suite gate plus mechanical safety ceilings only, never a reviewer pass -- review stays an interactive-herd-only feature (ADR 0016, HORIZON-3).
 
 ## [0.4.0] — public readiness (dogfood waves 1–5)
 
