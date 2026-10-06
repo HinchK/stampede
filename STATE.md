@@ -161,9 +161,14 @@
    - **HORIZON-4 (RESOLVED)**: `agy-docs` authored user-facing documentation for headless batch mode in `docs/user-guide.md`, updated `README.md`, and backfilled `CHANGELOG.md` under 0.5.0 (`f312b60`). `make version-check` and `make check` pass. Lease released.
    - **HL-LEDGER-1 (INTEGRATED & RESOLVED)**: Discovered by `looper` during HORIZON-2 pre-flight safety audit; `arch-2` namespaced headless workers (`headless-<seat_name>`), isolating all batch artifacts from interactive roster names in `seats.json`. Test case [14] in `tests/test_cli.sh` proves live interactive seats survive a headless batch byte-identical (56/56 passing). Reviewed PASS by `reviewer-hinchk-stampede` (Round 1/2) in `.herdr-swarm/reviews/HL-LEDGER-1-19135feca3569845988eb7d483428922cf3e0e84.md`. Integrated onto `swarm/stampede/integration` at `a9132d6`. Ticket resolved at `70176ab`.
    - **HL-CONFIG-1 (INTEGRATED & RESOLVED)**: `arch-1` created `.opencode/opencode.json` pinning `"model": "zai/glm-5.3"` and `"permission": { "external_directory": "allow" }` (`2cf79c0`), resolving HORIZON-2 F1 and F4 without touching global `~/.config`. Verified via `opencode debug config` inside worktree. Reviewed PASS by `reviewer-hinchk-stampede` (Round 1/2) in `.herdr-swarm/reviews/HL-CONFIG-1-2cf79c017f2238988f09433fc1057406c5037fb1.md`. Integrated onto `swarm/stampede/integration` at `ec5baa2` via `arbiter_enqueue_and_drain` (reconciled at `fc1fc46`). Lease released cleanly. Ticket resolved at `8b13bb8`.
-   - **HORIZON-2 (STAGED)**: Preconditions F1 and F4 unblocked by `HL-CONFIG-1`; staged pending queue isolation at run time.
-   - **HORIZON-3 (STAGED)**: Staged behind HORIZON-2.
+   - **HORIZON-2 / HORIZON-3**: Scope transitioned to continuation map `maps/headless-live.md` ("Prove It Live & Ship 0.5.0").
+   - **Epic Closeout**: Next Horizon epic completed and reconciled.
+8. **Prove It Live & Ship 0.5.0 Epic (IN PROGRESS)**:
+   - **HORIZON-2 (DISPATCHED TO ARCH-2)**: Claimed and dispatched interactively to `arch-2-hinchk-stampede` (idle-longest seat). Lease acquired on `docs/findings/headless-live-proof.md`. Brief delivers full 9-step corrected execution plan verbatim from `maps/tickets-staged/horizon-2-prove-headless-live.md`. Execution actively underway.
+   - **HORIZON-3 (STAGED)**: Review rounds in batch mode feature-or-ADR decision; staged behind HORIZON-2.
+   - **REL-1 (STAGED)**: Publish 0.5.0; staged at `maps/tickets-staged/rel-1-publish-050.md`, assigned to `human`, blocked by HORIZON-3.
    - **Total Test Suite Health**: All 19 suites green (`make check`), 0 ShellCheck warnings, tree clean.
+
 
 
 
