@@ -79,10 +79,12 @@ EOF
   # shellcheck disable=SC1090,SC1091  # supervisor sourced for its function surface
   source "$root/loop-bot-herd.sh" status >/dev/null
 
-  # The interactive herd's reviewer loop is out of scope for the batch:
-  # greens route straight to the arbiter queue (the pre-REV-5 ENQUEUE
-  # path). The batch's quality machinery is the suite gate + HEADLESS-5
-  # ceilings + dead-letter exits; headless reviewer rounds are follow-up
+  # ADR 0016 (the headless batch review boundary — an ACCEPTED LIMIT): the
+  # interactive herd's reviewer loop is out of scope for the batch. Greens
+  # route straight to the arbiter queue (the pre-REV-5 ENQUEUE path); the
+  # batch's quality machinery is the suite gate + HEADLESS-5 ceilings +
+  # dead-letter exits. `stampede headless` never spawns a reviewer. Revisit
+  # trigger and full reasoning: docs/adr/0016-headless-batch-review-boundary.md
   # (the loop's review_loop_enabled reads this env at directive time).
   export CONFIG_REVIEW_LOOP=0
 

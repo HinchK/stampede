@@ -23,6 +23,7 @@ ADRs capture significant architectural and design choices, along with the contex
 | [0013](0013-asynchronous-supervisor-gate-jobs.md) | Asynchronous Supervisor Suite Gating, Durable Job Records, and Concurrency Bounding | Accepted | 2026-09-19 | `loop-bot-herd.sh`, `.herdr-swarm/gates/`, [Fan-Out Roadmap §1.3](../audits/2026-09-19-phase3-concurrent-fanout-roadmap.md), [T-P3-3](../../maps/tickets/async-supervisor-harvesting.md) |
 | [0014](0014-arbiter-drain-automation.md) | Arbiter Drain Automation and Non-Blocking Supervisor Integration | Accepted | 2026-09-23 | `lib/arbiter.sh`, `loop-bot-herd.sh`, [PROVE-4](../../maps/tickets/prove-auto-wire-arbiter-drain.md), [PROVE-5](../../maps/tickets/prove-drain-adr.md) |
 | [0015](0015-headless-batch-drain-mode.md) | Headless Batch Drain Mode and Unattended Safety Invariants | Accepted | 2026-09-24 | `lib/headless.sh`, `lib/cli/stampede-headless.sh`, [HEADLESS-2](../findings/headless-mode-design.md), [HEADLESS-7](../../maps/tickets/headless-7-adr.md) |
+| [0016](0016-headless-batch-review-boundary.md) | The Headless Batch Review Boundary — an Accepted Limit | Accepted | 2026-10-05 | `lib/cli/stampede-headless.sh`, [HORIZON-2 live proof](../findings/headless-live-proof.md), [HORIZON-3](../../maps/tickets-staged/horizon-3-headless-review-rounds.md) |
 
 ## Related Documentation
 
