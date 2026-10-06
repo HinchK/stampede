@@ -6,7 +6,7 @@ status: backlog
 assignee: human
 owns: CHANGELOG.md,VERSION
 parent: maps/headless-live.md
-blocked_by: [HORIZON-3]
+blocked_by: []
 ---
 
 # REL-1 — ship the release the changelog already describes

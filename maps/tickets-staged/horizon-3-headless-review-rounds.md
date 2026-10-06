@@ -2,7 +2,7 @@
 id: HORIZON-3
 title: "Headless reviewer rounds in batch mode — feature or accepted limit"
 type: wayfinder:decision
-status: in_progress
+status: resolved
 assignee: arch-1-hinchk-stampede
 owns: docs/adr,lib/cli/stampede-headless.sh
 parent: maps/headless-live.md
@@ -36,3 +36,12 @@ and update the existing code comment in `lib/cli/stampede-headless.sh` to cite t
 ## Verification Step
 
 The ADR exists and the code comment cites it.
+
+## Resolution
+
+Resolved at commit `2dfa8bd3c4d82592552aa51033b70ae145d6fae0`.
+- Authored `docs/adr/0016-headless-batch-review-boundary.md` capturing driver Option (b).
+- Indexed in `docs/adr/README.md`.
+- Updated code comment in `lib/cli/stampede-headless.sh`.
+- Autonomous review PASS verdict by `reviewer-hinchk-stampede` (Round 1/2) in `.herdr-swarm/reviews/HORIZON-3-2dfa8bd3c4d82592552aa51033b70ae145d6fae0.md`.
+- Integrated onto `swarm/stampede/integration` via `arbiter_enqueue_and_drain` and merged to `main`. Lease released cleanly.
