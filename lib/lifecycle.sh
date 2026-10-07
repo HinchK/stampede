@@ -149,12 +149,47 @@ _review_write() { # STATE_DIR JQ_FILTER [JQARGS...] — atomic temp+mv write
 }
 
 # Entry point after a supervisor Suite Gate went green on (ticket, seat, sha).
+# REV-06: docs/maps-only commits fast-path past the reviewer round — the
+# narrowed path set is deliberate (test files do NOT qualify: weakening a
+# test is a real way to hide a defect under cover of "just tests"). Any
+# classification failure — unresolvable sha, missing repo, empty diff —
+# fails SAFE: the normal review path. Changed paths follow the repo's
+# existing git diff convention (partition/arbiter use diff --name-only;
+# diff-tree gives the same list without naming the parent).
+_review_commit_is_docs_only() { # SHA → rc 0 = every changed path is doc-class
+  local repo="${REPO_DIR:-$PWD}" paths p
+  paths=$(git -C "$repo" diff-tree --no-commit-id --name-only -r "$1" 2>/dev/null) || return 1
+  [[ -n "$paths" ]] || return 1
+  while IFS= read -r p; do
+    [[ -n "$p" ]] || continue
+    case "$p" in
+      docs/*|maps/*|README.md|CHANGELOG.md|CONTEXT.md|STATE.md) ;;
+      *) return 1 ;;
+    esac
+  done <<<"$paths"
+  return 0
+}
+
 review_loop_on_gate_green() { # TICKET SEAT SHA [STATE_DIR]
   local ticket="$1" seat="$2" sha="$3" sd="${4:-$PWD/.herdr-swarm}"
   local f; f=$(_review_state_file "$sd")
 
   if [[ "$(review_loop_enabled "$sd")" != "1" ]]; then
     printf 'ENQUEUE %s %s %s\n' "$ticket" "$seat" "$sha"
+    return 0
+  fi
+
+  # REV-06 fast-path: an all-docs commit enqueues directly, with a durable
+  # state record + log marker so it is visibly distinguishable from the
+  # loop-off ENQUEUE when reading traces/state later.
+  if _review_commit_is_docs_only "$sha"; then
+    printf 'ENQUEUE %s %s %s\n' "$ticket" "$seat" "$sha"
+    review_loop_init "$sd"
+    # shellcheck disable=SC2016  # jq program, not shell
+    _review_write "$sd" \
+      '.reviews[$t] = {seat:$s, sha:$h, state:"docs_fast_path", updated:$now, history:((.reviews[$t].history // []) + [{event:"docs_fast_path", sha:$h, at:$now}])}' \
+      --arg t "$ticket" --arg s "$seat" --arg h "$sha" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'review loop: #%s @ %s is docs/maps-only — fast-path ENQUEUE, no review round\n' "$ticket" "$sha" >&2
     return 0
   fi
 
