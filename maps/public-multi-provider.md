@@ -166,7 +166,6 @@ PUB-11 ← PUB-10.
 
 ## Not yet specified
 
-- Auto-throttling / rerouting on quota exhaustion (PUB-9 is read-only).
 - Cost attribution when a provider CLI reports no usage — `unreported`
   until a spec exists.
 

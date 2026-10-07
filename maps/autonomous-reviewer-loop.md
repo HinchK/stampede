@@ -25,8 +25,6 @@ An autonomous, config-gated cross-provider reviewer loop where `looper` dispatch
 ## Not yet specified
 
 <!-- Fog of war: in-scope questions to specify as the frontier advances -->
-- **Reviewer Auto-Approve Heuristics**: Policy on whether documentation-only or test-only commits can skip review loop or fast-path to PASS.
-- **Multi-Reviewer Quorum**: Scaling review from single-seat review to multi-seat cross-provider consensus (e.g., both Claude and Gemini must PASS).
 - **Interactive TUI Review Diff Inspection**: Visualizing reviewer critique comments directly inline within an Ops or Herdr terminal view.
 
 ## Out of scope

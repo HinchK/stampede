@@ -112,7 +112,7 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 
 ## Active Frontier
 
-No open tickets or maps remain active on this frontier. Backlog queue and active frontier clean.
+- **[Dispatch Safety & Review Policy](dispatch-safety-and-review-policy.md):** close the agy-dispatch quota loop (QUOTA-3 point-in-time gate command, QUOTA-4 looper brief integration) and resolve open review loop policies (REV-06 docs-only fast-path, REV-07 multi-reviewer quorum decision).
 
 ## Not yet specified
 

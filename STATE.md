@@ -174,6 +174,13 @@
    - **QUOTA-2 (INTEGRATED & RESOLVED)**: Implemented by `arch-1-hinchk-stampede` at commit `87c1cb21576eb2d27aeeaa0a8630ffd94519b198`. In `loop-bot-herd.sh`'s `_review_directives` `DISPATCH_REVIEWER` case, checks `_agy_quota_exhausted` via `quota_probe_kind agy` against the reviewer seat before calling `worker_feedback`; positive exhaustion (`ok:<seconds>s`) defers with a durable marker in `.herdr-swarm/quota-deferred.jsonl`, emits `review.deferred` telemetry, and alerts without pausing on unknown/error. `_dispatch_reviewer` unifies direct, deferred, and retried reviewer prompts. `cmd_once` runs `_quota_retry_deferred` first each cycle, retrying all pending dispatches and draining the marker once the account clears. Live probe gating ensures fresh gate-greens during the exhaustion window also defer into the marker. Test coverage in `tests/test_async_gate.sh` §16 adds 10 assertions (66/66 passing). Autonomous review PASS verdict by `reviewer-hinchk-stampede` (Round 1/2) in `.herdr-swarm/reviews/QUOTA-2-87c1cb21576eb2d27aeeaa0a8630ffd94519b198.md`. Integrated onto `swarm/stampede/integration` at `87c1cb2` via `arbiter_enqueue_and_drain`. Lease released cleanly. Ticket resolved.
    - **Epic Closeout**: QUOTA-2 epic completed and closed out.
    - **Total Test Suite Health**: All 19 suites green (`make check`), 0 ShellCheck warnings, tree clean.
+10. **Dispatch Safety & Review Policy Epic (IN PROGRESS)**:
+   - **Epic Charter**: Chartered via /wayfinder grilling 2026-10-07 ([`maps/dispatch-safety-and-review-policy.md`](maps/dispatch-safety-and-review-policy.md)). Covers two tracks: agy-dispatch quota loop closure (QUOTA-3, QUOTA-4) and review loop policy resolution (REV-06, REV-07).
+   - **QUOTA-3 (DISPATCHED TO ARCH-2)**: Point-in-time agy quota gate command (`lib/quota.sh gate agy <seat>`). Partition checked, lease acquired on `lib/quota.sh,tests/test_quota.sh`. Dispatched to `arch-2-hinchk-stampede` (idle-longest).
+   - **REV-06 (DISPATCHED TO ARCH-1)**: Docs/maps-only commits fast-path past reviewer dispatch (`lib/lifecycle.sh`). Partition checked, lease acquired on `lib/lifecycle.sh,tests/test_review_loop.sh`. Dispatched to `arch-1-hinchk-stampede`.
+   - **QUOTA-4 (BACKLOG)**: Looper brief quota check; staged at `maps/tickets/quota-4-looper-brief-quota-check.md`, blocked by `QUOTA-3`.
+   - **REV-07 (BACKLOG, HUMAN)**: Multi-reviewer quorum policy decision; staged at `maps/tickets/rev-07-multi-reviewer-quorum-decision.md`, assigned to `human` for future session grilling.
+   - **Total Test Suite Health**: All 19 suites green (`make check`), 0 ShellCheck warnings, tree clean.
 
 
 
