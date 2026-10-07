@@ -100,3 +100,43 @@ PYCODE
   [[ -n "$left" ]] || { printf 'error:unparsable credits response\n'; return 0; }
   printf 'ok:%sUSD\n' "$left"
 }
+
+# ── gate: point-in-time dispatch-safety check (QUOTA-3) ────────────────────
+# quota_gate KIND [SEAT] → exit 0 = safe to dispatch, exit 1 = measured
+# exhaustion (ok:<N>s — the agy pane-scan's seconds-until-reset). Deliberately
+# NOT fail-closed: `unknown` and `error:*` mean "no measured signal", and
+# absence of data is not evidence of exhaustion — a false "blocked" here
+# would silently starve a healthy seat (the opposite polarity of a safety
+# check). The raw probe result is printed either way so callers and humans
+# see WHY, not just the code. Point-in-time only: no blocking, no retry
+# queue, no new persistent state.
+quota_gate() { # KIND [SEAT]
+  local res
+  res=$(quota_probe_kind "$1" "${2:-}")
+  printf '%s\n' "$res"
+  if [[ "$res" =~ ^ok:[0-9]+s$ ]]; then
+    return 1
+  fi
+  return 0
+}
+
+# CLI dispatcher (library siblings' convention; also keeps `bash -n` honest).
+# Usage errors exit 2 — deliberately distinct from the gate's own 0/1
+# contract so scriptable callers never confuse "bad invocation" with
+# "exhausted".
+if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
+  cmd="${1:-}"
+  shift 2>/dev/null || true
+  case "$cmd" in
+    gate)
+      if [[ $# -ne 2 || -z "$1" || -z "$2" ]]; then
+        printf 'Usage: %s gate <kind> <seat>   (agy is the only kind with a signal today)\n' "$0" >&2
+        exit 2
+      fi
+      quota_gate "$1" "$2"
+      ;;
+    *)
+      printf 'Usage: %s gate <kind> <seat>\n' "$0" >&2
+      exit 2 ;;
+  esac
+fi

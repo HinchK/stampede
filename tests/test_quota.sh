@@ -120,6 +120,60 @@ else
 fi
 unset QUOTA_HERDR_FIXTURE
 
+# ── gate: point-in-time dispatch-safety exit codes (QUOTA-3) ────────────────
+# The herdr FUNCTION stub above was unset; a PATH binary stub now serves
+# both direct quota_gate calls in this shell and the CLI child process
+# (`bash lib/quota.sh gate …` runs standalone and cannot see shell functions).
+cat > "$SCRATCH/bin/herdr" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "agent" && "${2:-}" == "read" && "${4:-}" == "--source" ]]; then
+  [[ -f "${QUOTA_HERDR_FIXTURE:-}" ]] && cat "${QUOTA_HERDR_FIXTURE:-}"
+fi
+exit 0
+EOF
+chmod +x "$SCRATCH/bin/herdr"
+
+# exhaustion measured → exit 1, raw result on stdout
+q_fixture '⚠ Individual quota reached. Resets in 10m.
+'
+rc=0; out=$(quota_gate agy s1) || rc=$?
+[[ "$rc" == 1 && "$out" == "ok:600s" ]] \
+  && ok "gate: measured exhaustion (ok:600s) → exit 1" || bad "gate exhausted: rc=$rc out=$out"
+# no signal → exit 0 (never fail closed on absence of data)
+q_fixture 'normal pane chatter, nothing parseable
+'
+rc=0; out=$(quota_gate agy s1) || rc=$?
+[[ "$rc" == 0 && "$out" == "unknown" ]] \
+  && ok "gate: unknown → exit 0 (absence of data is not exhaustion)" || bad "gate unknown: rc=$rc out=$out"
+# herdr itself fails → unknown → exit 0
+q_fixture 'should not matter'
+herdr() { return 1; }
+rc=0; out=$(quota_gate agy s1) || rc=$?
+[[ "$rc" == 0 && "$out" == "unknown" ]] \
+  && ok "gate: herdr failure → unknown → exit 0" || bad "gate herdr-fail: rc=$rc out=$out"
+unset -f herdr
+# a kind with no probe surface → unknown → exit 0
+rc=0; out=$(quota_gate claude s1) || rc=$?
+[[ "$rc" == 0 && "$out" == "unknown" ]] \
+  && ok "gate: kind without a signal surface → exit 0" || bad "gate claude: rc=$rc out=$out"
+
+# CLI end-to-end: standalone child process, no sourcing required
+q_fixture 'working on the ticket…
+⚠ Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 1h26m33s.
+'
+rc=0; out=$(bash "$REPO_ROOT/lib/quota.sh" gate agy quota-seat-x) || rc=$?
+[[ "$rc" == 1 && "$out" == "ok:5193s" ]] \
+  && ok "CLI: bash lib/quota.sh gate agy <seat> → exit 1 + raw result" || bad "CLI gate: rc=$rc out=$out"
+q_fixture 'healthy seat, no quota message
+'
+rc=0; out=$(bash "$REPO_ROOT/lib/quota.sh" gate agy quota-seat-x) || rc=$?
+[[ "$rc" == 0 && "$out" == "unknown" ]] \
+  && ok "CLI: healthy seat → exit 0 + raw result" || bad "CLI healthy: rc=$rc out=$out"
+rc=0; bash "$REPO_ROOT/lib/quota.sh" gate agy >/dev/null 2>&1 || rc=$?
+[[ "$rc" == 2 ]] \
+  && ok "CLI: usage error exits 2, distinct from the gate's 0/1 contract" || bad "usage rc=$rc"
+unset QUOTA_HERDR_FIXTURE
+
 # ── openrouter probe: configuration matrix ─────────────────────────────────
 [[ "$(quota_probe_openrouter "")" == "unknown" ]] \
   && ok "no config, no env → unknown" || bad "no-config: $(quota_probe_openrouter "")"
