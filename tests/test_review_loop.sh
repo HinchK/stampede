@@ -144,5 +144,57 @@ grep -q 'CLI_NO_REVIEW_LOOP=1' "$REPO_ROOT/herdr-loop-swarm.sh" \
 grep -q 'review-loop.override' "$REPO_ROOT/herdr-loop-swarm.sh" \
   && ok "launcher writes the durable override marker" || bad "override write missing"
 
+# ── 11. docs/maps-only commits fast-path past review (REV-06) ──────────────
+# Classification shells out to git against a real scratch repo: every changed
+# path must sit under docs/ maps/ or the named root files; anything else —
+# code, or TEST FILES (deliberately narrow scope) — takes the normal review
+# path; unresolvable shas fail SAFE (normal path), which is what keeps every
+# earlier fake-sha test in this suite meaningful.
+GR="$SCRATCH/repo"
+mkdir -p "$GR"
+git -C "$GR" init -q -b main
+git -C "$GR" config user.email t@t; git -C "$GR" config user.name t
+printf 'base\n' > "$GR/b.txt"
+git -C "$GR" add -A; git -C "$GR" commit -qm base
+mkdir -p "$GR/docs" "$GR/maps" "$GR/lib" "$GR/tests"
+printf 'doc\n' > "$GR/docs/x.md"; printf 'map\n' > "$GR/maps/y.md"; printf 'rdme\n' > "$GR/README.md"
+git -C "$GR" add -A; git -C "$GR" commit -qm docs-only
+DSHA=$(git -C "$GR" rev-parse HEAD)
+printf 'doc2\n' > "$GR/docs/z.md"; printf 'code\n' > "$GR/lib/a.sh"
+git -C "$GR" add -A; git -C "$GR" commit -qm mixed
+MSHA=$(git -C "$GR" rev-parse HEAD)
+printf 't\n' > "$GR/tests/t.sh"
+git -C "$GR" add -A; git -C "$GR" commit -qm tests-only
+TSHA=$(git -C "$GR" rev-parse HEAD)
+FSTATE="$SCRATCH/fp-reviews.json"; rm -f "$FSTATE"
+
+export REPO_DIR="$GR" CONFIG_REVIEW_LOOP=1 CONFIG_REVIEW_MAX_ROUNDS=2
+FP="${SD}/fp.json"; rm -f "$FP"
+
+out=$(review_loop_on_gate_green "$T" "$seat" "$DSHA" "$FP" 2>"$SCRATCH/fp.err") && rc=0 || rc=$?
+[[ "$rc" == 0 ]] && ok "11a docs-only: rc 0" || bad "11a rc=$rc"
+[[ "$out" == "ENQUEUE $T $seat $DSHA" ]] \
+  && ok "11a2 docs-only: exact ENQUEUE directive (no reviewer round)" \
+  || bad "11a2 directive: $out"
+grep -q "docs/maps-only" "$SCRATCH/fp.err" \
+  && ok "11a3 fast-path visibly logged (distinguishable from loop-off)" \
+  || bad "11a3 no fast-path marker: $(cat "$SCRATCH/fp.err")"
+jq -e --arg t "$T" '.reviews[$t].state == "docs_fast_path"' "$FP/reviews.json" >/dev/null 2>&1 \
+  && ok "11a4 durable state records the fast-path" || bad "11a4 state not recorded"
+
+out=$(review_loop_on_gate_green "$T" "$seat" "$MSHA" "$FP" 2>/dev/null)
+directive "$out" "11b mixed commit (docs + code): normal reviewer path" \
+  "DISPATCH_REVIEWER reviewer-test $T $MSHA 1 2"
+
+out=$(review_loop_on_gate_green "$T" "$seat" "$TSHA" "$FP" 2>/dev/null)
+directive "$out" "11c tests-only commit: NOT fast-pathed (narrow scope held)" \
+  "DISPATCH_REVIEWER reviewer-test $T $TSHA 1 2"
+
+# unresolvable sha (no repo on REPO_DIR, or sha absent): fail safe → review
+REPO_DIR="$SCRATCH/nowhere" out=$(review_loop_on_gate_green "$T" "$seat" "$A1" "$FP" 2>/dev/null)
+directive "$out" "11d unresolvable sha/repo: fail-safe normal review path" \
+  "DISPATCH_REVIEWER reviewer-test $T $A1 1 2"
+unset REPO_DIR
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
