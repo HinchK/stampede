@@ -255,6 +255,7 @@ herdr() {
     [[ "${3:-}" == "seat-a" && -n "$VERDICT_A" ]] && printf '%s\n' "$VERDICT_A"
     [[ "${3:-}" == "seat-b" && -n "$VERDICT_B" ]] && printf '%s\n' "$VERDICT_B"
     [[ "${3:-}" == "seat-r" && -n "$VERDICT_R" ]] && printf '%s\n' "$VERDICT_R"
+    [[ "${3:-}" == "seat-r" && -n "${QUOTA_OUT:-}" ]] && printf '%s\n' "$QUOTA_OUT"
   fi
   if [[ "${1:-}" == "agent" && "${2:-}" == "prompt" ]]; then
     printf '%s :: %s\n' "$3" "$4" >> "$PROMPTS"
@@ -497,6 +498,74 @@ sleep 0.5   # settle: ENQUEUE directives run inside the reap pass
   && assert_ok 15c "integer-isolated seat gated in its worktree, not root" \
   || assert_bad 15c "gate ran in: $(cat "$STATE/gate-cwd.txt" 2>/dev/null)"
 unset HEADLESS_MODE
+
+# ── 16: quota-deferred reviewer dispatch, retried on clear (QUOTA-2) ───────
+# The reviewer's own pane reports the agy account wall (QUOTA-1's probe):
+# DISPATCH_REVIEWER defers with a durable marker instead of dispatching;
+# fresh greens during the pause defer too; the retry pass fires all of them
+# the moment the probe clears; a fresh dispatch after clear goes straight
+# through. Review loop ON, reviewer seat = seat-r (stub serves QUOTA_OUT).
+export CONFIG_REVIEW_LOOP=1 CONFIG_REVIEW_MAX_ROUNDS=2 SEAT_NAME_reviewer=seat-r
+VERDICT_A=""; VERDICT_B=""; VERDICT_R=""
+export QUOTA_OUT='⚠ Individual quota reached. Please upgrade your subscription. Resets in 10m.'
+DEFER="$STATE/quota-deferred.jsonl"
+rm -f "$DEFER"
+
+printf '#!/bin/sh\nexit 0\n' > "$WTB/gate.sh"
+git -C "$WTB" add -A; git -C "$WTB" -c user.email=t@t -c user.name=t commit -qm quota1
+SHA_Q1=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #Q-1 $SHA_Q1"
+: > "$PROMPTS"
+harvest_verdicts >/dev/null 2>&1; sleep 0.6; gate_reap >/dev/null 2>&1; sleep 0.5
+! grep -q "seat-r :: DISPATCH" "$PROMPTS" \
+  && assert_ok 16a "exhausted account: reviewer dispatch DEFERRED, not attempted" \
+  || assert_bad 16a "dispatch fired despite quota wall"
+[[ "$(rstate Q-1)" == "awaiting_review" ]] \
+  && assert_ok 16a2 "review state machine still advanced (awaiting_review)" \
+  || assert_bad 16a2 "state $(rstate Q-1)"
+[[ -f "$DEFER" ]] && jq -e -s 'length == 1 and .[0].ticket == "Q-1" and .[0].round != null' "$DEFER" >/dev/null 2>&1 \
+  && assert_ok 16b "durable pending-dispatch marker recorded (ticket/sha/round)" \
+  || assert_bad 16b "marker: $(cat "$DEFER" 2>/dev/null)"
+
+# second ticket green DURING the pause window → also defers
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m quota2
+SHA_Q2=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #Q-2 $SHA_Q2"
+harvest_verdicts >/dev/null 2>&1; sleep 0.6; gate_reap >/dev/null 2>&1; sleep 0.5
+! grep -q "seat-r :: DISPATCH" "$PROMPTS" \
+  && assert_ok 16c "pause window: second ticket's dispatch also deferred" \
+  || assert_bad 16c "second dispatch fired during pause"
+jq -e -s 'length == 2' "$DEFER" >/dev/null 2>&1 \
+  && assert_ok 16c2 "marker accumulates both pending dispatches" \
+  || assert_bad 16c2 "marker count: $(jq -s length "$DEFER" 2>/dev/null)"
+
+# still exhausted → the retry pass is a no-op, marker survives
+_quota_retry_deferred >/dev/null 2>&1
+! grep -q "seat-r :: DISPATCH" "$PROMPTS" && [[ -f "$DEFER" ]] \
+  && assert_ok 16d "retry pass no-ops while the account is still exhausted" \
+  || assert_bad 16d "retry fired or marker lost while exhausted"
+
+# clear the wall → one retry pass fires ALL pending dispatches
+unset QUOTA_OUT
+: > "$PROMPTS"
+_quota_retry_deferred >/dev/null 2>&1
+grep -q "seat-r :: DISPATCH: Review #Q-1 @ ${SHA_Q1} (round 1/2)" "$PROMPTS" \
+  && grep -q "seat-r :: DISPATCH: Review #Q-2 @ ${SHA_Q2} (round 1/2)" "$PROMPTS" \
+  && assert_ok 16e "quota cleared: ALL deferred dispatches retried with directive text" \
+  || assert_bad 16e "retried prompts: $(cat "$PROMPTS")"
+[[ ! -f "$DEFER" ]] \
+  && assert_ok 16f "marker drained after successful retry" || assert_bad 16f "marker left behind"
+
+# fresh dispatch after clear goes straight through (no defer residue)
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m quota3
+SHA_Q3=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #Q-3 $SHA_Q3"
+: > "$PROMPTS"
+harvest_verdicts >/dev/null 2>&1; sleep 0.6; gate_reap >/dev/null 2>&1; sleep 0.5
+grep -q "seat-r :: DISPATCH: Review #Q-3 @ ${SHA_Q3} (round 1/2)" "$PROMPTS" \
+  && assert_ok 16g "post-clear fresh dispatch is immediate (defer machinery inert)" \
+  || assert_bad 16g "fresh dispatch deferred wrongly: $(cat "$PROMPTS")"
+unset CONFIG_REVIEW_LOOP SEAT_NAME_reviewer QUOTA_OUT
 
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"

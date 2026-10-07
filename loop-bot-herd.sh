@@ -31,6 +31,9 @@ STATE_DIR="${STATE_DIR:-${REPO_DIR}/.herdr-swarm}"
 CONTROL="$STATE_DIR/control.json"
 SESSION_LOG="$STATE_DIR/session-verdicts.jsonl"
 CHANNEL_DIR="${STATE_DIR}/channel"
+# QUOTA-2: reviewer dispatches deferred during agy account exhaustion live
+# here, one JSON record each, until the retry pass drains them on clear.
+QUOTA_DEFER_FILE="${STATE_DIR}/quota-deferred.jsonl"
 POLL_S="${POLL_S:-30}"
 UNPUSHED_NUDGE_S=$((60 * 60))       # one unpushed reminder per hour
 CREDIT_WARN_USD="${CREDIT_WARN_USD:-1.00}"
@@ -81,6 +84,9 @@ source "$SCRIPT_DIR/lib/lifecycle.sh"
 # headless_spawn/status/kill and the logs/<seat>.log convention the headless
 # harvest seam reads from. Pane mode never calls into it.
 source "$SCRIPT_DIR/lib/headless.sh"
+# shellcheck disable=SC1091  # read-only quota probing (PUB-9/QUOTA-1): the
+# supervisor consults quota_probe_kind before dispatching to agy seats (QUOTA-2).
+source "$SCRIPT_DIR/lib/quota.sh"
 
 # Project profile (rendered by the launcher's ensure_profile pass)
 PROFILE_ENV="${REPO_DIR}/.herdr-swarm/profile.env"
@@ -386,6 +392,63 @@ gate_recover() {
 # is where the supervisor gives them effects: arbiter enqueues, herdr seat
 # prompts, and the review telemetry stream. One directive line in, one
 # side effect out — nothing here ever decides policy.
+# ---- 2d. quota-gated reviewer dispatch (QUOTA-2) ───────────────────────────
+# The agy seats share one account; when the reviewer's pane shows the
+# account-level quota wall (QUOTA-1's probe: ok:<seconds>s = reached, resets
+# in Ns), dispatching burns nothing but patience — defer with a durable
+# marker and retry on a later poll cycle. No signal (unknown/error) never
+# pauses anything: only a POSITIVE exhaustion signal defers.
+
+_agy_quota_exhausted() { # REVIEWER_SEAT → rc 0 = account exhausted
+  local probe
+  probe=$(quota_probe_kind agy "$1" 2>/dev/null || true)
+  [[ "$probe" =~ ^ok:[0-9]+s$ ]]
+}
+
+# The actual reviewer dispatch, shared by the direct path, the defer path,
+# and the retry pass — one voice, one telemetry shape.
+_dispatch_reviewer() { # RSEAT TICKET SHA ROUND MAX
+  local rseat="$1" t="$2" sha="$3" r="$4" m="$5"
+  note "review loop: dispatching reviewer for #$t @ ${sha} (round ${r}/${m})"
+  worker_feedback "$rseat" "$t" "$sha" "review-r${r}" "DISPATCH: Review #${t} @ ${sha} (round ${r}/${m}). Follow your seat brief."
+  "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" review.dispatched "$rseat" "$t" \
+    "$(jq -cn --arg t "$t" --arg h "$sha" --arg r "$r" \
+      '{ticket:$t, sha:$h, round:($r|tonumber), summary:("review round " + $r + " dispatched for #" + $t)}')" \
+    --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
+}
+
+_quota_defer_reviewer() { # TICKET SHA ROUND MAX — record the durable marker
+  jq -cn --argjson ts "$(date +%s)" --arg t "$1" --arg h "$2" --arg r "$3" --arg m "$4" \
+    '{ts: $ts, ticket: $t, sha: $h, round: $r, max: $m}' >> "$QUOTA_DEFER_FILE"
+  bad "quota: agy account exhausted — reviewer dispatch for #$1 deferred (marker in quota-deferred.jsonl)"
+  "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" review.deferred quota "$1" \
+    "$(jq -cn --arg t "$1" --arg h "$2" '{ticket:$t, sha:$h, summary:("reviewer dispatch deferred: agy quota exhausted")}')" \
+    --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
+}
+
+# Each poll cycle, before anything else dispatches to an agy seat: still
+# exhausted → report and hold; cleared → retry ALL pending dispatches.
+_quota_retry_deferred() {
+  [[ -f "$QUOTA_DEFER_FILE" ]] || return 0
+  local rseat="${SEAT_NAME_reviewer:-reviewer}"
+  if _agy_quota_exhausted "$rseat"; then
+    note "quota: agy account still exhausted — $(wc -l < "$QUOTA_DEFER_FILE" | tr -d ' ') reviewer dispatch(es) deferred"
+    return 0
+  fi
+  local rec t sha r m
+  ok "quota: agy quota cleared — retrying deferred reviewer dispatch(es)"
+  while IFS= read -r rec; do
+    [[ -n "$rec" ]] || continue
+    t=$(jq -r '.ticket // empty' <<<"$rec" 2>/dev/null) || continue
+    sha=$(jq -r '.sha // empty' <<<"$rec" 2>/dev/null)
+    r=$(jq -r '.round // empty' <<<"$rec" 2>/dev/null)
+    m=$(jq -r '.max // empty' <<<"$rec" 2>/dev/null)
+    [[ -n "$t" && -n "$sha" && -n "$r" && -n "$m" ]] || continue
+    _dispatch_reviewer "$rseat" "$t" "$sha" "$r" "$m"
+  done < "$QUOTA_DEFER_FILE"
+  rm -f "$QUOTA_DEFER_FILE"
+}
+
 _review_directives() { # DIRECTIVES-LINES TICKET SHA
   local dirs="$1" ticket="$2" sha="$3" line d0 d1 d2 d3 d4 d5
   while IFS= read -r line; do
@@ -400,12 +463,15 @@ _review_directives() { # DIRECTIVES-LINES TICKET SHA
       DISPATCH_REVIEWER)
         # d1=reviewer-seat d2=ticket d3=sha d4=round d5=max
         local rseat="${SEAT_NAME_reviewer:-reviewer}"
-        note "review loop: dispatching reviewer for #$d2 @ ${d3} (round ${d4}/${d5})"
-        worker_feedback "$rseat" "$d2" "$d3" "review-r${d4}" "DISPATCH: Review #${d2} @ ${d3} (round ${d4}/${d5}). Follow your seat brief."
-        "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" review.dispatched "$rseat" "$d2" \
-          "$(jq -cn --arg t "$d2" --arg h "$d3" --arg r "$d4" \
-            '{ticket:$t, sha:$h, round:($r|tonumber), summary:("review round " + $r + " dispatched for #" + $t)}')" \
-          --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
+        # QUOTA-2: positive exhaustion signal on the shared agy account →
+        # defer with a durable marker; the retry pass re-fires on clear.
+        # Applies to every dispatch during the pause window, not just the
+        # first — the gate is the probe, not the marker.
+        if _agy_quota_exhausted "$rseat"; then
+          _quota_defer_reviewer "$d2" "$d3" "$d4" "$d5"
+        else
+          _dispatch_reviewer "$rseat" "$d2" "$d3" "$d4" "$d5"
+        fi
         ;;
       DISPATCH_CRITIQUE)
         # d1=impl-seat d2=ticket d3=round d4=max d5=findings-path
@@ -967,6 +1033,8 @@ arbiter_auto_drain() {
 }
 
 cmd_once() {
+  _quota_retry_deferred   # QUOTA-2: drain deferred reviewer dispatches first —
+                          # nothing dispatches to an agy seat ahead of the retry
   gate_recover
   health_pass
   harvest_verdicts
