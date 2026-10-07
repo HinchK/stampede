@@ -108,11 +108,11 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - **[Close the Gaps](close-the-gaps.md):** complete. PART-1 (`lib/partition.sh` inactive ticket exclusion), PART-2 (`lib/partition.sh lease acquire` fail-closed pre-check enforcement), PROVE-HEADLESS-1 (headless mode end-to-end rehearsal on scratch repo, uncovering five findings F1-F5), and SYNC-2 (`lib/gh_sync.sh` superseded state handling). All integrated and promoted to `main`.
 - **[Harden Headless Mode](harden-headless-mode.md):** complete. HL-WT-1 (worktree isolation and fail-closed targeting in batch mode), HL-CFG-1 (`config_dump_env` emit_env_wins hierarchy for headless knobs), HL-RED-1 (fail-closed exit on RED tickets, exit code 1, test_cli restoration), HL-TMO-1 (hard wall-clock timeout with `-k` grace and 124 exit normalization), and HL-DOCS-1 (accurate dead-letter exit markers and target repo requirements). All integrated and promoted to `main`.
 - **[Prove It Live & Ship 0.5.0](headless-live.md):** complete. HORIZON-2 (live proof run receipts), HORIZON-3 (ADR 0016 batch review boundary accepted limit), HL-DL-1 (headless dead-letter batch scoping), and REL-1 (v0.5.0 tagged and published). All integrated and promoted to `main`.
-- **QUOTA-2** (in progress, `arch-1-hinchk-stampede`, [`maps/tickets/quota-2-supervisor-defer-on-exhaustion.md`](tickets/quota-2-supervisor-defer-on-exhaustion.md)): chartered via /wayfinder grilling without a dedicated map (scope settled tight enough for one ticket parented directly to `maps/universal-herdr-swarm.md`; see ticket for full destination and reasoning).
+- **QUOTA-2** (resolved, commit `87c1cb2`, [`maps/tickets/quota-2-supervisor-defer-on-exhaustion.md`](tickets/quota-2-supervisor-defer-on-exhaustion.md)): chartered via /wayfinder grilling without a dedicated map (scope settled tight enough for one ticket parented directly to `maps/universal-herdr-swarm.md`). Proactive check on `quota_probe_kind agy` against reviewer seat defers reviewer dispatch on account-wide quota exhaustion, stores durable marker in `quota-deferred.jsonl`, and `cmd_once` retries all pending dispatches on clear. Autonomous review PASS (round 1/2), integrated via `arbiter_enqueue_and_drain` on `swarm/stampede/integration` at `87c1cb2`.
 
 ## Active Frontier
 
-- **[QUOTA-2](tickets/quota-2-supervisor-defer-on-exhaustion.md):** supervisor defers reviewer dispatch on account-wide agy quota exhaustion, retries through on clear (in progress, dispatched to `arch-1-hinchk-stampede`).
+No open tickets or maps remain active on this frontier. Backlog queue and active frontier clean.
 
 ## Not yet specified
 
