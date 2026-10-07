@@ -170,6 +170,9 @@
    - **REL-1 (RESOLVED)**: Release tagged `v0.5.0` at commit `ae85d06` and pushed to `origin/main` by human operator. CHANGELOG dated `[0.5.0] — 2026-10-05` and populated with release notes for live proof (HORIZON-2), review boundary ADR 0016 (HORIZON-3), headless dead-letter batch scoping (HL-DL-1), live seat isolation (HL-LEDGER-1), quota agy probe (QUOTA-1), and user docs (HORIZON-4) in follow-up docs commit `60d355d` per driver decision. Ticket resolved.
    - **Epic Closeout**: "Prove It Live & Ship 0.5.0" epic completed and closed out. Version 0.5.0 published.
    - **Total Test Suite Health**: All 19 suites green (`make check`), 0 ShellCheck warnings, tree clean.
+9. **Supervisor Quota Deferral (QUOTA-2) Epic (IN PROGRESS)**:
+   - **QUOTA-2 (DISPATCHED TO ARCH-1)**: Chartered via /wayfinder grilling without a dedicated map (scope settled tight enough for one ticket parented directly to `maps/universal-herdr-swarm.md`). In `loop-bot-herd.sh`'s `_review_directives` `DISPATCH_REVIEWER` case, check `quota_probe_kind agy` before calling `worker_feedback`; defer dispatch across poll cycles if exhausted, retrying when cleared. Partition checked, lease acquired on `loop-bot-herd.sh,lib/quota.sh,tests/test_async_gate.sh`. Dispatched to `arch-1-hinchk-stampede` (idle-longest seat).
+   - **Total Test Suite Health**: All 19 suites green (`make check`), 0 ShellCheck warnings, tree clean.
 
 
 

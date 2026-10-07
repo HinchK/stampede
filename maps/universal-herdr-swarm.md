@@ -107,11 +107,12 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
   Reviewed PASS and integrated on `swarm/stampede/integration` at `3bb01bd`.
 - **[Close the Gaps](close-the-gaps.md):** complete. PART-1 (`lib/partition.sh` inactive ticket exclusion), PART-2 (`lib/partition.sh lease acquire` fail-closed pre-check enforcement), PROVE-HEADLESS-1 (headless mode end-to-end rehearsal on scratch repo, uncovering five findings F1-F5), and SYNC-2 (`lib/gh_sync.sh` superseded state handling). All integrated and promoted to `main`.
 - **[Harden Headless Mode](harden-headless-mode.md):** complete. HL-WT-1 (worktree isolation and fail-closed targeting in batch mode), HL-CFG-1 (`config_dump_env` emit_env_wins hierarchy for headless knobs), HL-RED-1 (fail-closed exit on RED tickets, exit code 1, test_cli restoration), HL-TMO-1 (hard wall-clock timeout with `-k` grace and 124 exit normalization), and HL-DOCS-1 (accurate dead-letter exit markers and target repo requirements). All integrated and promoted to `main`.
-- **[Next Horizon](next-horizon.md):** complete. DECISION-1 (incident class closed with written decision record codifying GRANT-1 over CRED-1), QUOTA-1 (read-only agy token headroom probe in `lib/quota.sh`), HORIZON-4 (headless batch mode user documentation in `docs/user-guide.md` and 0.5.0 changelog), HORIZON-5 (parked-queue triage audit), HL-LEDGER-1 (namespaced headless workers preventing `seats.json` collision), and HL-CONFIG-1 (project-level `.opencode/opencode.json` model pin and `external_directory` permission). Remaining scope (HORIZON-2 live proof, HORIZON-3 review boundary, and REL-1 release) transitioned to continuation map `headless-live.md`.
+- **[Prove It Live & Ship 0.5.0](headless-live.md):** complete. HORIZON-2 (live proof run receipts), HORIZON-3 (ADR 0016 batch review boundary accepted limit), HL-DL-1 (headless dead-letter batch scoping), and REL-1 (v0.5.0 tagged and published). All integrated and promoted to `main`.
+- **QUOTA-2** (in progress, `arch-1-hinchk-stampede`, [`maps/tickets/quota-2-supervisor-defer-on-exhaustion.md`](tickets/quota-2-supervisor-defer-on-exhaustion.md)): chartered via /wayfinder grilling without a dedicated map (scope settled tight enough for one ticket parented directly to `maps/universal-herdr-swarm.md`; see ticket for full destination and reasoning).
 
 ## Active Frontier
 
-- **[Prove It Live & Ship 0.5.0](headless-live.md):** prove headless mode live on this repo with receipts (HORIZON-2, staged per corrected plan), decide the batch review boundary (HORIZON-3, staged), and publish 0.5.0 (REL-1, staged for human release).
+- **[QUOTA-2](tickets/quota-2-supervisor-defer-on-exhaustion.md):** supervisor defers reviewer dispatch on account-wide agy quota exhaustion, retries through on clear (in progress, dispatched to `arch-1-hinchk-stampede`).
 
 ## Not yet specified
 

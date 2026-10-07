@@ -166,8 +166,6 @@ PUB-11 ← PUB-10.
 
 ## Not yet specified
 
-- Headless mode (no panes) — stays parked in `maps/public-readiness.md`;
-  this PRD does not depend on it.
 - Auto-throttling / rerouting on quota exhaustion (PUB-9 is read-only).
 - Cost attribution when a provider CLI reports no usage — `unreported`
   until a spec exists.

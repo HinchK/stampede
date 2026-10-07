@@ -121,9 +121,6 @@ GitHub issues for anything released.
   brief bytes delivered, suite-gate runs per retired ticket, re-verdicts per
   ticket, dispatches per integration, wall-clock per ticket. Publishing real
   numbers later still beats publishing a modelled 80% now.
-- Headless mode (no panes, no focus calls) — the capability that would make
-  "autonomous" true rather than aspirational. Still unspecified; the
-  multi-provider PRD deliberately does not depend on it.
 
 ## Out of scope
 
