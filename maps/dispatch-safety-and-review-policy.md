@@ -42,21 +42,20 @@ tight enough in grilling to ticket now:
 - 2026-10-07 (charting): multi-reviewer quorum (`REV-07`) is policy-design-only for this epic — only one
   reviewer kind/seat exists today (`default_kind = "agy"`), so building actual quorum infrastructure is a
   separably-sized future ticket once the policy itself is decided.
-- 2026-10-07 (charting): inline TUI diff inspection stays in **Not yet specified** below — least-researched of
-  the three reviewer-loop threads, no clear picture yet of what Herdr's pane model can actually render inline.
+- 2026-10-07 (execution): QUOTA-3 resolved (dad8668) — point-in-time gate command `lib/quota.sh gate agy <seat>` passed review and integrated.
+- 2026-10-07 (execution): REV-06 resolved (823365f) — docs/maps fast-path passed review and merged into integration at bf84323.
+- 2026-10-07 (execution): QUOTA-4 resolved (35a6e49) — looper standing brief gates AGY dispatches, passed review and merged into integration at 2ee247e.
 
 ## Tickets
 
-| Ticket | Seat | Blocked by | Synopsis |
-|---|---|---|---|
-| **QUOTA-3** | arch | — | Build `lib/quota.sh gate agy <seat>` — point-in-time exit-code check, tested |
-| **QUOTA-4** | arch | QUOTA-3 | Wire the gate into `looper`'s standing brief before it dispatches to `reviewer`/`agy-docs`/`agy-gh` |
-| **REV-06** | arch | — | Docs/maps-only commits fast-path past the reviewer dispatch, straight to enqueue |
-| **REV-07** | — (decision, unclaimed) | — | Decide multi-reviewer quorum policy — build, or accepted-limit ADR; needs its own grilling session |
+| Ticket | Seat | Status | Blocked by | Synopsis |
+|---|---|---|---|---|
+| **QUOTA-3** | arch-2-hinchk-stampede | **resolved** (dad8668) | — | Build `lib/quota.sh gate agy <seat>` — point-in-time exit-code check, tested |
+| **QUOTA-4** | arch-2-hinchk-stampede | **resolved** (35a6e49) | QUOTA-3 | Wire the gate into `looper`'s standing brief before it dispatches to `reviewer`/`agy-docs`/`agy-gh` |
+| **REV-06** | arch-1-hinchk-stampede | **resolved** (823365f) | — | Docs/maps-only commits fast-path past the reviewer dispatch, straight to enqueue |
+| **REV-07** | — (decision, unclaimed) | backlog | — | Decide multi-reviewer quorum policy — build, or accepted-limit ADR; needs its own grilling session |
 
-`QUOTA-3` and `REV-06` are disjoint (different owns, no shared dependency) — dispatchable in parallel to both
-arch seats right now. `QUOTA-4` waits on `QUOTA-3`. `REV-07` is a decision ticket for a future session, not
-dispatched today — wayfinder resolves one ticket per session, and today's session is chartering, not resolving.
+All three implementation tickets (`QUOTA-3`, `QUOTA-4`, `REV-06`) are resolved and integrated into `swarm/stampede/integration` at `2ee247e`. `REV-07` remains an explicit backlog decision ticket for a future session.
 
 ## Not yet specified
 

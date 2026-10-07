@@ -2,10 +2,16 @@
 id: REV-06
 title: "Docs/maps-only commits fast-path past the reviewer dispatch"
 type: wayfinder:task
-status: in_progress
+status: resolved
 assignee: arch-1-hinchk-stampede
 owns: lib/lifecycle.sh,tests/test_review_loop.sh
 parent: maps/dispatch-safety-and-review-policy.md
+resolution:
+  commit: 823365f9f426b94fad80c163a7df070a2e8eb866
+  reviewed_by: reviewer-hinchk-stampede
+  verdict: PASS
+  review_file: .herdr-swarm/reviews/REV-06-823365f9f426b94fad80c163a7df070a2e8eb866.md
+  integrated_at: bf84323da3296ad3f52af901ea54ffb7ddfe1874
 ---
 
 # REV-06 -- skip review for pure docs/maps changes
