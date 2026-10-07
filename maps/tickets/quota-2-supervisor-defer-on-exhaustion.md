@@ -2,7 +2,7 @@
 id: QUOTA-2
 title: "Supervisor defers reviewer dispatch on account-wide agy quota exhaustion, retries on clear"
 type: wayfinder:task
-status: in_progress
+status: resolved
 assignee: arch-1-hinchk-stampede
 owns: loop-bot-herd.sh,lib/quota.sh,tests/test_async_gate.sh
 parent: maps/universal-herdr-swarm.md
@@ -75,3 +75,14 @@ This does not touch `looper`'s own interactive dispatch behavior, and does not e
 `claude` -- both are explicitly out of scope for this ticket per the grilling above. If this pattern proves
 out in practice, extending it to looper's own brief-level dispatch is a natural follow-up, informed by having
 this land first.
+
+## Resolution
+
+Resolved at commit `87c1cb21576eb2d27aeeaa0a8630ffd94519b198`.
+- In `_review_directives`'s `DISPATCH_REVIEWER` case in `loop-bot-herd.sh`, proactive check probes `quota_probe_kind agy` against reviewer seat (`_agy_quota_exhausted`). If positive exhaustion (`ok:<seconds>s`), defers dispatch with a durable record in `.herdr-swarm/quota-deferred.jsonl`, emits `review.deferred` telemetry, and alerts. Normal/unknown responses proceed unhindered.
+- Unified reviewer dispatch implementation factored into `_dispatch_reviewer`.
+- `cmd_once` runs `_quota_retry_deferred` first each cycle, retrying all deferred dispatches once quota clears and draining the marker.
+- The pause gate checks the probe directly, so fresh gate-greens during an exhaustion window also defer into the marker.
+- Comprehensive test coverage in `tests/test_async_gate.sh` (§16, 10 assertions, 66/66 passing).
+- Autonomous review PASS verdict by `reviewer-hinchk-stampede` (Round 1/2) in `.herdr-swarm/reviews/QUOTA-2-87c1cb21576eb2d27aeeaa0a8630ffd94519b198.md`.
+- Integrated onto `swarm/stampede/integration` via `arbiter_enqueue_and_drain` at `87c1cb2`. Lease released cleanly.
