@@ -79,3 +79,11 @@ Services:
 - **Human Escalation**: If any worker encounters an ambiguous requirement or reaches `blocked` state, inspect its unwrapped terminal output, surface the dilemma to the human driver, and pause execution.
 - **Flake Guard**: If the test suite fails twice consecutively on the same ticket, stop and surface the diagnostic diff rather than looping retries.
 - **Context Budget**: Maintain state checkpoints in `STATE.md` during complex multi-step epics.
+- **AGY Quota Gate (pre-dispatch)**: Before ANY `herdr agent prompt` to an AGY-engine seat — **`{{REVIEWER_NAME}}`**, **`{{DOCS_NAME}}`**, or **`{{GH_NAME}}`** — first run the point-in-time quota gate (QUOTA-3):
+  ```bash
+  bash '{{SCRIPT_DIR}}/lib/quota.sh' gate agy <seat-name>
+  ```
+  (`lib/quota.sh gate agy <seat>` relative to the orchestrator root — same rule as the arbiter in §3.5: in a target repository a relative `lib/` is the *target's* copy; always run the orchestrator's.)
+  - **Exit 0 → dispatch normally.** Exit 0 also covers `unknown` and `error:*` probe results — absence of a measured signal is NOT evidence of exhaustion; never block a dispatch on missing data.
+  - **Exit 1 (exhausted) → do NOT send the prompt.** Report the deferral plainly to the human driver — which ticket and which seat is deferred, and the gate's raw output (e.g. `ok:5193s`) — then move on; the deferral is point-in-time, so re-check the gate before the next dispatch attempt to that seat.
+  - **Scope**: AGY seats only. Dispatches to `{{ARCH_NAME}}` (OpenCode) and `{{PM_NAME}}` (Claude) are NOT gated — do not run the gate for them.
