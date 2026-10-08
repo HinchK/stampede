@@ -536,6 +536,23 @@ swarm_down() { # TARGET_DIR ASSUME_YES KEEP_WS
   printf '  %s✓ Transient channel files purged (profile, seats, traces preserved).%s\n\n' "$GREEN" "$RESET"
 }
 
+# seat_wait_ready NAME PANE TIMEOUT_MS — one single-target readiness wait
+# (HERDR-2 / ADR 0017 D1). With `pane wait-output` available, block once on
+# the brief-delivery anchor in the seat's pane (the tightened brief-ready
+# signal the audit's S18/S23 rows asked for); without it, the pre-HERDR-2
+# agent-lifecycle wait, unchanged. On success SEAT_WAIT_MODE names the signal
+# that passed ("brief-ready" | "interactive-ready") for the caller's label.
+seat_wait_ready() { # NAME PANE TIMEOUT_MS
+  local name="$1" pane="${2:-}" timeout_ms="${3:-30000}"
+  if [[ -n "$pane" ]] && herdr_has_wait_output; then
+    SEAT_WAIT_MODE=brief-ready
+    herdr pane wait-output "$pane" --regex "$BRIEF_ACK_REGEX" --timeout "$timeout_ms" >/dev/null 2>&1
+    return
+  fi
+  SEAT_WAIT_MODE=interactive-ready
+  herdr agent wait "$name" --until idle --until "done" --until working --timeout "$timeout_ms" >/dev/null 2>&1
+}
+
 # Post-seating readiness gate. Every seat must exist and have settled into a
 # stable post-boot state. NOTE: "ready" includes WORKING — an agent that is
 # executing has demonstrably booted and consumed its standing brief; a strict
@@ -584,8 +601,8 @@ swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
       failures=1
       continue
     fi
-    if herdr agent wait "$name" --until idle --until "done" --until working --timeout "$timeout_ms" >/dev/null 2>&1; then
-      printf '  %s✓ %s (%s in %s): interactive-ready%s\n' "$GREEN" "$name" "$kind" "$pane" "$RESET"
+    if seat_wait_ready "$name" "$pane" "$timeout_ms"; then
+      printf '  %s✓ %s (%s in %s): %s%s\n' "$GREEN" "$name" "$kind" "$pane" "$SEAT_WAIT_MODE" "$RESET"
     else
       printf '  %s✖ %s: not ready within %sms%s\n' "$RED" "$name" "$timeout_ms" "$RESET"
       failures=1

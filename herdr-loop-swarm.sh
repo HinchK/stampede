@@ -599,7 +599,9 @@ else
     # an unattended loop must not start on an unverified herd.
     critical_fail=0
     for critical_seat in "$ARCH_AGENT" "${SEAT_NAME_pm:-pm}"; do
-      if ! herdr agent wait "$critical_seat" --until idle --until "done" --until working --timeout 2000 >/dev/null 2>&1; then
+      cpane=$(jq -r --arg n "$critical_seat" '.seats[]? | select(.name == $n) | .pane // empty' \
+        "${PWD}/.herdr-swarm/seats.json" 2>/dev/null) || cpane=""
+      if ! seat_wait_ready "$critical_seat" "$cpane" 2000; then
         bad "Critical seat not ready: ${critical_seat}"
         critical_fail=1
       fi
