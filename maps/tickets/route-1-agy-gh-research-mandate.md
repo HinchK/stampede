@@ -2,7 +2,7 @@
 id: ROUTE-1
 title: "agy-gh brief gains a GitHub/git research mandate with findings-file protocol"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: briefs/worker-gh.in.md
 parent: maps/herdr-native-and-seat-utilization.md
@@ -57,3 +57,23 @@ The `.herdr-swarm/research/` directory is runtime state (add nothing to the repo
 for it). Harvesting of `RESEARCH DONE` is deliberately *not* wired into the supervisor
 — research is ungated read-only work; the anchor is for the dispatcher's wait-output,
 not the verdict pipeline.
+
+## Resolution (2026-10-07)
+
+Done: Core Responsibilities item 2 "Research & Archaeology (read-only, on dispatcher
+request)" — 3-line preamble shape (Question / Done-criteria / Verification), findings
+at `.herdr-swarm/research/<topic>.md` with unique slug, receipts bar (issue/PR URLs
+with numbers, `gh api` endpoints, commit SHAs), anchor
+`RESEARCH DONE <topic> <path>` with a worked example. Guardrails gain "Research Is
+Read-Only": no repo write-path commits/merges/rebases (arch/arbiter territory), no
+code edits; claim/close/release, `-R {{REPO}}`, and push guardrail reworded not at
+all. `briefs/looper.in.md` untouched (ROUTE-2). Anchor grammar is exactly
+`RESEARCH DONE <topic> <path>` — ROUTE-2's criterion 5 must copy this verbatim.
+
+Receipts:
+- `bash lib/briefs.sh render <repo> hinchk-stampede` → all 6 briefs rendered; rendered
+  worker-gh.md contains the new section with `{{GH_NAME}}`/`{{SLUG}}`/`{{REPO}}`/
+  `{{LOOPER_NAME}}` substituted, zero leftover `{{` placeholders.
+- `make check` → `All suites green (19)`, lint 0 warnings.
+- `git status` after render → only `briefs/worker-gh.in.md` modified (`.herdr-swarm/`
+  gitignored; nothing staged into the repo tree for `research/`).
