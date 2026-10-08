@@ -2,7 +2,7 @@
 id: ROUTE-3
 title: "Arch brief: research/diagnosis dispatch mode for the opencode GLM engines"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: briefs/arch.in.md
 parent: maps/herdr-native-and-seat-utilization.md
@@ -51,3 +51,8 @@ as the first live exercise of the mode.
 Pairing: ROUTE-2's looper brief routes code questions here; this brief accepts them.
 The two tickets share no files (arch.in.md vs looper.in.md) — dispatchable in
 parallel.
+
+## Resolution (2026-10-07)
+
+Resolved in commit `efb08ea9c7971306d48e4955d6574a0abc9715e7` (`efb08ea`).
+Added "Research & Diagnosis Dispatches" section in `briefs/arch.in.md`, establishing the 3-line preamble request shape, findings path under `docs/findings/<topic>.md`, REV-06 fast path for docs-class findings, single-ticket scope guardrails, and F-2 clean sha-anchor verdict syntax. Rendered cleanly via `lib/briefs.sh render`. Integrated at `b7411e4`.

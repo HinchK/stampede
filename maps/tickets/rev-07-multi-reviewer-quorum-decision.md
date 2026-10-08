@@ -31,3 +31,7 @@ ticket resolved per session; this epic's chartering session resolved zero ticket
 Whichever way this resolves, write it as an ADR (same precedent as `ADR 0016` for the headless review
 boundary) -- a decision this load-bearing about review trustworthiness belongs in a durable record, not left
 as a fog note indefinitely.
+
+## Input from PM audit 2026-10-08
+
+The quota-outage experiment showed review is the single point of failure: the stand-in orchestrator (see `fallback-1-standby-orchestrator-seat.md`) could dispatch and harvest but nothing could pass review while the agy reviewer was walled. Decide a non-agy fallback reviewer (or accept the limit in an ADR) in this session; recommend deciding it before FALLBACK-1 is dispatched.

@@ -2,7 +2,7 @@
 id: HERDR-5
 title: "Supervisor human-visible alerts also emit herdr notification show"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: loop-bot-herd.sh, tests/test_async_gate.sh
 parent: maps/herdr-native-and-seat-utilization.md
@@ -49,3 +49,8 @@ machine.
 
 Keep the message under one terminal line: ticket/seat/reason + pointer to the durable
 record (`.herdr-swarm/...` path or trace id).
+
+## Resolution (2026-10-07)
+
+Resolved in commit `cb26aaf686aed1b6e00f2581a670768179cb7f1c` (`cb26aaf`).
+Added `_supervisor_notify` helper in `loop-bot-herd.sh` wrapping `herdr notification show` with HERDR_ENV and `--help` probe checks, fire-and-forget execution, and `[stampede:<slug>]` prefix. Wired into quota deferral, ALERT_BLOCKED, headless dead letter, and RED verdict alerts. Verified in `tests/test_async_gate.sh` with 56 passing assertions. Integrated at `cb26aaf`.

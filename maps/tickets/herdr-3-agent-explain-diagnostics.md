@@ -2,7 +2,7 @@
 id: HERDR-3
 title: "stampede doctor surfaces herdr agent explain for ambiguous seats"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: lib/cli/stampede-doctor.sh, tests/test_cli_doctor.sh
 parent: maps/herdr-native-and-seat-utilization.md
@@ -50,3 +50,8 @@ once landed and paste the explain line for one real seat.
 Seat-verify failure path in the launcher is deliberately NOT touched here —
 `herdr-loop-swarm.sh` is HERDR-2's owns; if the audit says verify needs explain too,
 that lands as a follow-up ticket keeping owns disjoint.
+
+## Resolution (2026-10-07)
+
+Resolved in commit `07732038913a53d75c2fab0b84f9311096b96fcd` (`0773203`), addressing reviewer critique round 2 and integrated on integration branch at `c3dd3f7d6676265faa37727ede05f0299c1287ed` (`c3dd3f7`).
+Implemented `stampede doctor` integration surfacing `herdr agent explain <seat> --verbose` for ambiguous seats (`unknown` lifecycle state), probe-gated with graceful degradation, and comprehensive stub tests in `tests/test_cli_doctor.sh`.
