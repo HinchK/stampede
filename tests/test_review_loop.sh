@@ -196,5 +196,80 @@ directive "$out" "11d unresolvable sha/repo: fail-safe normal review path" \
   "DISPATCH_REVIEWER reviewer-test $T $A1 1 2"
 unset REPO_DIR
 
+# ── 12. REVIEW-SHA-1: canonical sha forms across anchor and verdict ──────
+# A real scratch repo (resolution needs one); the CI-FIX-2 defect replay:
+# short stored form, full verdict form, same commit → must PASS.
+RS="$SCRATCH/rsha"; mkdir -p "$RS"
+git -C "$RS" init -q -b main
+git -C "$RS" config user.email t@t; git -C "$RS" config user.name t
+printf 'x\n' > "$RS/x"; git -C "$RS" add x; git -C "$RS" commit -qm c1
+C1=$(git -C "$RS" rev-parse HEAD)
+printf 'y\n' > "$RS/y"; git -C "$RS" add y; git -C "$RS" commit -qm c2
+C2=$(git -C "$RS" rev-parse HEAD)
+RSSD="$RS/.herdr-swarm"
+T="RS1"
+
+# [12a] short anchor + full verdict (the live CI-FIX-2 shape) → PASS, and
+# the ENQUEUE directive carries the CANONICAL full sha
+review_loop_on_gate_green "$T" "$seat" "${C1:0:7}" "$RSSD" >/dev/null
+out=$(review_loop_on_review_verdict "$T" "$C1" PASS "$RSSD") && rc=0 || rc=$?
+[[ "$rc" == 0 ]] && ok "12a short anchor + full verdict → PASS rc 0" || bad "12a rc=$rc out=$out"
+directive "$out" "12a enqueue carries canonical full sha" "ENQUEUE $T $seat $C1"
+
+# [12b] full anchor + short verdict → PASS
+T="RS2"
+review_loop_on_gate_green "$T" "$seat" "$C1" "$RSSD" >/dev/null
+out=$(review_loop_on_review_verdict "$T" "${C1:0:7}" PASS "$RSSD") && rc=0 || rc=$?
+[[ "$rc" == 0 ]] && ok "12b full anchor + short verdict → PASS rc 0" || bad "12b rc=$rc out=$out"
+directive "$out" "12b enqueue still canonical" "ENQUEUE $T $seat $C1"
+
+# [12c] different commit (both resolve) → fail closed on sha-mismatch
+T="RS3"
+review_loop_on_gate_green "$T" "$seat" "$C1" "$RSSD" >/dev/null
+out=$(review_loop_on_review_verdict "$T" "$C2" PASS "$RSSD" 2>/dev/null) && rc=0 || rc=$?
+[[ "$rc" -ne 0 ]] && directive "$out" "12c differing commits fail closed (mismatch)" "ALERT_INVALID RS3 sha-mismatch" \
+  || bad "12c differing commits wrongly accepted: $out"
+[[ "$(jq -r '.reviews.RS3.state' "$RSSD/reviews.json")" == "review_blocked" ]] \
+  && ok "12c state review_blocked" || bad "12c state: $(jq -r '.reviews.RS3.state' "$RSSD/reviews.json")"
+
+# [12d] unknown sha (resolvable repo, nonexistent object) → fail closed
+T="RS4"
+review_loop_on_gate_green "$T" "$seat" "$C1" "$RSSD" >/dev/null
+out=$(review_loop_on_review_verdict "$T" "ffffffffffffffffffffffffffffffffffffffff" PASS "$RSSD" 2>/dev/null) && rc=0 || rc=$?
+[[ "$rc" -ne 0 ]] && directive "$out" "12d unknown sha fails closed (unresolvable)" "ALERT_INVALID RS4 sha-unresolvable" \
+  || bad "12d unknown sha wrongly accepted: $out"
+
+# [12e] ambiguous short sha (two commit objects sharing a 4-hex prefix)
+# → rev-parse refuses, verdict fails closed. Collision objects are built
+# with commit-tree; expected first collision ≈ a few hundred objects.
+PREFDIR="$SCRATCH/prefixes"; mkdir -p "$PREFDIR"
+AMBSHA=""; i=1
+TREE=$(git -C "$RS" rev-parse 'HEAD^{tree}')
+while (( i < 3000 )); do
+  s=$(GIT_AUTHOR_DATE="@$i +0000" GIT_COMMITTER_DATE="@$i +0000" \
+      git -C "$RS" commit-tree "$TREE" -m "amb $i")
+  p=${s:0:4}
+  if [[ -f "$PREFDIR/$p" ]]; then AMBSHA="$p"; break; fi
+  printf '%s' "$s" > "$PREFDIR/$p"
+  i=$(( i + 1 ))
+done
+T="RS5"
+review_loop_on_gate_green "$T" "$seat" "$C1" "$RSSD" >/dev/null
+if [[ -n "$AMBSHA" ]]; then
+  out=$(review_loop_on_review_verdict "$T" "$AMBSHA" PASS "$RSSD" 2>/dev/null) && rc=0 || rc=$?
+  [[ "$rc" -ne 0 ]] && directive "$out" "12e ambiguous short sha fails closed" "ALERT_INVALID RS5 sha-unresolvable" \
+    || bad "12e ambiguous sha wrongly accepted: $out"
+else
+  ok "12e no collision found in 3000 objects (statistically unexpected) — skipped"
+fi
+
+# [12f] regression guard: outside a repo the state machine stays raw-equal
+# (the hermetic sections above already prove it; assert the fallback once)
+T="RS6"
+mkdir -p "$SCRATCH/norepo/.herdr-swarm"
+review_loop_on_gate_green "$T" "$seat" "$A1" "$SCRATCH/norepo/.herdr-swarm" >/dev/null
+out=$(review_loop_on_review_verdict "$T" "$A1" PASS "$SCRATCH/norepo/.herdr-swarm") && rc=0 || rc=$?
+[[ "$rc" == 0 ]] && ok "12f no-repo fake-sha path unchanged (raw equality)" || bad "12f rc=$rc out=$out"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

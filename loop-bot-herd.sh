@@ -707,7 +707,17 @@ harvest_verdicts() {
       [[ -n "$ticket" ]] || continue
       # Commit sha: carried in the verdict line (ARCH DONE #<id> <sha>), else repo HEAD
       sha=$(sed -nE 's/.*ARCH DONE #[A-Za-z0-9_.-]+[[:space:]]+([0-9a-fA-F]{7,40}).*/\1/p' <<<"$verdict_line" | tail -n1)
-      [[ -n "$sha" ]] || sha=$(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+      [[ -n "$sha" ]] || sha=$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo "unknown")
+      # REVIEW-SHA-1: canonicalise to the full 40-char form at this one
+      # boundary so every downstream record (session-verdicts, reviews.json
+      # seed, arbiter queue, trace events) carries a single form. An anchor
+      # sha that will not resolve keeps its raw value and fails closed at
+      # the commit reality check below.
+      if [[ "$sha" != "unknown" ]]; then
+        local canon_sha
+        canon_sha=$(git -C "$REPO_DIR" rev-parse --verify --quiet "${sha}^{commit}" 2>/dev/null || true)
+        [[ -n "$canon_sha" ]] && sha="$canon_sha"
+      fi
       ts=$(date +%s)
       if [[ -f "$SESSION_LOG" ]]; then
         # Permanent retire: this ticket already gated GREEN (only green retires).

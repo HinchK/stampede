@@ -2,7 +2,7 @@
 id: REVIEW-SHA-1
 title: "review loop fails closed when the worker anchor carries a short sha and the reviewer a full one"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: lib/lifecycle.sh, loop-bot-herd.sh, tests/test_review_loop.sh
 parent: maps/universal-herdr-swarm.md
@@ -54,3 +54,40 @@ that bypasses the per-ticket enqueue/lease/state accounting.
 ## Verification Step
 
 `make check` green; replay the CI-FIX-2 shape (short stored, full verdict) in the suite.
+
+## Resolution (2026-10-08)
+
+Done per criteria 1-2:
+- `loop-bot-herd.sh` harvest canonicalises the ARCH DONE sha at the one boundary
+  where every downstream record inherits it (`git rev-parse --verify <sha>^{commit}`,
+  quiet); the HEAD fallback now emits the full form too. An unresolvable anchor keeps
+  its raw value and fails closed at the existing commit-reality check.
+- `lib/lifecycle.sh` gains `review_canonical_sha SHA REPO_DIR` (rc 0 = full sha,
+  rc 1 = unresolvable/ambiguous, rc 2 = no repo). `review_loop_on_review_verdict`
+  resolves the INCOMING verdict sha before the equality check (rc 1 → fail closed
+  `sha-unresolvable`), and best-effort-resolves the STORED sha so legacy short-stored
+  states unblock. Exact equality after resolution — no prefix matching. rc 2 (no repo,
+  the hermetic fake-sha suite) falls back to today's raw comparison, unchanged.
+- Tests `tests/test_review_loop.sh` §12 (real scratch repo): 12a short-anchor +
+  full-verdict PASS with canonical ENQUEUE (the CI-FIX-2 replay); 12b full-anchor +
+  short-verdict PASS; 12c differing commits fail closed → review_blocked; 12d unknown
+  sha fails closed; 12e ambiguous short sha (real 4-hex collision pair built via
+  commit-tree) fails closed; 12f no-repo raw-equality regression guard.
+  `bash tests/test_review_loop.sh` → 59/59; `make check` green (20 suites).
+
+Recovery path (criterion 4) — NOT applied yet, needs this fix on `main` first:
+CI-FIX-2's `reviews.json` entry (`review_blocked` @ short `d8b4d98`) is stale
+bookkeeping for an already-resolved ticket. Post-promote, either delete the entry
+(recommended — a closed ticket needs no review state; future stray verdicts fail
+closed `no-active-review`) or re-deliver the reviewer's PASS verdict after removing
+its `review-verdicts.seen` key; with canonical resolution both forms now match.
+
+Side-effect audit (criterion 5), receipts from live state:
+- `integration.jsonl` DOES carry a complete CI-FIX-2 record: status `integrated`,
+  full sha `d8b4d985…`, fast-forward merge (merge_sha == gated sha). The PM audit's
+  "no per-ticket record" claim was wrong — per-ticket enqueue/lease/state accounting
+  happened; only the review state entry is stale.
+- No CI-FIX-2 lease in `leases.json`. A duplicate future enqueue of the same sha
+  cannot double-merge: the commit is already an ancestor of
+  `swarm/stampede/integration` (merge-base --is-ancestor confirmed), so a drain merge
+  is a no-op, and (ticket, sha) session-verdict dedupe blocks re-gating.

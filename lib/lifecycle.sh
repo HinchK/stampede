@@ -227,6 +227,18 @@ _review_fail_closed() { # TICKET STATE_DIR REASON
 }
 
 # Entry point for a reviewer verdict anchor: REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>.
+# REVIEW-SHA-1: one canonical sha form (full 40-char) across gate, review
+# and arbiter. Inside a git repo, any unambiguous short/full form resolves
+# to its full sha; an unknown or ambiguous sha fails (rc 1) so fail-closed
+# callers own the path. Outside a repo (rc 2 — the hermetic state-machine
+# tests drive fake shas) callers fall back to raw comparison.
+review_canonical_sha() { # SHA REPO_DIR
+  local sha="$1" repo="$2"
+  git -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || return 2
+  [[ -n "$sha" ]] || return 1
+  git -C "$repo" rev-parse --verify --quiet "${sha}^{commit}" 2>/dev/null || return 1
+}
+
 review_loop_on_review_verdict() { # TICKET SHA VERDICT [STATE_DIR]
   local ticket="$1" sha="$2" verdict="$3" sd="${4:-$PWD/.herdr-swarm}"
   local f; f=$(_review_state_file "$sd")
@@ -245,6 +257,24 @@ review_loop_on_review_verdict() { # TICKET SHA VERDICT [STATE_DIR]
     *) _review_fail_closed "$ticket" "$sd" "unknown-verdict:${verdict:-empty}"; return 1 ;;
   esac
   [[ "$state" != "none" ]] || { _review_fail_closed "$ticket" "$sd" "no-active-review"; return 1; }
+
+  # REVIEW-SHA-1: compare canonical forms. A short worker anchor and a full
+  # reviewer verdict naming the SAME commit must match (the CI-FIX-2
+  # defect), and a legacy short-stored sha must not block a full verdict.
+  # Exact equality after resolution — never prefix matching; a different
+  # commit, or an unknown/ambiguous incoming sha in a real repo, still
+  # fails closed. Outside a repo this is a no-op (raw comparison).
+  local canon rc_canon repo_root
+  repo_root=$(dirname "$sd")
+  canon=$(review_canonical_sha "$sha" "$repo_root") && rc_canon=0 || rc_canon=$?
+  if (( rc_canon == 0 )); then
+    sha="$canon"
+  elif (( rc_canon == 1 )); then
+    _review_fail_closed "$ticket" "$sd" "sha-unresolvable:${sha}"; return 1
+  fi
+  if canon=$(review_canonical_sha "$cur_sha" "$repo_root"); then
+    cur_sha="$canon"   # legacy short-stored form resolves to full; garbage stays raw
+  fi
   [[ "$sha" == "$cur_sha" ]] || { _review_fail_closed "$ticket" "$sd" "sha-mismatch:expected:${cur_sha:-none}"; return 1; }
 
   if [[ "$verdict" == "PASS" ]]; then
