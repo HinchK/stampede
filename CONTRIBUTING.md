@@ -80,6 +80,7 @@ Individual suites, run directly:
 /bin/bash tests/test_arbiter.sh      # CAS integration, conflict, promote
 /bin/bash tests/test_partition.sh    # owns parsing, overlap, leases
 /bin/bash tests/test_async_gate.sh   # background gate jobs, reaping
+/bin/bash tests/test_briefs.sh       # brief delivery single-submission (HERDR-4)
 /bin/bash tests/test_profile.sh      # ecosystem / test-cmd detection
 /bin/bash tests/test_pyenv.sh        # interpreter resolution
 ```

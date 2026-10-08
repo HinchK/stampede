@@ -2,7 +2,7 @@
 id: HERDR-4
 title: "Brief delivery submits exactly once (drop legacy double-enter)"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: lib/briefs.sh, tests/test_briefs.sh
 parent: maps/herdr-native-and-seat-utilization.md
@@ -59,3 +59,42 @@ the per-kind probe table pasted in the ticket resolution.
 The double-enter hazard is not hypothetical: a stray `enter` on an opencode pane can
 resubmit the previous prompt — for a worker seat that means a duplicate run of its
 last dispatch.
+
+## Resolution (2026-10-07)
+
+Live probe ran first (scratch workspaces `wZ`/`w0`/`w11`-`w13`, never the live
+herd; full method + receipts in `docs/findings/brief-delivery-probe.md`):
+
+| Kind | Fresh-dir startup | `agent prompt` alone submits | `prompt … --wait` |
+|---|---|---|---|
+| opencode | clean | **yes** (marker 6 s) | rc=0, settled state in reply |
+| claude | blocked: trust dialog, cursor defaults to "No, exit" (plain Enter exits; `down`+`enter` accepts) | **yes** | rc=1 `agent_prompt_stalled` — **spurious**: marker still appeared (submitted + answered) |
+| agy | first contact blocked, one Enter cleared; later idle | **yes** (marker 0 s) | rc=0, settled state in reply |
+
+Implemented per the table: the `sleep 1 && send-keys enter` follow-up is dropped
+for every kind (probe-proven submission); `agent prompt --wait --timeout 15000`
+(options after the text — the CLI arg parser rejects them before it, a probe
+byproduct recorded in the findings) replaces the blind pre-send
+`agent wait --until idle`; `agent_blocked` is reported and never retried;
+`agent_prompt_stalled`/`timeout` degrade to a bounded pane-read verification of
+the `STANDING BRIEF` marker (claude's false negative) before reporting
+delivered/`FAILED:<code>`; every failure path surfaces on stderr and returns 1 —
+no `|| true` swallows left. `--wait` adoption is itself capability-probed once
+per process (`_briefs_prompt_has_wait`) with a prompt-only legacy path.
+
+Incidental findings recorded (outside owns, not fixed here): claude fresh-dir
+trust dialog defaults to declining — the launcher's `agent start … || warn`
+quietly drops such seats into fallback; worth a ticket if pm seats land in
+fresh dirs.
+
+Tests: new `tests/test_briefs.sh` (18 assertions) — missing-file hard fail,
+single-submission argv on probed support (one prompt, `--wait --timeout 15000`,
+no send-keys, no pre-wait), capability cache across deliveries, legacy
+prompt-only path, `agent_blocked` reported-not-retried, stall→pane-verified
+delivered, stall-unverified→FAILED with exactly three bounded reads, hard
+failures surfaced. Suite count updated everywhere current: CLAUDE.md (20 +
+list entry), CONTRIBUTING.md sample list; STATE.md historical counts left
+as history.
+
+Receipts: `make check` → `All suites green (20)`, `Lint clean`;
+`ls tests/*.sh | wc -l` → 20.
