@@ -2,7 +2,7 @@
 id: TEST-PATH-1
 title: "Hermeticize tests/test_profile.sh:78 PATH against runner tool shadow hazard"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: tests/test_profile.sh
 parent: maps/pick-up-where-we-left-off.md
@@ -40,3 +40,15 @@ This is the exact same defect class that caused `CI-FIX-1` (`test_ci_local.sh`),
 ```bash
 bash tests/test_profile.sh && make check
 ```
+
+## Resolution (2026-10-08)
+
+Resolved in commit `89b9ef4902219aca81b4d7e9036ac869b6916b7d` (`89b9ef4`), implemented by
+`arch-2-hinchk-stampede` (swept to resolved on their branch at `52549af`; this sweep mirrors it
+under the resumption map).
+
+Delivered: `tests/test_profile.sh` (+23/−2) — test `4c` no longer allowlists `/usr/bin:/bin`;
+a hermetic bin directory shadows `uv`/`poetry` so an ambient tool (host or future Ubuntu runner
+image) cannot leak into `detect_test_cmd`, closing the 4th observed instance of the CI-FIX
+runner-shadow class (after CI-FIX-1/2/3). Independent `make check` green per implementer's
+report; supervisor harvest/integration of the branch pending at sweep time.

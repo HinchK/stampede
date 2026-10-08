@@ -60,24 +60,51 @@ parked.
   is the driver's call, not a resumption default.
 - 2026-10-08 (charting): dispatch order recommendation — REV-JQ-1 + INTEG-REC-1 first (both live-observed; disjoint
   owns; two arch seats), TEST-PATH-1 next, REV-07 + BORROW-1 whenever the human sits for decisions.
+- 2026-10-08 (driver resolution, REV-07): single-reviewer PASS is an **accepted limit** — quorum not built;
+  the review quota SPOF is closed by **failover** instead. Recorded as
+  [ADR 0018](../docs/adr/0018-single-reviewer-accepted-limit-with-quota-failover.md); the OpenRig §7 #6
+  cross-vendor critique idea is realized as the failover path, staged as REV-FAILOVER-1.
+- 2026-10-08 (driver resolution, BORROW-1): triage — **adopt** #1 seeded-regression pairs (SEEDED-1), #3
+  evidence hashes (HASH-1), #4 `INDETERMINATE` floor (STATUS-INDET-1), #5 snapshot-before-`down` (SNAP-1,
+  capture only); **fold** #6 cross-vendor review into REV-FAILOVER-1; **fog** #2 stub seat runtime and #7
+  webhook adapter (unblocking conditions in fog below); **affirm all §8 declines** (daemon+SQLite,
+  agent-managed topology, shared checkout, permissive defaults, verdicts-as-verification) — reasoning in the
+  BORROW-1 resolution receipt.
+- 2026-10-08 (execution): REV-JQ-1 resolved (`2fe4963`, arch-1) — telemetry hardening with seeded-regression
+  receipt; INTEG-REC-1 resolved (`eb805dd`, arch-2) and TEST-PATH-1 resolved (`89b9ef4`, arch-2). All three
+  verdict anchors emitted; supervisor harvest/integration pending at chart-update time — statuses cite the
+  implementation shas, not yet base promotion.
 
 ## Tickets
 
 | Ticket | Seat | Status | Blocked by | Synopsis |
 |---|---|---|---|---|
-| **REV-JQ-1** | arch (unclaimed) | backlog | — | Harden review verdict telemetry against empty/malformed findings counts (`loop-bot-herd.sh:567`, observed live) |
-| **INTEG-REC-1** | arch (unclaimed) | backlog | — | Arbiter integration emits durable session-verdict record (unblocks post-integration docs sweeps) |
-| **TEST-PATH-1** | arch (unclaimed) | backlog | — | Hermeticize `tests/test_profile.sh:78` PATH — 4th instance of the CI-FIX runner-shadow class |
-| **REV-07** | human | backlog | — | Decide multi-reviewer quorum (or accepted-limit ADR); consume OpenRig cross-vendor finding; review is the quota SPOF |
-| **BORROW-1** | human | backlog | — | Triage OpenRig §7 borrows — adopt / decline / fog each, with receipts |
+| **REV-JQ-1** | arch-1-hinchk-stampede | **resolved** (`2fe4963`, integration pending) | — | Harden review verdict telemetry against empty/malformed findings counts (`loop-bot-herd.sh`, observed live) |
+| **INTEG-REC-1** | arch-2-hinchk-stampede | **resolved** (`eb805dd`, integration pending) | — | Arbiter integration emits durable session-verdict record (unblocks post-integration docs sweeps) |
+| **TEST-PATH-1** | arch-2-hinchk-stampede | **resolved** (`89b9ef4`, integration pending) | — | Hermeticize `tests/test_profile.sh` PATH — 4th instance of the CI-FIX runner-shadow class |
+| **REV-07** | human (settled), arch-1 (recorded) | **resolved** (ADR 0018) | — | Single-reviewer accepted limit; quota SPOF closed by failover, not quorum |
+| **BORROW-1** | human (settled), arch-1 (recorded) | **resolved** (triage receipt) | — | OpenRig §7 triage: 4 adopts, 1 fold, 2 fog, §8 declines affirmed |
+| **REV-FAILOVER-1** | arch (unclaimed) | backlog | — | Non-AGY reviewer failover on quota exhaustion (ADR 0018's staged mechanism) |
+| **SEEDED-1** | arch (unclaimed) | backlog | — | Seeded-regression pairs for verdict dedupe + CAS paths — suites must fail when the defect is planted |
+| **HASH-1** | arch (unclaimed) | backlog | — | Evidence hashes (`sha256` gate log + host/pid) on session verdict records |
+| **STATUS-INDET-1** | arch (unclaimed) | backlog | — | `INDETERMINATE` floor for `stampede status` — derived at read time, never collapsed by labels |
+| **SNAP-1** | arch (unclaimed) | backlog | — | Snapshot transcript tails + ledgers before `swarm down` closes panes (capture only) |
+
+Note: REV-FAILOVER-1 and HASH-1 both own `loop-bot-herd.sh` — they cannot co-dispatch; the partition lease
+serializes them. Dispatch recommendation: REV-FAILOVER-1 first (closes the ADR 0018 SPOF), then SEEDED-1
+(cheap, sharpens every later gate change), then HASH-1 / STATUS-INDET-1 / SNAP-1 in any order.
 
 ## Not yet specified
 
 - Inline TUI review-diff inspection — carried fog from `maps/autonomous-reviewer-loop.md`; still needs its own
   research pass on what Herdr's pane model can render.
-- The deeper OpenRig borrows pending BORROW-1's verdicts: seeded-regression test pairs, a stub seat runtime,
-  evidence-hashed verdicts, an `INDETERMINATE` floor for `stampede status`, snapshot-before-`down`, webhook
-  notification adapter for headless/CI.
+- **Stub seat runtime** (OpenRig §7 #2, fogged by BORROW-1): needs a research pass on the seat-type surface —
+  config binding for a `worker = stub` kind, brief-delivery path, headless-harness interplay — before a ticket
+  is specifiable. Unblocks zero-model-cost pipeline suites.
+- **Notification webhook adapter** (OpenRig §7 #7, fogged by BORROW-1): only justified when headless/CI runs
+  without panes become routine; revisit when a second real headless deployment exists.
+- **Snapshot restore/resume** (beyond SNAP-1's capture-only scope): resurrecting conversation state after
+  `down` needs its own design pass; SNAP-1 is deliberately the cheap half.
 
 ## Out of scope
 

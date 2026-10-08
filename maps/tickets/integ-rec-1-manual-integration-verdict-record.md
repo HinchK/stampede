@@ -2,7 +2,7 @@
 id: INTEG-REC-1
 title: "Manual / fast-forward integration path emits durable session verdict record"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: lib/arbiter.sh
 parent: maps/pick-up-where-we-left-off.md
@@ -38,3 +38,15 @@ The root cause is an architectural split between supervisor harvesting and arbit
 ```bash
 bash tests/test_arbiter.sh && make check
 ```
+
+## Resolution (2026-10-08)
+
+Resolved in commit `eb805dd10bf658bca72875e2c54269a06ec2105b` (`eb805dd`), implemented by
+`arch-2-hinchk-stampede` (swept to resolved on their branch at `a15164f`; this sweep mirrors it
+under the resumption map).
+
+Delivered: `lib/arbiter.sh` (+19) — integration paths append a durable green verdict record to
+`session-verdicts.jsonl` consistent with the supervisor schema, full 40-char SHAs; tests in
+`tests/test_arbiter.sh` (+29) cover the drain-emits-verdict contract. Independent `make check`
+green per implementer's report; supervisor harvest/integration of the branch pending at sweep
+time — the record emission is exactly what closes this ticket's own sweep-precondition gap.
