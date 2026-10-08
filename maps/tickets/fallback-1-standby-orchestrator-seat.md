@@ -2,7 +2,7 @@
 id: FALLBACK-1
 title: "Standby orchestrator seat: quota-triggered, single-command takeover and stand-down"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: swarm.config.toml, briefs/looper-standby.in.md, lib/standby.sh, tests/test_standby.sh
 parent: maps/dispatch-safety-and-review-policy.md
@@ -65,3 +65,15 @@ PM recommendation for that session: decide it first, FALLBACK-1 is half a fix wi
 `make check` green. Live drill (human-gated, like HORIZON-2): force-exhaustion fixture,
 `standby up`, confirm lock and brief, `standby down`, confirm the real looper resumes
 cleanly. Record receipts in the hand-off.
+
+## Resolution (2026-10-08)
+
+Resolved in commit `b054afc7f5ad8baa7ae3e5a6e4a55b3555aced20` (`b054afc`).
+
+Delivered across all criteria:
+1. **Config**: Added `[seats.looper_standby]` in `swarm.config.toml` (`enabled = false` by default, `kind = "opencode"`, `model = "zai-coding-plan/glm-5.3-flash"`).
+2. **Standing Brief**: Authored `briefs/looper-standby.in.md` with explicit hard invariants (no AGY dispatches while walled, never promote, never `git stash`, never write to `main`, no forbidden path edits, verbatim verdict reporting, no cross-pane injection) and mechanics-only workflow (harvest `ARCH DONE`, partition checks, dispatch to arch seats, handoff file at `.herdr-swarm/research/looper-standby-handoff.md`).
+3. **Lifecycle Commands**: Implemented `lib/standby.sh` with `up`, `down`, and `status` subcommands. `up` splits pane by explicit ID (never `--current`), starts seat, and delivers templated brief; `down` executes clean handshake and requires confirmation or `--yes`.
+4. **Single-Orchestrator Lock**: Built `.herdr-swarm/orchestrator.lock` mutual exclusion. Standby takeover requires detected AGY quota exhaustion (or explicit `--force`), preventing dual active orchestration.
+5. **Supervisor Notification**: Updated `loop-bot-herd.sh` to name `bash lib/standby.sh up (FALLBACK-1)` in the `herdr notification show` alert when AGY quota exhaustion is detected.
+6. **Test Coverage**: Added `tests/test_standby.sh` with 38 passing assertions validating disabled seat gating, refusal on un-exhausted quota, forced override, single-orchestrator lock mutual exclusion, clean stand-down handshake, brief rule presence, and status reporting.
