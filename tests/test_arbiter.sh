@@ -542,6 +542,34 @@ slug_of() { ( eval "$1 _arb_cfg" >/dev/null 2>&1; printf '%s' "${ARB_SLUG:-}" );
 [[ "$(slug_of 'unset PROJECT_SLUG; unset SWARM_CONFIG_NAME;')" == "repo" ]] \
   && ok "10k basename is the last-resort fallback" || bad "10k fallback: $(slug_of 'unset PROJECT_SLUG; unset SWARM_CONFIG_NAME;')"
 
+# ── 11: seeded-regression pair — CAS drops expected-old (SEEDED-1) ─────────
+# The pair discipline (tests/helpers/seed.sh): the §5 race scenario must go
+# RED when the compare-and-swap is seeded into a plain update-ref — the
+# exact silent concurrency-loser ADR 0009 exists to reject. The healthy
+# half replays the race (gate advances the ref mid-run → CAS rejects,
+# record retry); the seeded half plants the defect in _arb_integrate and
+# asserts the SAME retry assertion fails (the racer's tip is overwritten).
+# shellcheck disable=SC1091  # shared seeded-pair helper (SEEDED-1)
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers/seed.sh"
+
+printf '#!/bin/sh\nc=$(git commit-tree HEAD^{tree} -p HEAD -m racer-sd1)\ngit update-ref '"$IREF"' "$c"; exit 0\n' > "$TEST_DIR/wc/check.sh"
+SHA_SD1=$(commit_at "$TEST_DIR/wc" "sd racer 1")
+arbiter_enqueue sd1 seat-sd "$SHA_SD1"
+arbiter_drain 2>/dev/null
+ck sd1 retry "healthy half: concurrent ref move during gate → CAS retry"
+
+SHA_SD2=$(commit_at "$TEST_DIR/wc" "sd racer 2")
+arbiter_enqueue sd2 seat-sd "$SHA_SD2"
+sd2_last() { jq -r -s --arg t sd2 '[.[] | select((.ticket|tostring) == $t)] | .[-1].status // "none"' "$Q" 2>/dev/null; }
+if with_seeded_defect _arb_integrate \
+  's/update-ref "\$ARB_REF" "\$candidate" "\$i0"/update-ref "$ARB_REF" "$candidate"/' \
+  'arbiter_drain >/dev/null 2>&1; [[ "$(sd2_last)" == "retry" ]]'; then
+  ok "seeded half: retry assertion FAILS when expected-old is dropped (teeth proven)"
+else
+  bad "seeded half: assertion passed despite dropped expected-old — no teeth"
+fi
+# the seed's drain overwrote the racer's tip; nothing follows that reads it
+
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))

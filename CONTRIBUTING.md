@@ -88,6 +88,17 @@ Individual suites, run directly:
 No suite has a per-test filter. To exercise a single function, source the
 library in a scratch repo yourself — that is what the suites do.
 
+**Seeded-regression pairs (SEEDED-1).** A state-machine test only counts if it
+also *fails when the defect is planted* — passes-healthy is necessary, never
+sufficient. `tests/helpers/seed.sh` provides `with_seeded_defect <fn> <sed-expr>
+<assertion-body>`: it redefines the function under test with the defect sedded
+into its own `declare -f` text, asserts the body fails, and restores the
+original. The bar for new supervisor/arbiter state-machine coverage is a pair —
+green-without-seed plus red-with-seed — on the model of the two shipped pairs:
+verdict dedupe dropping the sha (`tests/test_async_gate.sh` §18) and the CAS
+ref advance dropping `expected-old` (`tests/test_arbiter.sh` §11). Plant the
+bug where a silent pass-through would be costliest.
+
 ## Platform floor: bash 3.2
 
 **macOS system bash (3.2) is the platform floor.** Suites run under

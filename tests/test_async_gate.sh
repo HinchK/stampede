@@ -692,7 +692,7 @@ herdr() {
     [[ "${3:-}" == "seat-b" && -n "$VERDICT_B" ]] && printf '%s\n' "$VERDICT_B"
     [[ "${3:-}" == "seat-r" && -n "$VERDICT_R" ]] && printf '%s\n' "$VERDICT_R"
     [[ "${3:-}" == "seat-r" && -n "${QUOTA_OUT:-}" ]] && printf '%s\n' "$QUOTA_OUT"
-    [[ "${3:-}" == "seat-f1" && -n "$VERDICT_F" ]] && printf '%s\n' "$VERDICT_F"
+    [[ "${3:-}" == "seat-f1" && -n "${VERDICT_F:-}" ]] && printf '%s\n' "$VERDICT_F"
   fi
   if [[ "${1:-}" == "agent" && "${2:-}" == "prompt" ]]; then
     printf '%s :: %s\n' "$3" "$4" >> "$PROMPTS"
@@ -780,10 +780,68 @@ harvest_verdicts >/dev/null 2>&1; sleep 0.6; gate_reap >/dev/null 2>&1; sleep 0.
   && assert_ok 17f "agy-kind failover target refused — defer stands" \
   || assert_bad 17f "agy failover not refused: $(cat "$PROMPTS")"
 
-# §17 cleanup: restore the failover-free default for anything trailing
+# §17 cleanup: restore the failover-free default for anything trailing.
+# VERDICT_F is emptied, never unset — the stub above reads it with ${:-}
+# but keep the set-"" convention of VERDICT_A/VERDICT_B/VERDICT_R so a
+# later stub revision can never abort a $( ) subshell on an unbound var.
 SEAT_KINDS_arch_1="opencode claude"; export SEAT_KINDS_arch_1
-unset CONFIG_REVIEW_FAILOVER_SEAT QUOTA_OUT VERDICT_F
+VERDICT_F=""
+unset CONFIG_REVIEW_FAILOVER_SEAT QUOTA_OUT
 rm -f "$DEFER"
+
+# ── 18: seeded-regression pair — verdict dedupe drops the sha (SEEDED-1) ───
+# The pair discipline (tests/helpers/seed.sh): the harvest lane's
+# (ticket, sha) dedupe must go RED when seeded into a ticket-only match —
+# a RED verdict would then silently swallow every re-verdict at a new sha,
+# exactly the false-skip the exact-sha protocol (ADR 0002) exists to
+# prevent. Healthy half: RED@S1 then re-verdict@S2 IS re-gated (green row
+# recorded). Seeded half: the same shape fails — no row for the new sha.
+# Inline gating (gc=0) keeps verdict rows synchronous for determinism.
+# shellcheck disable=SC1091  # shared seeded-pair helper (SEEDED-1)
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers/seed.sh"
+GATE_CONCURRENCY=0
+export CONFIG_REVIEW_LOOP=0   # dedupe pair exercises the harvest lane only
+
+# healthy half (ticket SD-A): RED@S1 → re-verdict@S2 gates green
+printf '#!/bin/sh\nexit 1\n' > "$WTB/gate.sh"
+git -C "$WTB" add -A; git -C "$WTB" -c user.email=t@t -c user.name=t commit -q -m sd-red
+SHA_S1=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #SD-A $SHA_S1"; VERDICT_R=""
+harvest_verdicts >/dev/null 2>&1
+[[ "$(last_suite_of SD-A)" == "RED" ]] \
+  && assert_ok 18a "healthy half: RED recorded at S1" || assert_bad 18a "RED@S1 (got $(last_suite_of SD-A))"
+printf '#!/bin/sh\nexit 0\n' > "$WTB/gate.sh"
+git -C "$WTB" add -A; git -C "$WTB" -c user.email=t@t -c user.name=t commit -q -m sd-green
+SHA_S2=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #SD-A $SHA_S2"
+harvest_verdicts >/dev/null 2>&1
+jq -e -s --arg t SD-A --arg s "$SHA_S2" 'any(.[]; (.ticket|tostring) == $t and .sha == $s and .suite == "green")' "$LOG" >/dev/null 2>&1 \
+  && assert_ok 18b "healthy half: re-verdict at NEW sha is re-gated (green row)" \
+  || assert_bad 18b "no green row for SD-A @ S2"
+
+# seeded half (ticket SD-B): dedupe matches any sha for the ticket → the
+# re-verdict after a conclusive RED is silently skipped, no row lands
+sd_body='
+  printf "#!/bin/sh\nexit 1\n" > "$WTB/gate.sh"
+  git -C "$WTB" add -A; git -C "$WTB" -c user.email=t@t -c user.name=t commit -q -m sd-seed-red
+  S3=$(git -C "$WTB" rev-parse HEAD)
+  VERDICT_B="ARCH DONE #SD-B $S3"
+  harvest_verdicts >/dev/null 2>&1
+  printf "#!/bin/sh\nexit 0\n" > "$WTB/gate.sh"
+  git -C "$WTB" add -A; git -C "$WTB" -c user.email=t@t -c user.name=t commit -q -m sd-seed-green
+  S4=$(git -C "$WTB" rev-parse HEAD)
+  VERDICT_B="ARCH DONE #SD-B $S4"
+  harvest_verdicts >/dev/null 2>&1
+  jq -e -s --arg t SD-B --arg s "$S4" "any(.[]; (.ticket|tostring) == \$t and .sha == \$s)" "$LOG"
+'
+if with_seeded_defect harvest_verdicts 's/and \.sha == \$s and (\.suite/and (.suite/' "$sd_body"; then
+  assert_ok 18c "seeded half: re-verdict row FAILS to land when dedupe drops the sha (teeth proven)"
+else
+  assert_bad 18c "seeded half: row landed despite sha-less dedupe — no teeth"
+fi
+VERDICT_B=""
+GATE_CONCURRENCY=2
+unset CONFIG_REVIEW_LOOP
 
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
