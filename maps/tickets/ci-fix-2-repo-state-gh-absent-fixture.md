@@ -43,6 +43,8 @@ the "absent" fixture finds it. Identical root cause to CI-FIX-1.
 
 ## Resolution (2026-10-08)
 
+Resolved in commit `d8b4d985b4b6ecd2ae867e33956784916e1ff613` (`d8b4d98`).
+
 Done per criterion 1: `NOGH_BIN` now holds symlinks to exactly the externals
 `repo-state.sh` resolves (`bash git sed awk cat`) and every absence-fixture run uses
 `PATH="$NOGH_BIN"` — no system dir whitelisted, so gh is unreachable wherever the host

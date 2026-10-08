@@ -206,3 +206,9 @@
    - **ROUTE-5 (RESOLVED & INTEGRATED)**: `agy-docs` brief updated with post-integration sweep mandate, request shape `sweep #<TICKET> <sha>`, green-verdict precondition verification, and `DOCS DONE <ticket> <sha>` completion anchor (`briefs/worker-docs.in.md`). Committed at `5330cae`, integrated at `ceaaecf`.
    - **Epic Closeout**: All tickets in the "Herdr-Native Coordination & Seat Utilization" epic are resolved, verified, and integrated onto `swarm/stampede/integration`, promoted to `main` at `8eae776`.
    - **Total Test Suite Health**: All 20 suites green (`make check`), 0 ShellCheck warnings, tree clean.
+
+12. **Infrastructure Hardening & Review Canonicalization (RESOLVED & PROMOTED)**:
+   - **CI-FIX-2 (RESOLVED & PROMOTED)**: Hermetic `gh`-absent fixture in `tests/test_repo_state.sh` (`d8b4d985b4b6ecd2ae867e33956784916e1ff613`). Replaced `/usr/bin:/bin` allowlist with clean `NOGH_BIN` containing only target dependencies, resolving the latent defect on Ubuntu CI runners and returning CI to green.
+   - **QUOTA-5 (RESOLVED & PROMOTED)**: Fixed `lib/quota.sh` to parse the real two-line `Individual quota reached` banner (`Resets in <dur>`), broadened quota gate to scan account-wide across all `kind == "agy"` seats in `.herdr-swarm/seats.json`, and added `.herdr-swarm/quota-banner-seen.json` to prevent stale scrollback text from causing permanent deferrals (`5ba1fbf27f5b819d2695f8e862ed40b2593b68eb`, merge `fbfd44d`).
+   - **REVIEW-SHA-1 (RESOLVED & PROMOTED)**: Canonicalized commit SHAs to full 40-character form at harvest boundary in `loop-bot-herd.sh` and implemented `review_canonical_sha` in `lib/lifecycle.sh` (`843f08578a58b06e494624c965416c7ed2a1dae0`), eliminating false-positive `sha-mismatch` review loop stalls between short and full SHAs.
+   - **Total Test Suite Health**: All 20 suites green (`make check`), 0 ShellCheck warnings, tree clean.

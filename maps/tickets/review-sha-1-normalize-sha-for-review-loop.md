@@ -57,6 +57,8 @@ that bypasses the per-ticket enqueue/lease/state accounting.
 
 ## Resolution (2026-10-08)
 
+Resolved in commit `843f08578a58b06e494624c965416c7ed2a1dae0` (`843f085`).
+
 Done per criteria 1-2:
 - `loop-bot-herd.sh` harvest canonicalises the ARCH DONE sha at the one boundary
   where every downstream record inherits it (`git rev-parse --verify <sha>^{commit}`,
