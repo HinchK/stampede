@@ -567,6 +567,62 @@ grep -q "seat-r :: DISPATCH: Review #Q-3 @ ${SHA_Q3} (round 1/2)" "$PROMPTS" \
   || assert_bad 16g "fresh dispatch deferred wrongly: $(cat "$PROMPTS")"
 unset CONFIG_REVIEW_LOOP SEAT_NAME_reviewer QUOTA_OUT
 
+# ── 16n-p: HERDR-5 native notifications at the alert seams ────────────────
+# The herdr stub grows a notification recorder + a probe-failure knob; the
+# quota-defer seam is driven directly (it is the [16a] alert path, exercised
+# end-to-end above). Every case re-probes via _HERDR_NOTIFY_MODE unset.
+NOTIF="$TEST_DIR/notif.log"; : > "$NOTIF"
+NOTIF_PROBE_RC=0
+herdr() {
+  if [[ "${1:-}" == "notification" ]]; then
+    [[ "${2:-}" == "--help" ]] && return "$NOTIF_PROBE_RC"
+    if [[ "${2:-}" == "show" ]]; then printf '%s || %s\n' "$3" "$5" >> "$NOTIF"; return 0; fi
+    return 0
+  fi
+  if [[ "${1:-}" == "agent" && "${2:-}" == "read" ]]; then
+    printf 'read %s\n' "$3" >> "$READS"
+    [[ "${3:-}" == "seat-a" && -n "$VERDICT_A" ]] && printf '%s\n' "$VERDICT_A"
+    [[ "${3:-}" == "seat-b" && -n "$VERDICT_B" ]] && printf '%s\n' "$VERDICT_B"
+    [[ "${3:-}" == "seat-r" && -n "$VERDICT_R" ]] && printf '%s\n' "$VERDICT_R"
+    [[ "${3:-}" == "seat-r" && -n "${QUOTA_OUT:-}" ]] && printf '%s\n' "$QUOTA_OUT"
+  fi
+  if [[ "${1:-}" == "agent" && "${2:-}" == "prompt" ]]; then
+    printf '%s :: %s\n' "$3" "$4" >> "$PROMPTS"
+  fi
+  return 0
+}
+
+# [16n] inside HERDR_ENV=1 with probe support: defer seam emits a native
+# notification carrying the [stampede:<slug>] prefix and ticket detail
+unset _HERDR_NOTIFY_MODE
+export HERDR_ENV=1 NOTIF_PROBE_RC=0
+: > "$NOTIF"
+_quota_defer_reviewer "NTF-1" "deadbeef" 1 2 >/dev/null 2>&1
+grep -q "^\[stampede:.*\] agy quota exhausted || .*NTF-1" "$NOTIF" \
+  && assert_ok 16n "quota-defer alert emits native notification inside HERDR_ENV=1" \
+  || assert_bad 16n "notification missing: $(cat "$NOTIF")"
+
+# [16o] probe failure (older herdr): no emission, alert path exit unchanged
+unset _HERDR_NOTIFY_MODE
+export NOTIF_PROBE_RC=2
+: > "$NOTIF"
+_quota_defer_reviewer "NTF-2" "deadbeef" 1 2 >/dev/null 2>&1
+rc=$?
+[[ ! -s "$NOTIF" && "$rc" == 0 ]] \
+  && assert_ok 16o "probe-absent herdr: no notification, defer seam rc unchanged (0)" \
+  || assert_bad 16o "notif='$(cat "$NOTIF")' rc=$rc"
+
+# [16p] outside Herdr (HERDR_ENV unset): no emission, one degrade note
+unset _HERDR_NOTIFY_MODE HERDR_ENV
+export NOTIF_PROBE_RC=0
+: > "$NOTIF"
+_quota_defer_reviewer "NTF-3" "deadbeef" 1 2 >/dev/null 2>&1
+rc=$?
+[[ ! -s "$NOTIF" && "$rc" == 0 ]] \
+  && assert_ok 16p "HERDR_ENV unset: no notification, defer seam rc unchanged (0)" \
+  || assert_bad 16p "notif='$(cat "$NOTIF")' rc=$rc"
+export HERDR_ENV=1   # restore for any trailing assertions in this pane
+
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))

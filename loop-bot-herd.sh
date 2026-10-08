@@ -140,6 +140,31 @@ bad()  { log "${RED}✗${RESET} $1"; }
 note() { log "${DIM}•${RESET} $1"; }
 step() { log "${BLUE}▸${RESET} $1"; }
 
+# HERDR-5 / ADR 0017: notify, don't hope. Human-visible supervisor alerts
+# additionally emit a native OS notification when running inside Herdr.
+# Fire-and-forget — a notification failure must never fail a supervisor
+# pass. The capability is probed once per process; outside Herdr or on a
+# probe-absent herdr this degrades to a single debug line and every alert
+# stays on the durable channels (trace stream + logs) as before.
+_sup_notify() { # TITLE DETAIL
+  if [[ -z "${_HERDR_NOTIFY_MODE:-}" ]]; then
+    if [[ "${HERDR_ENV:-}" != "1" ]]; then
+      _HERDR_NOTIFY_MODE="outside-herdr"
+    elif ! command -v herdr >/dev/null 2>&1; then
+      _HERDR_NOTIFY_MODE="herdr-missing"
+    elif herdr notification --help >/dev/null 2>&1; then
+      _HERDR_NOTIFY_MODE="on"
+    else
+      _HERDR_NOTIFY_MODE="unsupported"
+    fi
+    if [[ "$_HERDR_NOTIFY_MODE" != "on" ]]; then
+      note "notify: native notifications unavailable (${_HERDR_NOTIFY_MODE}) — alerts stay on the trace stream"
+    fi
+  fi
+  [[ "$_HERDR_NOTIFY_MODE" == "on" ]] || return 0
+  herdr notification show "[stampede:${PROJECT_SLUG}] $1" --body "$2" >/dev/null 2>&1 || true
+}
+
 mkdir -p "$STATE_DIR" "$CHANNEL_DIR"
 
 # ---- control file --------------------------------------------------------
@@ -421,6 +446,7 @@ _quota_defer_reviewer() { # TICKET SHA ROUND MAX — record the durable marker
   jq -cn --argjson ts "$(date +%s)" --arg t "$1" --arg h "$2" --arg r "$3" --arg m "$4" \
     '{ts: $ts, ticket: $t, sha: $h, round: $r, max: $m}' >> "$QUOTA_DEFER_FILE"
   bad "quota: agy account exhausted — reviewer dispatch for #$1 deferred (marker in quota-deferred.jsonl)"
+  _sup_notify "agy quota exhausted" "reviewer dispatch for #$1 @ $2 deferred — auto-retries when the account clears"
   "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" review.deferred quota "$1" \
     "$(jq -cn --arg t "$1" --arg h "$2" '{ticket:$t, sha:$h, summary:("reviewer dispatch deferred: agy quota exhausted")}')" \
     --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
@@ -486,6 +512,7 @@ _review_directives() { # DIRECTIVES-LINES TICKET SHA
         # d1=ticket d2=sha d3=round d4=max — fail closed, never enqueued
         bad "review loop: #$d1 @ ${d2} BLOCKED after ${d4} rounds — human review required"
         looper_notice "LOOP-BOT: review for #${d1} @ ${d2} BLOCKED after ${d4} rounds — human review required."
+        _sup_notify "review BLOCKED" "#$d1 @ ${d2} blocked after ${d4} rounds — human review required"
         # HEADLESS-5 hazard 3: a blocked review is a terminal outcome —
         # dead-letter it so the unattended run's exit code reflects it.
         if _headless_active; then
@@ -637,6 +664,7 @@ _headless_deadletter() { # TICKET SHA REASON
   dead_letter_record "$ticket" "$sha" "$reason" "$SESSION_ID"
   lease_release "$ticket" >/dev/null 2>&1 || true
   looper_notice "LOOP-BOT: #$ticket @ ${sha} moved to DEAD_LETTER (${reason}) — lease released; human evaluation required."
+  _sup_notify "DEAD_LETTER" "#$ticket @ ${sha} — ${reason} (lease released; human evaluation required)"
 }
 
 # Ceiling judgement for the feedback sites. The inline paths append their
@@ -773,6 +801,7 @@ harvest_verdicts() {
             _headless_deadletter "$ticket" "$sha" "suite RED — re-verdict ceiling reached"
           else
             worker_feedback "$seat" "$ticket" "$sha" red "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate log: $gate_log)."
+            _sup_notify "suite RED" "#$ticket @ ${sha} gated RED (gate log: $gate_log) — worker re-verdicting"
           fi
         fi
       elif [[ "$(ctl_get suite_gate)" == "true" ]]; then
