@@ -24,10 +24,20 @@ cd "$SCRATCH" && git init -q .
 stub() { printf '#!/usr/bin/env bash\n%s\n' "$2" > "$SCRATCH/bin/$1"; chmod +x "$SCRATCH/bin/$1"; }
 stub herdr   'exit 0'
 stub gh      'exit 0'
-stub jq      'exit 0'
 stub timeout 'shift; exec "$@"'
 stub claude  'echo "claude 1.2.3 (stub)"'
 stub agy     'echo "agy 9.9 (stub)"'
+
+# jq must be REAL: doctor's HERDR-3 lifecycle section parses herdr JSON
+# with it (the presence-stub predates that). Same policy as
+# tests/test_cli_status.sh — skip the suite when jq is unavailable.
+if REAL_JQ=$(command -v jq); then
+  printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$REAL_JQ" > "$SCRATCH/bin/jq"
+  chmod +x "$SCRATCH/bin/jq"
+else
+  printf 'test_cli_doctor: SKIP — jq not on PATH (a stampede preflight dependency)\n'
+  exit 0
+fi
 
 # Resolve the interpreter with the FULL path first, then narrow.
 if ! PYTHON_OUT=$(cd "$REPO_ROOT" && bash lib/pyenv.sh 2>/dev/null); then
@@ -117,6 +127,119 @@ out=$(STAMPEDE_CONFIG="$cfg" "$REPO_ROOT/bin/stampede" doctor 2>&1); rc=$?
 check "chain with healthy fallback → rc 0" 0 "$rc"
 printf '%s\n' "$out" | grep -Eq 'arch_1 +opencode,claude +FALLBACK' \
   && ok "FALLBACK row names primary and live kind" || bad "fallback row: $out"
+
+# [7] HERDR-3: explain diagnostics — unsupported probe → note, exit intact
+cat > "$SCRATCH/bin/herdr" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "agent" ] && [ "$2" = "explain" ]; then exit 2; fi
+exit 0
+EOF
+chmod +x "$SCRATCH/bin/herdr"
+cat > "$cfg" <<'EOF'
+[seats.pm]
+name = "pm"
+default_kind = "claude"
+EOF
+out=$(STAMPEDE_CONFIG="$cfg" "$REPO_ROOT/bin/stampede" doctor 2>&1); rc=$?
+check "explain probe unsupported → rc still 0" 0 "$rc"
+[[ "$out" == *"explain unavailable"* ]] && ok "unsupported probe prints one note" || bad "note missing: $out"
+
+# [8] HERDR-3: ambiguous seat (state unknown) → explain runs, matched rule
+# printed; healthy seat in the same herd is NOT explained
+cat > "$SCRATCH/bin/herdr" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "agent" ] && [ "$2" = "explain" ] && [ "$3" = "--help" ]; then exit 0; fi
+if [ "$1" = "agent" ] && [ "$2" = "list" ]; then
+  printf '%s\n' '{"result":{"agents":[
+    {"name":"pm-demo","state":"unknown","agent":"claude","pane_id":"w1:p1"},
+    {"name":"arch-1-demo","state":"idle","agent":"opencode","pane_id":"w1:p2"}]}}'
+  exit 0
+fi
+if [ "$1" = "agent" ] && [ "$2" = "explain" ]; then
+  echo "$3" >> "$DOCTOR_EXPLAIN_LOG"
+  printf '%s\n' '{"state":"unknown","matched_rule":"screen.ambiguous_idle",
+                  "evaluated_rules":[{"id":"a"},{"id":"b"}],
+                  "fallback_reason":null,"screen_detection_skip_reason":null,
+                  "warning":null}'
+  exit 0
+fi
+exit 0
+EOF
+chmod +x "$SCRATCH/bin/herdr"
+export DOCTOR_EXPLAIN_LOG="$SCRATCH/explain.log"; : > "$DOCTOR_EXPLAIN_LOG"
+out=$(STAMPEDE_CONFIG="$cfg" "$REPO_ROOT/bin/stampede" doctor 2>&1); rc=$?
+check "ambiguous seat present → rc still 0 (advisory)" 0 "$rc"
+[[ "$out" == *"explain pm-demo"*"state=unknown"*"rule=screen.ambiguous_idle"* ]] \
+  && ok "ambiguous seat explained with matched rule" || bad "explain line: $out"
+grep -qx "pm-demo" "$DOCTOR_EXPLAIN_LOG" \
+  && ok "explain ran for the ambiguous seat only" || bad "explain log: $(cat "$DOCTOR_EXPLAIN_LOG")"
+if grep -q "arch-1-demo" "$DOCTOR_EXPLAIN_LOG"; then
+  bad "healthy seat was explained (must be skipped)"
+else
+  ok "healthy seat skipped by explain"
+fi
+
+# [9] HERDR-3: healthy herd → explain skipped entirely
+cat > "$SCRATCH/bin/herdr" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "agent" ] && [ "$2" = "explain" ] && [ "$3" = "--help" ]; then exit 0; fi
+if [ "$1" = "agent" ] && [ "$2" = "list" ]; then
+  printf '%s\n' '{"result":{"agents":[
+    {"name":"pm-demo","state":"idle","agent":"claude","pane_id":"w1:p1"},
+    {"name":"arch-1-demo","state":"working","agent":"opencode","pane_id":"w1:p2"}]}}'
+  exit 0
+fi
+if [ "$1" = "agent" ] && [ "$2" = "explain" ]; then
+  echo "$3" >> "$DOCTOR_EXPLAIN_LOG"; exit 0
+fi
+exit 0
+EOF
+chmod +x "$SCRATCH/bin/herdr"
+: > "$DOCTOR_EXPLAIN_LOG"
+out=$(STAMPEDE_CONFIG="$cfg" "$REPO_ROOT/bin/stampede" doctor 2>&1); rc=$?
+check "healthy herd → rc 0" 0 "$rc"
+[[ "$out" == *"none ambiguous — explain skipped"* ]] \
+  && ok "healthy herd reports skip line" || bad "skip line: $out"
+[[ ! -s "$DOCTOR_EXPLAIN_LOG" ]] && ok "no explain calls on a healthy herd" || bad "explain ran: $(cat "$DOCTOR_EXPLAIN_LOG")"
+
+# [10] HERDR-3: foreign agents never explained — seat identity is exact via
+# the seat ledger when one exists (prefix heuristic is the fallback only)
+mkdir -p "$SCRATCH/tgt/.herdr-swarm"
+cat > "$SCRATCH/tgt/.herdr-swarm/seats.json" <<'EOF'
+{"workspace_id": "w1", "seats": [
+  {"name": "pm-demo", "kind": "claude", "pane": "w1:p1"},
+  {"name": "arch-1-demo", "kind": "opencode", "pane": "w1:p2"}
+]}
+EOF
+cat > "$SCRATCH/bin/herdr" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "agent" ] && [ "$2" = "explain" ] && [ "$3" = "--help" ]; then exit 0; fi
+if [ "$1" = "agent" ] && [ "$2" = "list" ]; then
+  printf '%s\n' '{"result":{"agents":[
+    {"name":"pm-otherproject","state":"unknown","agent":"claude","pane_id":"w2:p1"},
+    {"name":"pm-demo","state":"unknown","agent":"claude","pane_id":"w1:p1"}]}}'
+  exit 0
+fi
+if [ "$1" = "agent" ] && [ "$2" = "explain" ]; then
+  echo "$3" >> "$DOCTOR_EXPLAIN_LOG"
+  printf '%s\n' '{"state":"unknown","matched_rule":"screen.ambiguous_idle",
+                  "evaluated_rules":[],"fallback_reason":null,
+                  "screen_detection_skip_reason":null,"warning":null}'
+  exit 0
+fi
+exit 0
+EOF
+chmod +x "$SCRATCH/bin/herdr"
+: > "$DOCTOR_EXPLAIN_LOG"
+out=$(REPO_DIR="$SCRATCH/tgt" STAMPEDE_CONFIG="$cfg" "$REPO_ROOT/bin/stampede" doctor 2>&1); rc=$?
+check "ledger-precise filter → rc 0" 0 "$rc"
+grep -qx "pm-demo" "$DOCTOR_EXPLAIN_LOG" \
+  && ok "ledger seat in unknown state explained" || bad "log: $(cat "$DOCTOR_EXPLAIN_LOG")"
+if grep -q "pm-otherproject" "$DOCTOR_EXPLAIN_LOG"; then
+  bad "foreign agent explained despite ledger"
+else
+  ok "foreign agent filtered out (ledger names are exact)"
+fi
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
