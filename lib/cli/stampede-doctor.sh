@@ -128,7 +128,7 @@ stampede_cmd_doctor() {
       fi
       (( is_ours )) || continue
       [[ "$astate" == "unknown" || -z "$astate" || "$astate" == "null" ]] && amb_list+="$aname"$'\n'
-    done < <(jq -r '.result.agents[]? | [(.name // "?"), (.state // "")] | @tsv' <<<"$agents_json" 2>/dev/null)
+    done < <(jq -r '.result.agents[]? | [(.name // "?"), (.agent_status // .state // "")] | @tsv' <<<"$agents_json" 2>/dev/null)
     if [[ -z "${amb_list//$'\n'/}" ]]; then
       printf 'agent lifecycle: %s live agent(s), none ambiguous — explain skipped\n' "$total_n"
     else

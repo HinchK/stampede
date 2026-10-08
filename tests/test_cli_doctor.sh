@@ -151,8 +151,8 @@ cat > "$SCRATCH/bin/herdr" <<'EOF'
 if [ "$1" = "agent" ] && [ "$2" = "explain" ] && [ "$3" = "--help" ]; then exit 0; fi
 if [ "$1" = "agent" ] && [ "$2" = "list" ]; then
   printf '%s\n' '{"result":{"agents":[
-    {"name":"pm-demo","state":"unknown","agent":"claude","pane_id":"w1:p1"},
-    {"name":"arch-1-demo","state":"idle","agent":"opencode","pane_id":"w1:p2"}]}}'
+    {"name":"pm-demo","agent_status":"unknown","agent":"claude","pane_id":"w1:p1"},
+    {"name":"arch-1-demo","agent_status":"idle","agent":"opencode","pane_id":"w1:p2"}]}}'
   exit 0
 fi
 if [ "$1" = "agent" ] && [ "$2" = "explain" ]; then
@@ -185,8 +185,8 @@ cat > "$SCRATCH/bin/herdr" <<'EOF'
 if [ "$1" = "agent" ] && [ "$2" = "explain" ] && [ "$3" = "--help" ]; then exit 0; fi
 if [ "$1" = "agent" ] && [ "$2" = "list" ]; then
   printf '%s\n' '{"result":{"agents":[
-    {"name":"pm-demo","state":"idle","agent":"claude","pane_id":"w1:p1"},
-    {"name":"arch-1-demo","state":"working","agent":"opencode","pane_id":"w1:p2"}]}}'
+    {"name":"pm-demo","agent_status":"idle","agent":"claude","pane_id":"w1:p1"},
+    {"name":"arch-1-demo","agent_status":"working","agent":"opencode","pane_id":"w1:p2"}]}}'
   exit 0
 fi
 if [ "$1" = "agent" ] && [ "$2" = "explain" ]; then
@@ -202,6 +202,30 @@ check "healthy herd → rc 0" 0 "$rc"
   && ok "healthy herd reports skip line" || bad "skip line: $out"
 [[ ! -s "$DOCTOR_EXPLAIN_LOG" ]] && ok "no explain calls on a healthy herd" || bad "explain ran: $(cat "$DOCTOR_EXPLAIN_LOG")"
 
+# [9b] HERDR-3 round 2: older herdr reporting bare `.state` still parses
+# (fallback branch of `.agent_status // .state`) — healthy herd skips explain
+cat > "$SCRATCH/bin/herdr" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "agent" ] && [ "$2" = "explain" ] && [ "$3" = "--help" ]; then exit 0; fi
+if [ "$1" = "agent" ] && [ "$2" = "list" ]; then
+  printf '%s\n' '{"result":{"agents":[
+    {"name":"pm-demo","state":"idle","agent":"claude","pane_id":"w1:p1"},
+    {"name":"arch-1-demo","state":"done","agent":"opencode","pane_id":"w1:p2"}]}}'
+  exit 0
+fi
+if [ "$1" = "agent" ] && [ "$2" = "explain" ]; then
+  echo "$3" >> "$DOCTOR_EXPLAIN_LOG"; exit 0
+fi
+exit 0
+EOF
+chmod +x "$SCRATCH/bin/herdr"
+: > "$DOCTOR_EXPLAIN_LOG"
+out=$(STAMPEDE_CONFIG="$cfg" "$REPO_ROOT/bin/stampede" doctor 2>&1); rc=$?
+check "state-only schema (older herdr) → rc 0" 0 "$rc"
+[[ "$out" == *"none ambiguous — explain skipped"* ]] \
+  && ok "bare .state fallback: healthy herd (idle/done) still skips explain" || bad "fallback skip line: $out"
+[[ ! -s "$DOCTOR_EXPLAIN_LOG" ]] && ok "no explain calls under .state fallback" || bad "explain ran: $(cat "$DOCTOR_EXPLAIN_LOG")"
+
 # [10] HERDR-3: foreign agents never explained — seat identity is exact via
 # the seat ledger when one exists (prefix heuristic is the fallback only)
 mkdir -p "$SCRATCH/tgt/.herdr-swarm"
@@ -216,8 +240,8 @@ cat > "$SCRATCH/bin/herdr" <<'EOF'
 if [ "$1" = "agent" ] && [ "$2" = "explain" ] && [ "$3" = "--help" ]; then exit 0; fi
 if [ "$1" = "agent" ] && [ "$2" = "list" ]; then
   printf '%s\n' '{"result":{"agents":[
-    {"name":"pm-otherproject","state":"unknown","agent":"claude","pane_id":"w2:p1"},
-    {"name":"pm-demo","state":"unknown","agent":"claude","pane_id":"w1:p1"}]}}'
+    {"name":"pm-otherproject","agent_status":"unknown","agent":"claude","pane_id":"w2:p1"},
+    {"name":"pm-demo","agent_status":"unknown","agent":"claude","pane_id":"w1:p1"}]}}'
   exit 0
 fi
 if [ "$1" = "agent" ] && [ "$2" = "explain" ]; then
