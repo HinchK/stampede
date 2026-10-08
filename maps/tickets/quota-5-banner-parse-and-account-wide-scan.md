@@ -59,6 +59,8 @@ Replay the captured two-line banner against the probe (fails before, passes afte
 
 ## Resolution (2026-10-08)
 
+Resolved in commit `5ba1fbf27f5b819d2695f8e862ed40b2593b68eb` (`5ba1fbf`), integrated at merge commit `fbfd44dcbeb1c9eb764b543b91b741cd229bccfa`.
+
 Done, all five criteria:
 
 1. **Two-line + legacy match, most recent wins** — the probe joins the pane read
