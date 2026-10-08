@@ -5,7 +5,7 @@ type: wayfinder:task
 status: backlog
 assignee: arch
 owns: lib/arbiter.sh
-parent: maps/dispatch-safety-and-review-policy.md
+parent: maps/pick-up-where-we-left-off.md
 ---
 
 # INTEG-REC-1 -- arbiter integration emits durable session verdict record

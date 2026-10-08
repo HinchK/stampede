@@ -47,6 +47,8 @@ tight enough in grilling to ticket now:
 - 2026-10-07 (execution): QUOTA-4 resolved (35a6e49) — looper standing brief gates AGY dispatches, passed review and merged into integration at 2ee247e.
 - 2026-10-08 (execution): FALLBACK-1 resolved (b054afc) — standby orchestrator seat with takeover and stand-down implemented in lib/standby.sh, briefs/looper-standby.in.md, tests/test_standby.sh, and swarm.config.toml.
 - 2026-10-08 (execution): CI-FIX-3 resolved (564bde7) — test_standby sed replacement made portable across BSD/macOS and GNU/Linux.
+- 2026-10-08 (charter): unclaimed backlog (`REV-07`, `REV-JQ-1`, `TEST-PATH-1`, `INTEG-REC-1`) re-parented to the
+  resumption map [`maps/pick-up-where-we-left-off.md`](pick-up-where-we-left-off.md); this map is closed.
 
 ## Tickets
 
@@ -62,7 +64,7 @@ tight enough in grilling to ticket now:
 | **TEST-PATH-1** | arch (unclaimed) | backlog | — | Hermeticize tests/test_profile.sh:78 PATH against runner tool shadow hazard |
 | **INTEG-REC-1** | arch (unclaimed) | backlog | — | Manual / fast-forward integration path emits durable session verdict record |
 
-All five implementation tickets (`QUOTA-3`, `QUOTA-4`, `REV-06`, `FALLBACK-1`, `CI-FIX-3`) are resolved. `REV-07` (quorum decision), `REV-JQ-1`, `TEST-PATH-1`, and `INTEG-REC-1` remain on backlog.
+All five implementation tickets (`QUOTA-3`, `QUOTA-4`, `REV-06`, `FALLBACK-1`, `CI-FIX-3`) are resolved. `REV-07` (quorum decision), `REV-JQ-1`, `TEST-PATH-1`, and `INTEG-REC-1` remained on backlog until 2026-10-08, when the milestone map `maps/pick-up-where-we-left-off.md` adopted and re-parented them — see that map for their live status.
 
 ## Not yet specified
 

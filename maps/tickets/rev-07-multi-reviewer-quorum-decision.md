@@ -5,7 +5,7 @@ type: wayfinder:decision
 status: backlog
 assignee: human
 owns: docs/adr
-parent: maps/dispatch-safety-and-review-policy.md
+parent: maps/pick-up-where-we-left-off.md
 ---
 
 # REV-07 -- does single-reviewer PASS need a second opinion?

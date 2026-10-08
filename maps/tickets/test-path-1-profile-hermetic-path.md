@@ -5,7 +5,7 @@ type: wayfinder:task
 status: backlog
 assignee: arch
 owns: tests/test_profile.sh
-parent: maps/dispatch-safety-and-review-policy.md
+parent: maps/pick-up-where-we-left-off.md
 ---
 
 # TEST-PATH-1 -- hermeticize test_profile [4c] against runner PATH tool shadowing

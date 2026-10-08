@@ -1,6 +1,6 @@
 # Swarm State Checkpoint: Universal Herdr Swarm (`herd-swarm`)
 
-**Updated:** 2026-10-05  
+**Updated:** 2026-10-08  
 **Plan of Record:** [maps/universal-herdr-swarm.md](maps/universal-herdr-swarm.md)  
 **Execution Roadmap:** [docs/reordered-plan.md](docs/reordered-plan.md)  
 **Orchestrator:** `looper` (wM:p1, AGY Flash)  
@@ -209,5 +209,10 @@
    - **QUOTA-5 (RESOLVED & PROMOTED)**: Fixed `lib/quota.sh` to parse the real two-line `Individual quota reached` banner (`Resets in <dur>`), broadened quota gate to scan account-wide across all `kind == "agy"` seats in `.herdr-swarm/seats.json`, and added `.herdr-swarm/quota-banner-seen.json` to prevent stale scrollback text from causing permanent deferrals (`5ba1fbf27f5b819d2695f8e862ed40b2593b68eb`, merge `fbfd44d`).
    - **REVIEW-SHA-1 (RESOLVED & PROMOTED)**: Canonicalized commit SHAs to full 40-character form at harvest boundary in `loop-bot-herd.sh` and implemented `review_canonical_sha` in `lib/lifecycle.sh` (`843f08578a58b06e494624c965416c7ed2a1dae0`), eliminating false-positive `sha-mismatch` review loop stalls between short and full SHAs.
    - **FALLBACK-1 (RESOLVED & PROMOTED)**: Standby orchestrator seat (`lib/standby.sh`, `briefs/looper-standby.in.md`, `tests/test_standby.sh`, `swarm.config.toml`) supporting single-command takeover (`standby up`) and clean stand-down (`standby down`) when AGY account quota walls the herd. Built `.herdr-swarm/orchestrator.lock` mutual exclusion to eliminate dual active orchestration, alert notification via `herdr notification show` on quota exhaustion, and hermetic unit test suite (38 assertions passing in `tests/test_standby.sh`). Implemented by `arch-1-hinchk-stampede` at commit `b054afc7f5ad8baa7ae3e5a6e4a55b3555aced20` (`b054afc`), and promoted to `main` at `4384971`.
-   - **CI-FIX-3 (RESOLVED & PROMOTED)**: Fixed `tests/test_standby.sh` to use portable temporary-file replacement (`sed '...' "$CFG" > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"`) instead of BSD-only `sed -i ''`, eliminating runner failure on Ubuntu CI and restoring green CI across macOS and Linux runners. Implemented by `arch-1-hinchk-stampede` at commit `564bde76484694b36b94b630563d73211683b706` (`564bde7`) and promoted to `main` at `3628a32`.
-   - **Total Test Suite Health**: All 21 suites green (`make check`), 0 ShellCheck warnings, tree clean.
+    - **CI-FIX-3 (RESOLVED & PROMOTED)**: Fixed `tests/test_standby.sh` to use portable temporary-file replacement (`sed '...' "$CFG" > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"`) instead of BSD-only `sed -i ''`, eliminating runner failure on Ubuntu CI and restoring green CI across macOS and Linux runners. Implemented by `arch-1-hinchk-stampede` at commit `564bde76484694b36b94b630563d73211683b706` (`564bde7`) and promoted to `main` at `3628a32`.
+    - **Total Test Suite Health**: All 21 suites green (`make check`), 0 ShellCheck warnings, tree clean.
+
+13. **Pick Up Where We Left Off Epic (CHARTERED — Awaiting First Dispatch)**:
+    - **Epic Charter**: Chartered 2026-10-08 by `arch-1-hinchk-stampede` from driver milestone-charter dispatch. Map: [`maps/pick-up-where-we-left-off.md`](maps/pick-up-where-we-left-off.md). Adopts the unclaimed dispatch-safety backlog (REV-JQ-1, TEST-PATH-1, INTEG-REC-1, REV-07 — re-parented, ids stable; `maps/dispatch-safety-and-review-policy.md` closed) and stages BORROW-1 (triage of the 2026-10-08 OpenRig comparison §7 borrows).
+    - **Resumption state verified at charter time**: `main` == `origin/main` == `swarm/stampede/integration` at `6ad1234`; 21 suites green; leases empty; no blocked reviews (REVIEW-SHA-1 canonicalization held); standby orchestrator live (FALLBACK-1); dead letter historical (HL-TGT-1, scoped by HL-DL-1).
+    - **Dispatch order recommendation**: REV-JQ-1 + INTEG-REC-1 first (both live-observed last session; disjoint owns — co-dispatchable to arch-1/arch-2), TEST-PATH-1 next (4th instance of the CI-FIX runner-shadow class), REV-07 + BORROW-1 as human decision sessions (REV-07 should consume the OpenRig cross-vendor review finding — review is the remaining quota SPOF now that FALLBACK-1 shipped).

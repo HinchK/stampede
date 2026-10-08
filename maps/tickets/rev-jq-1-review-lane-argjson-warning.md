@@ -5,7 +5,7 @@ type: wayfinder:task
 status: backlog
 assignee: arch
 owns: loop-bot-herd.sh
-parent: maps/dispatch-safety-and-review-policy.md
+parent: maps/pick-up-where-we-left-off.md
 ---
 
 # REV-JQ-1 -- harden review verdict telemetry against empty/malformed findings counts
