@@ -2,7 +2,7 @@
 id: HERDR-1
 title: "Herdr surface audit: every call site vs installed CLI, keep/adopt/drop receipts"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: docs/findings/herdr-surface-audit.md
 parent: maps/herdr-native-and-seat-utilization.md
@@ -53,3 +53,8 @@ installed binary.
 
 Findings-only output; no code changes in this ticket. Audit runs against the *live*
 binary via `--help` probes, not memory of docs.
+
+## Resolution (2026-10-07)
+
+Resolved in commit `e8cb0149fbbc695f8e46170f9e317012157876db` (`e8cb014`).
+Authored `docs/findings/herdr-surface-audit.md` auditing all 39 `herdr` call sites across the repository against the installed CLI (v0.9.3) with keep/adopt/drop receipts and identified findings F-1 through F-3. Gated green via REV-06 docs fast path and integrated at `e8cb014`.

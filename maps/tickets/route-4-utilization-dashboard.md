@@ -2,7 +2,7 @@
 id: ROUTE-4
 title: "Seat-utilization activity panel in stampede status --rich"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: lib/cli/stampede-status.sh, tests/test_cli_status.sh
 parent: maps/herdr-native-and-seat-utilization.md
@@ -51,3 +51,8 @@ should be visible in the numbers.
 This is the epic's gauge, not a behavior change: no alerts, no thresholds, no
 auto-anything. If the panel exposes telemetry gaps (missing event kinds for dispatch
 counting), record the gap in the ticket rather than widening the schema silently.
+
+## Resolution (2026-10-07)
+
+Resolved in commit `6a19bd10199259f4581269dbaa035f29867d97a4` (`6a19bd1`).
+Implemented `Seat Activity` panel in `stampede status --rich` (`lib/cli/stampede-status.sh`), aggregating dispatch counts from `lease.acquired` traces, calculating commit shares via git integration records and trailer parsing over `--window <days>` (default 7), honest `other` author aggregation, and graceful `n/a` degradation when traces are absent. Covered by 99 unit assertions in `tests/test_cli_status.sh`. Integrated at `c2752ec`.

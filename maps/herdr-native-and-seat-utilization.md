@@ -117,24 +117,22 @@ grammars; wait-output would serialize it) — a documented keep, not an oversigh
 
 ---
 
-## Tickets (charted; release/order is looper's call)
+## Tickets
 
-| Ticket | Seat | Blocked by | Synopsis |
-|---|---|---|---|
-| HERDR-1 | arch | — | Herdr surface audit: every call site vs installed CLI, keep/adopt/drop receipts (`docs/findings/herdr-surface-audit.md`) |
-| HERDR-2 | arch | HERDR-1 | `pane wait-output` adoption: seat-verify wait + quota probe block, probe-gated fallbacks |
-| HERDR-3 | arch | HERDR-1 | `agent explain` diagnostics in `stampede doctor` |
-| HERDR-4 | arch | HERDR-1 | Brief delivery single-submission (drop double-enter after live per-kind probe) |
-| HERDR-5 | arch | HERDR-1 | Supervisor alerts via `herdr notification show` |
-| ROUTE-1 | arch | — | `agy-gh` research mandate + findings-file protocol (`RESEARCH DONE` anchor) |
-| ROUTE-2 | arch | — | `looper` thin-orchestration brief: dispatch budget, no self-serve research, herdr hygiene |
-| ROUTE-3 | arch | — | `arch` brief research/diagnosis dispatch mode |
-| ROUTE-4 | arch | — | Seat-utilization activity panel in `stampede status --rich` |
+| Ticket | Seat | Status | Blocked by | Synopsis |
+|---|---|---|---|---|
+| **HERDR-1** | arch-1-hinchk-stampede | **resolved** (e8cb014) | — | Herdr surface audit: every call site vs installed CLI, keep/adopt/drop receipts (`docs/findings/herdr-surface-audit.md`) |
+| **HERDR-2** | arch-2-hinchk-stampede | **resolved** (ad42801) | HERDR-1 | `pane wait-output` adoption: seat-verify wait + quota probe block, probe-gated fallbacks (integrated at `b150257`) |
+| **HERDR-3** | arch-1-hinchk-stampede | **resolved** (0773203) | HERDR-1 | `agent explain` diagnostics in `stampede doctor` (integrated at `c3dd3f7`) |
+| **HERDR-4** | arch-2-hinchk-stampede | **resolved** (2225e2c) | HERDR-1 | Brief delivery single-submission (drop double-enter after live per-kind probe; integrated at `8eae776`) |
+| **HERDR-5** | arch-1-hinchk-stampede | **resolved** (cb26aaf) | HERDR-1 | Supervisor alerts via `herdr notification show` (integrated at `cb26aaf`) |
+| **ROUTE-1** | arch-2-hinchk-stampede | **resolved** (6d13160) | — | `agy-gh` research mandate + findings-file protocol (`RESEARCH DONE` anchor; integrated at `b1a6f1a`) |
+| **ROUTE-2** | arch-2-hinchk-stampede | **resolved** (6b2b697) | — | `looper` thin-orchestration brief: dispatch budget, no self-serve research, herdr hygiene (integrated at `6b2b697`) |
+| **ROUTE-3** | arch-1-hinchk-stampede | **resolved** (efb08ea) | — | `arch` brief research/diagnosis dispatch mode (integrated at `b7411e4`) |
+| **ROUTE-4** | arch-1-hinchk-stampede | **resolved** (6a19bd1) | — | Seat-utilization activity panel in `stampede status --rich` (integrated at `c2752ec`) |
+| **ROUTE-5** | arch-2-hinchk-stampede | **resolved** (5330cae) | — | `agy-docs` post-integration docs sweep mandate; owns `briefs/worker-docs.in.md` (`DOCS DONE` anchor; integrated at `ceaaecf`) |
 
-All nine land through the normal gate (docs-only tickets ride the REV-06 fast path).
-`ROUTE-2` may not be dispatched until `ROUTE-1` and `ROUTE-3` are integrated (looper's
-brief must not reference protocols whose tickets have not landed) — sequencing note,
-not a partition edge.
+All tickets in the epic are resolved and integrated on `swarm/stampede/integration` (promoted to `main` at `8eae776`).
 
 ## Decisions so far
 
@@ -147,3 +145,13 @@ not a partition edge.
   (HERDR-4) — docs and operational folklore disagree; a probe settles it.
 - 2026-10-07 (charter): routing policy is brief-level (accepted best-effort limit,
   same class as QUOTA-4) plus a measurable dashboard (ROUTE-4) so drift is visible.
+- 2026-10-07 (execution): HERDR-1 resolved (e8cb014) — 39 call sites audited, receipts in `docs/findings/herdr-surface-audit.md`.
+- 2026-10-07 (execution): ROUTE-1 resolved (6d13160) — `agy-gh` research mandate with `RESEARCH DONE` anchor.
+- 2026-10-07 (execution): ROUTE-3 resolved (efb08ea) — arch brief research/diagnosis mode established.
+- 2026-10-07 (execution): ROUTE-5 resolved (5330cae) — `agy-docs` post-integration sweep mandate with `DOCS DONE` anchor.
+- 2026-10-07 (execution): ROUTE-2 resolved (6b2b697) — looper thin orchestration and wait hygiene integrated.
+- 2026-10-07 (execution): ROUTE-4 resolved (6a19bd1) — seat-activity panel in `stampede status --rich` integrated.
+- 2026-10-07 (execution): HERDR-2 resolved (ad42801) — `pane wait-output` single-target wait integration.
+- 2026-10-07 (execution): HERDR-3 resolved (0773203) — `stampede doctor` ambiguous seat explanation via `agent explain`.
+- 2026-10-07 (execution): HERDR-5 resolved (cb26aaf) — supervisor human-visible alerts emit `herdr notification show`.
+- 2026-10-07 (execution): HERDR-4 resolved (2225e2c) — brief delivery single submission via `agent prompt --wait`. Epic fully integrated and promoted to `main` at `8eae776`.
