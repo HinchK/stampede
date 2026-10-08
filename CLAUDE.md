@@ -21,12 +21,13 @@ make test                              # all suites under /bin/bash (bash 3.2 is
 make lint                              # shellcheck 0-warning bar + bash -n + py_compile
 # CI parity (DOG-18): `make check` IS the gate — reach for it first; ci-local only adds the pin-parity signal
 scripts/ci-local.sh [--strict]          # runs make check (rc authoritative) + warns when local shellcheck != CI's pinned SC_VERSION (--strict: exit 1 on unproven parity)
-# Suites — 18 as of this writing (PROVE-6); re-verify with `ls tests/*.sh | wc -l`
+# Suites — 20 as of this writing (HERDR-4); re-verify with `ls tests/*.sh | wc -l`
 # (each builds an ephemeral scratch git repo under /tmp and cleans up after itself.
 #  Per-suite assertion counts are deliberately omitted — they drift fastest; the
 #  suite's own summary line prints the live count.)
 /bin/bash tests/test_arbiter.sh       # CAS integration, conflict abort, promote, string ticket ids
 /bin/bash tests/test_async_gate.sh    # background gate jobs, reaping, invalidation, review-loop wiring
+/bin/bash tests/test_briefs.sh        # brief delivery single-submission, --wait adoption, failure surfacing
 /bin/bash tests/test_ci_local.sh      # ci-local make delegation + shellcheck pin-parity ladder
 /bin/bash tests/test_cli.sh           # bin/stampede entrypoint dispatch and pass-through
 /bin/bash tests/test_cli_doctor.sh    # `stampede doctor` end-to-end

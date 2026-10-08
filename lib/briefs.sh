@@ -101,7 +101,27 @@ print(json.dumps(vars_map))
   done
 }
 
-# Deliver brief to seated agent using file-path nonce protocol
+# HERDR-4: one submission path. The live probe (2026-10-07, Herdr 0.9.3 —
+# docs/findings/brief-delivery-probe.md) proved `agent prompt` alone submits
+# for every kind the swarm seats (opencode, claude, agy), so the legacy
+# `sleep 1 && send-keys enter` follow-up is GONE everywhere: a stray Enter can
+# resubmit the previous prompt on an opencode pane (duplicate dispatch).
+_BRIEFS_PROMPT_WAIT_CACHE=""
+_briefs_prompt_has_wait() {
+  if [[ -z "$_BRIEFS_PROMPT_WAIT_CACHE" ]]; then
+    if herdr agent prompt --help 2>&1 | grep -q -- '--wait'; then
+      _BRIEFS_PROMPT_WAIT_CACHE=yes
+    else
+      _BRIEFS_PROMPT_WAIT_CACHE=no
+    fi
+  fi
+  [[ "$_BRIEFS_PROMPT_WAIT_CACHE" == yes ]]
+}
+
+# Deliver brief to seated agent using file-path nonce protocol.
+# Contract (HERDR-4): exactly one `agent prompt` per delivery — no Enter
+# follow-up — with `--wait` where the capability probe says yes; failures are
+# surfaced (delivered / FAILED:reason), never swallowed.
 deliver_brief_nonce() {
   local seat_name="$1"
   local brief_path="$2"
@@ -111,18 +131,58 @@ deliver_brief_nonce() {
     return 1
   fi
 
-  # 1. Wait until agent is idle before sending prompt
-  herdr agent wait "$seat_name" --until idle --timeout 15000 >/dev/null 2>&1 || true
-
-  # 2. Deliver compact reference prompt (<200 bytes, immune to buffer truncation)
+  # Compact reference prompt (<200 bytes, immune to buffer truncation).
+  # NOTE: herdr parses options only AFTER the <TEXT> positional —
+  # `prompt <target> --wait <text>` is an arg-parser error (probe receipt).
   local prompt_msg="STANDING BRIEF: You are seated as '${seat_name}'. Your standing brief is rendered at '${brief_path}'. Read it immediately using your file viewing tools and adopt this posture. Acknowledge when ready."
-  herdr agent prompt "$seat_name" "$prompt_msg" >/dev/null 2>&1 || true
+  local out rc
+  if _briefs_prompt_has_wait; then
+    out=$(herdr agent prompt "$seat_name" "$prompt_msg" --wait --timeout 15000 2>&1) && rc=0 || rc=$?
+  else
+    out=$(herdr agent prompt "$seat_name" "$prompt_msg" 2>&1) && rc=0 || rc=$?
+  fi
 
-  # 3. Send enter keystroke to confirm submission
-  sleep 1
-  herdr agent send-keys "$seat_name" enter >/dev/null 2>&1 || true
+  if [[ $rc -eq 0 ]]; then
+    printf '  \033[32m✓\033[0m Brief delivered to %s (%s)\n' "$seat_name" "$(basename "$brief_path")"
+    return 0
+  fi
 
-  printf '  \033[32m✓\033[0m Brief delivered to %s (%s)\n' "$seat_name" "$(basename "$brief_path")"
+  # agent_blocked: herdr rejected the submission pre-send — report, never
+  # retry (ADR 0017 D4; a blocked agent must not be nudged by a resubmit).
+  if [[ "$out" == *agent_blocked* ]]; then
+    printf '  \033[31m✖ Brief delivery FAILED for %s: agent_blocked (agent is blocked — prompt was not sent; not retrying)\033[0m\n' "$seat_name" >&2
+    return 1
+  fi
+
+  # agent_prompt_stalled / timeout are INDETERMINATE, not failures: the probe
+  # caught claude returning agent_prompt_stalled while the prompt was in fact
+  # submitted and answered. Degrade to a bounded pane read verifying the
+  # STANDING BRIEF marker (typing == submission on a --wait-capable Herdr)
+  # before deciding; unverified ⇒ FAILED.
+  local code
+  code=$(printf '%s' "$out" | sed -nE 's/.*"code":"([a-z_]+)".*/\1/p' | head -n1)
+  case "${code:-rc$rc}" in
+    agent_prompt_stalled|timeout)
+      local _
+      for _ in 1 2 3; do
+        if herdr agent read "$seat_name" --source recent-unwrapped --lines 200 2>/dev/null \
+           | grep -q "$BRIEF_ACK_REGEX"; then
+          printf '  \033[32m✓\033[0m Brief delivered to %s (%s, verified by pane read after %s)\n' \
+            "$seat_name" "$(basename "$brief_path")" "${code:-timeout}"
+          return 0
+        fi
+        sleep 2
+      done
+      printf '  \033[31m✖ Brief delivery FAILED for %s: %s (marker not in pane output)\033[0m\n' \
+        "$seat_name" "${code:-timeout}" >&2
+      return 1
+      ;;
+    *)
+      printf '  \033[31m✖ Brief delivery FAILED for %s: %s\033[0m\n' \
+        "$seat_name" "${code:-${out:0:160}}" >&2
+      return 1
+      ;;
+  esac
 }
 
 # CLI dispatcher
