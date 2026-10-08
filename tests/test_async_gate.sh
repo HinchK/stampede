@@ -333,6 +333,45 @@ grep -q '"recipient": "seat-b"' "$STATE"/traces/*.jsonl 2>/dev/null \
 grep -q '"findings_count": 2' "$STATE"/traces/*.jsonl 2>/dev/null \
   && assert_ok 13d5 "verdict telemetry counts findings from the evidence file" || assert_bad 13d5 "findings_count wrong"
 
+# [13f] REV-JQ-1: evidence file with ZERO findings — `grep -c` prints "0"
+# AND exits 1, so the old `|| printf '0'` concatenated a second 0 onto the
+# count ("0\n0"), jq --argjson parse-errored, and the whole review.verdict
+# payload was silently dropped. The event must now emit with findings_count 0.
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m rev5f
+SHA_RF=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #REV-12 $SHA_RF"; VERDICT_R=""
+harvest_verdicts >/dev/null 2>&1
+sleep 0.6; gate_reap >/dev/null 2>&1
+printf 'verdict: PASS\nthis evidence file has no findings-marker lines\n' \
+  > "$STATE/reviews/REV-12-$SHA_RF.md"
+VERDICT_R="REVIEW VERDICT #REV-12 $SHA_RF PASS"
+harvest_verdicts >/dev/null 2>&1
+grep -qF '"summary": "review PASS for #REV-12 (round 1, 0 findings)"' "$STATE"/traces/*.jsonl 2>/dev/null \
+  && assert_ok 13f "zero-findings evidence: verdict telemetry emits with findings_count 0" \
+  || assert_bad 13f "no/incorrect telemetry for REV-12"
+[[ "$(rstate REV-12)" == "review_passed" ]] \
+  && assert_ok 13f2 "zero-findings PASS still transitions review_passed" || assert_bad 13f2 "state $(rstate REV-12)"
+
+# [13g] REV-JQ-1: non-numeric round in reviews.json (valid JSON, corrupt
+# value) must degrade to round 0 in telemetry — without breaking the state
+# machine transition. Under the old payload jq this was `tonumber` on "bad"
+# → parse error → payload dropped.
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m rev5g
+SHA_RG=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #REV-13 $SHA_RG"; VERDICT_R=""
+harvest_verdicts >/dev/null 2>&1
+sleep 0.6; gate_reap >/dev/null 2>&1
+jq --arg t REV-13 '.reviews[$t].round = "bad"' "$STATE/reviews.json" > "$STATE/reviews.json.tmp" \
+  && mv "$STATE/reviews.json.tmp" "$STATE/reviews.json"
+printf '[CONCERNS] docs/x.md:1 — typo\n' > "$STATE/reviews/REV-13-$SHA_RG.md"
+VERDICT_R="REVIEW VERDICT #REV-13 $SHA_RG PASS"
+harvest_verdicts >/dev/null 2>&1
+grep -qF '"summary": "review PASS for #REV-13 (round 0, 1 findings)"' "$STATE"/traces/*.jsonl 2>/dev/null \
+  && assert_ok 13g "corrupt round degrades to 0 in telemetry; findings still counted" \
+  || assert_bad 13g "no/incorrect telemetry for REV-13"
+[[ "$(rstate REV-13)" == "review_passed" ]] \
+  && assert_ok 13g2 "state machine unaffected by corrupt round" || assert_bad 13g2 "state $(rstate REV-13)"
+
 # [13e] supervisor sources cleanly under TERM=dumb (tput hardening receipt)
 RROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 dumb_rc=0

@@ -553,19 +553,31 @@ _review_scan_verdicts() { # SEAT PANE-OUTPUT
     printf '%s\n' "$seen_key" >> "$seen_file"
 
     # Round at verdict time (pre-transition) + findings count from the
-    # durable evidence file — measured values, never guesses.
+    # durable evidence file — measured values, never guesses. Both are
+    # defensively normalized to bare non-negative integers (REV-JQ-1): a
+    # zero-match `grep -c` prints 0 but exits 1, so `|| printf '0'`
+    # concatenates a SECOND 0 onto the count ("0\n0"); a corrupt
+    # reviews.json can hand back a non-numeric round. Either fed jq
+    # --argjson a parse error and silently dropped the whole telemetry
+    # payload — now the payload degrades to 0 instead of dying.
     round=$(jq -r --arg t "$ticket" '.reviews[$t].round // 0' "${STATE_DIR}/reviews.json" 2>/dev/null || printf '0')
+    round=$(printf '%s' "$round" | tr -cd '0-9')
+    round=${round:-0}
     fp="${STATE_DIR}/reviews/${ticket}-${sha}.md"
     fc=0
     if [[ -f "$fp" ]]; then
-      fc=$(grep -cE '^\[(BLOCK|CONCERNS)\]' "$fp" 2>/dev/null || printf '0')
+      fc=$(grep -cE '^\[(BLOCK|CONCERNS)\]' "$fp" 2>/dev/null || true)
     fi
+    fc=$(printf '%s' "$fc" | tr -cd '0-9')
+    fc=${fc:-0}
 
     local dirs rc=0
     dirs=$(review_loop_on_review_verdict "$ticket" "$sha" "$verdict" "$STATE_DIR" 2>/dev/null) || rc=$?
     "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" review.verdict "$seat" "$ticket" \
-      "$(jq -cn --arg t "$ticket" --arg h "$sha" --arg v "$verdict" --arg r "$round" --argjson f "$fc" \
-        '{ticket:$t, sha:$h, verdict:$v, round:($r|tonumber), findings_count:$f, summary:("review " + $v + " for #" + $t + " (round " + $r + ", " + ($f|tostring) + " findings)")}')" \
+      "$(jq -cn --arg t "$ticket" --arg h "$sha" --arg v "$verdict" --arg r "$round" --arg f "$fc" \
+        '($r|tonumber? // 0) as $rn | ($f|tonumber? // 0) as $fn |
+         {ticket:$t, sha:$h, verdict:$v, round:$rn, findings_count:$fn,
+          summary:("review " + $v + " for #" + $t + " (round " + ($rn|tostring) + ", " + ($fn|tostring) + " findings)")}')" \
       --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
     _review_directives "$dirs" "$ticket" "$sha"
   done < <(grep -E '^[[:space:]]*REVIEW VERDICT #[A-Za-z0-9_.-]+[[:space:]]+[0-9a-fA-F]{7,40}[[:space:]]+(PASS|BLOCK)[[:space:]]*$' <<<"$out" | tail -n 5)
