@@ -189,3 +189,11 @@
 
 
 
+
+11. **Herdr-Native Coordination & Seat Utilization Epic (CHARTERED)**:
+   - **Epic Charter**: Chartered 2026-10-07 by human driver direct prompt to `arch-1-hinchk-stampede` (brainstorm: Direction → Design → PRD → Tickets), sourced from the session retrospective at `~/Fun/Agathokakological/stampede-notes-10072026.md`. Epic map: [`maps/herdr-native-and-seat-utilization.md`](maps/herdr-native-and-seat-utilization.md). ADR 0017 accepted (block/explain/notify adoption, probe-gated fail-soft; supervisor multi-anchor harvest scan explicitly kept).
+   - **Two pillars**: (1) herdr-native primitives — `pane wait-output`, `agent explain`, `notification show`, prompt-native single submission (HERDR-1..5); (2) right-seat routing — agy-gh research mandate, looper thin orchestration, arch research/diagnosis mode, utilization dashboard (ROUTE-1..4).
+   - **Tickets staged (all backlog)**: HERDR-1 (herdr surface audit, docs/findings — first live exercise of the ROUTE-3 research mode), HERDR-2 (wait-output: seat-verify + quota probe seams), HERDR-3 (explain in doctor), HERDR-4 (brief delivery single submission, probe-receipt-gated), HERDR-5 (native notifications at supervisor alert seams), ROUTE-1 (agy-gh research mandate + `RESEARCH DONE` anchor), ROUTE-2 (looper dispatch budget + herdr hygiene; sequence after ROUTE-1/3), ROUTE-3 (arch research dispatch mode), ROUTE-4 (seat-activity panel in `stampede status --rich`).
+   - **Stated interpretation (driver may veto)**: "git work → agy-gh" scoped to research/operations; write-path git stays with arch + arbiter.
+   - Universal-map frontier wiring, gh issue creation (`lib/gh_sync.sh`), and ticket release order are looper/agy-gh bookkeeping — deliberately not done by arch-1.
+   - **Total Test Suite Health**: 19 suites green (`make check`), 0 ShellCheck warnings, tree clean (charter docs-only commit).
