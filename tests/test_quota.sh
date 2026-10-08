@@ -127,7 +127,11 @@ unset QUOTA_HERDR_FIXTURE
 cat > "$SCRATCH/bin/herdr" <<'EOF'
 #!/usr/bin/env bash
 if [[ "${1:-}" == "agent" && "${2:-}" == "read" && "${4:-}" == "--source" ]]; then
-  [[ -f "${QUOTA_HERDR_FIXTURE:-}" ]] && cat "${QUOTA_HERDR_FIXTURE:-}"
+  if [[ -n "${QUOTA_FIX_DIR:-}" && -f "${QUOTA_FIX_DIR}/${3}" ]]; then
+    cat "${QUOTA_FIX_DIR}/${3}"
+  elif [[ -f "${QUOTA_HERDR_FIXTURE:-}" ]]; then
+    cat "${QUOTA_HERDR_FIXTURE:-}"
+  fi
 fi
 exit 0
 EOF
@@ -212,7 +216,7 @@ herdr_has_wait_output 2>>"$SCRATCH/cap.err" || true
 wait_probe_reset; export T2_CAP_RC=0 T2_WAIT_RC=0
 rc=0; quota_wait_banner agy-seat-q wX:p1 5000 >/dev/null 2>&1 || rc=$?
 [[ "$rc" == 0 ]] && ok "wait: banner detected via wait-output → 0" || bad "wait rc=$rc"
-grep -qF 'pane wait-output wX:p1 --regex Individual quota reached.*Resets in --timeout 5000' "$T2_LOG" \
+grep -qF 'pane wait-output wX:p1 --regex Individual quota reached --timeout 5000' "$T2_LOG" \
   && ok "wait: exact wait-output argv (pane + --regex banner + --timeout ms)" || bad "argv: $(cat "$T2_LOG")"
 # wait-output timeout is authoritative (no silent fallthrough to polling)
 export T2_WAIT_RC=3
@@ -253,6 +257,101 @@ rc=0; bash "$REPO_ROOT/lib/quota.sh" wait quota-seat-x wX:p9 >/dev/null 2>&1 || 
 rc=0; bash "$REPO_ROOT/lib/quota.sh" wait >/dev/null 2>&1 || rc=$?
 [[ "$rc" == 2 ]] && ok "CLI: wait usage error exits 2" || bad "CLI wait usage rc=$rc"
 unset QUOTA_HERDR_FIXTURE
+
+# ── QUOTA-5: two-line banner parse, account-wide gate, stale guard ──────────
+# Fixture is the REAL banner captured verbatim from the live 2026-10-08 wall
+# (PM audit receipt): two lines, reset on its own line. The pre-QUOTA-5
+# single-line parser answered `unknown` on exactly this text.
+Q5="$SCRATCH/q5"; mkdir -p "$Q5/.herdr-swarm" "$Q5/panes" "$Q5/nol3/.herdr-swarm"
+BANNER_L1='⚠ Individual quota reached. Please upgrade your subscription to increase your limits.'
+printf 'chatter\n%s\nResets in 22m24s.\n' "$BANNER_L1" > "$Q5/panes/seat-a"
+printf 'clean pane, no banner\n' > "$Q5/panes/seat-b"
+printf '%s\nResets in 10m.\n' "$BANNER_L1" > "$Q5/panes/seat-c"
+printf 'mid chatter\n%s\nResets in 22m24s.\nmore chatter\n%s\nResets in 10m.\n' "$BANNER_L1" "$BANNER_L1" > "$Q5/panes/seat-d"
+jq -cn '{version: 2, workspace_id: "wQ5", seats: [
+  {name: "seat-a", kind: "agy", pane: "wQ5:p1"},
+  {name: "seat-b", kind: "agy", pane: "wQ5:p2"},
+  {name: "seat-c", kind: "agy", pane: "wQ5:p3"},
+  {name: "seat-op", kind: "opencode", pane: "wQ5:p4"}]}' > "$Q5/.herdr-swarm/seats.json"
+herdr() { # per-seat pane fixture (agent read <seat>)
+  if [[ "${1:-}" == "agent" && "${2:-}" == "read" && "${4:-}" == "--source" ]]; then
+    [[ -f "$Q5/panes/$3" ]] && cat "$Q5/panes/$3"
+  fi
+  return 0
+}
+
+[[ "$(quota_probe_kind agy seat-a)" == "ok:1344s" ]] \
+  && ok "QUOTA-5: real two-line banner (verbatim fixture) → ok:1344s" \
+  || bad "two-line: $(quota_probe_kind agy seat-a)"
+[[ "$(quota_probe_kind agy seat-d)" == "ok:600s" ]] \
+  && ok "QUOTA-5: most recent two-line marker wins (22m24s then 10m → 600s)" \
+  || bad "recent-wins: $(quota_probe_kind agy seat-d)"
+[[ "$(quota_probe_kind agy seat-b)" == "unknown" ]] \
+  && ok "QUOTA-5: clean pane still unknown (no fabrication)" || bad "clean: seat-b"
+
+# account-wide: a clean named seat is gated by a sibling's banner (longest wins)
+rm -f "$Q5/.herdr-swarm/quota-banner-seen.json"
+rc=0; out=$(quota_gate agy seat-b "$Q5" 2>"$Q5/err") || rc=$?
+[[ "$rc" == 1 && "$out" == "ok:1344s" ]] \
+  && ok "account-wide: clean named seat deferred by sibling banners (longest 1344s)" \
+  || bad "account-wide: rc=$rc out=$out"
+grep -q "account-wide wall: banner on seat-a(1344s)" "$Q5/err" \
+  && grep -q "seat-c(600s)" "$Q5/err" \
+  && ok "account-wide detail on stderr names every walled seat" || bad "note: $(cat "$Q5/err")"
+grep -q "seat-op" "$Q5/err" \
+  && bad "non-agy seat probed by the account-wide scan" || ok "non-agy seats excluded from the scan"
+
+# no ledger: graceful degrade to the named seat only (clean → unknown, exit 0)
+rc=0; out=$(quota_gate agy seat-b "$Q5/nol3" 2>/dev/null) || rc=$?
+[[ "$rc" == 0 && "$out" == "unknown" ]] \
+  && ok "no seats.json: named-seat-only degrade, still honest" || bad "degrade: rc=$rc out=$out"
+
+# stale guard: recorded window long expired, banner text frozen → no-signal
+NOW=$(date +%s)
+jq -cn --argjson t $((NOW - 7200)) '{("seat-a"): {seen: $t, reset_s: 1344}}' \
+  > "$Q5/nol3/.herdr-swarm/quota-banner-seen.json"
+rc=0; out=$(quota_gate agy seat-a "$Q5/nol3" 2>"$Q5/err2") || rc=$?
+[[ "$rc" == 0 && "$out" == "unknown" ]] \
+  && ok "stale guard: banner 2h past its stated window is ignored" || bad "stale: rc=$rc out=$out"
+grep -q "ignored as stale" "$Q5/err2" \
+  && ok "stale ignore is reported on stderr with ages" || bad "stale note: $(cat "$Q5/err2")"
+# frozen banner never re-defers: second read is still unknown
+rc=0; out=$(quota_gate agy seat-a "$Q5/nol3" 2>/dev/null) || rc=$?
+[[ "$rc" == 0 && "$out" == "unknown" ]] \
+  && ok "stale guard: repeated reads of the frozen banner stay unknown" || bad "re-stale: rc=$rc out=$out"
+
+# new wall instance: measured countdown grew past the recorded one → trusted
+jq -cn --argjson t $((NOW - 7200)) '{("seat-a"): {seen: $t, reset_s: 600}}' \
+  > "$Q5/nol3/.herdr-swarm/quota-banner-seen.json"
+rc=0; out=$(quota_gate agy seat-a "$Q5/nol3" 2>"$Q5/err3") || rc=$?
+[[ "$rc" == 1 && "$out" == "ok:1344s" ]] \
+  && ok "new banner instance (1344s > recorded 600s) re-registers and defers" \
+  || bad "new-instance: rc=$rc out=$out"
+grep -q "new banner instance" "$Q5/err3" \
+  && ok "re-registration reported on stderr" || bad "note: $(cat "$Q5/err3")"
+
+# clean probe clears the record
+jq -cn --argjson t "$NOW" '{("seat-b"): {seen: $t, reset_s: 600}}' \
+  > "$Q5/nol3/.herdr-swarm/quota-banner-seen.json"
+rc=0; out=$(quota_gate agy seat-b "$Q5/nol3" 2>/dev/null) || rc=$?
+[[ "$rc" == 0 ]] || bad "clean-record rc=$rc"
+jq -e 'has("seat-b") | not' "$Q5/nol3/.herdr-swarm/quota-banner-seen.json" >/dev/null 2>&1 \
+  && ok "clean probe clears the seat's first-seen record" || bad "record not cleared"
+rm -f "$Q5/.herdr-swarm/quota-banner-seen.json" "$Q5/nol3/.herdr-swarm/quota-banner-seen.json"
+unset -f herdr
+
+# CLI end-to-end with 3-arg gate: account-wide scan in the child process
+export QUOTA_FIX_DIR="$Q5/panes"
+rc=0; out=$(bash "$REPO_ROOT/lib/quota.sh" gate agy seat-b "$Q5" 2>/dev/null) || rc=$?
+[[ "$rc" == 1 && "$out" == "ok:1344s" ]] \
+  && ok "CLI: gate <kind> <seat> <target_dir> scans the ledger (child process)" \
+  || bad "CLI 3-arg gate: rc=$rc out=$out"
+unset QUOTA_FIX_DIR
+
+# non-agy kinds keep the plain per-seat contract
+rc=0; out=$(quota_gate claude seat-b "$Q5" 2>/dev/null) || rc=$?
+[[ "$rc" == 0 && "$out" == "unknown" ]] \
+  && ok "non-agy kind unchanged (no scan, unknown → exit 0)" || bad "claude: rc=$rc out=$out"
 
 # ── openrouter probe: configuration matrix ─────────────────────────────────
 [[ "$(quota_probe_openrouter "")" == "unknown" ]] \
