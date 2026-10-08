@@ -2,10 +2,16 @@
 id: QUOTA-3
 title: "Point-in-time agy quota gate command (lib/quota.sh gate agy <seat>)"
 type: wayfinder:task
-status: in_progress
+status: resolved
 assignee: arch-2-hinchk-stampede
 owns: lib/quota.sh,tests/test_quota.sh
 parent: maps/dispatch-safety-and-review-policy.md
+resolution:
+  commit: dad86685af5df479509c59eb15bdb3c0a87c3c8e
+  reviewed_by: reviewer-hinchk-stampede
+  verdict: PASS
+  review_file: .herdr-swarm/reviews/QUOTA-3-dad86685af5df479509c59eb15bdb3c0a87c3c8e.md
+  integrated_at: dad86685af5df479509c59eb15bdb3c0a87c3c8e
 ---
 
 # QUOTA-3 -- a scriptable yes/no gate for agy exhaustion

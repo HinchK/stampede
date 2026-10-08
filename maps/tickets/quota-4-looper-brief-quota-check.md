@@ -2,11 +2,16 @@
 id: QUOTA-4
 title: "Looper's standing brief checks the agy gate before dispatching to other agy seats"
 type: wayfinder:task
-status: backlog
-assignee: arch
+status: resolved
+assignee: arch-2-hinchk-stampede
 owns: briefs/looper.in.md
 parent: maps/dispatch-safety-and-review-policy.md
-blocked_by: [QUOTA-3]
+resolution:
+  commit: 35a6e4962b03d0ec618ffbae87eff8a37f2ccbdd
+  reviewed_by: reviewer-hinchk-stampede
+  verdict: PASS
+  review_file: .herdr-swarm/reviews/QUOTA-4-35a6e4962b03d0ec618ffbae87eff8a37f2ccbdd.md
+  integrated_at: 2ee247ef98b761540bce9946f98461241a5f6bae
 ---
 
 # QUOTA-4 -- teach looper's brief to check before it dispatches
