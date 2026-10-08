@@ -2,7 +2,7 @@
 id: CI-FIX-2
 title: "test_repo_state [1k] hides gh by PATH allowlist — still red on ubuntu after CI-FIX-1"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: tests/test_repo_state.sh
 parent: maps/universal-herdr-swarm.md
@@ -40,3 +40,32 @@ the "absent" fixture finds it. Identical root cause to CI-FIX-1.
 
 `make check` green locally; after promote, `gh run list -L 1` shows
 `completed success`. Do not call CI fixed on the local run alone.
+
+## Resolution (2026-10-08)
+
+Done per criterion 1: `NOGH_BIN` now holds symlinks to exactly the externals
+`repo-state.sh` resolves (`bash git sed awk cat`) and every absence-fixture run uses
+`PATH="$NOGH_BIN"` — no system dir whitelisted, so gh is unreachable wherever the host
+installed it. New regression case **[1k2]** proves the ubuntu condition inside the
+suite: a fake gh in an ambient PATH dir (resolvable via `command -v gh`) still yields
+`gh: unavailable (not on PATH)` under the fixture's PATH.
+
+Receipts (criteria 2-3):
+- `bash tests/test_repo_state.sh` → `36 passed, 0 failed` (local, Homebrew gh).
+- Fake `/usr/bin`-style gh on the ambient PATH (`PATH="<fake>:$PATH" command -v gh`
+  resolves it) + full suite → `36 passed, 0 failed` — the ubuntu condition.
+- `make check` → `All suites green (20)` (now includes HERDR-4's test_briefs),
+  lint 0 warnings.
+- Sweep of the other `/usr/bin`-allowlisting suites — none in the defect class;
+  all were green on ubuntu run 37730865014 (the run that exposed [1k]):
+  - `test_ci_local.sh:50` — carrier PATH for stub make + real shellcheck parity
+    (the absence fixtures were already fixed by CI-FIX-1).
+  - `test_cli.sh:136` (HB_PATH) — carrier for python/git/jq; hides herdr, which is
+    not preinstalled in /usr/bin on runners.
+  - `test_cli_init.sh`, `test_cli_doctor.sh`, `test_providers.sh`, `test_quota.sh` —
+    prepend scratch stub bins that SHADOW /usr/bin; the only absences relied on are
+    provider CLIs / herdr, none of which ubuntu runners preinstall in /usr/bin.
+    (Doctor's opencode-absent case is the closest cousin — revisit only if a runner
+    ever preinstalls opencode.)
+  - `test_pyenv.sh` — /usr/bin python3 is the intended fallback (fail-closed scan
+    stops at the first candidate), not a hidden-tool fixture.

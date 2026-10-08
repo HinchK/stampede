@@ -25,10 +25,15 @@ check() {
   if eval "$body" >/dev/null 2>&1; then ok "$label" "$desc"; else bad "$label" "$desc"; fi
 }
 
-# A PATH that has git but cannot see gh: a bin dir holding only a git symlink.
+# A PATH that has git but cannot see gh: a scratch bin holding ONLY the
+# externals repo-state.sh resolves (CI-FIX-2, same class as CI-FIX-1). No
+# system dir is whitelisted, so gh stays invisible wherever the host put it
+# (/usr/bin on ubuntu runners, Homebrew on macOS).
 NOGH_BIN="$TEST_DIR/nogh-bin"; mkdir -p "$NOGH_BIN"
-ln -s "$(command -v git)" "$NOGH_BIN/git"
-NOGH_PATH="$NOGH_BIN:/usr/bin:/bin"
+for tool in bash git sed awk cat; do
+  ln -s "$(command -v "$tool")" "$NOGH_BIN/$tool"
+done
+NOGH_PATH="$NOGH_BIN"
 
 # gh stubs (see tests/test_gh_sync.sh for the stubbing precedent)
 STUB_BIN="$TEST_DIR/stub-bin"; mkdir -p "$STUB_BIN"
@@ -96,6 +101,20 @@ check 1j  "merged section omits unmerged branch" \
   '! grep -A5 "^── merged branches$" <<<"$OUT" | grep -q "feature-open"'
 check 1k  "ci degrades to gh: unavailable (missing binary)" \
   'grep -A1 "^── ci" <<<"$OUT" | grep -qxF "gh: unavailable (not on PATH)"'
+# [1k2] CI-FIX-2 regression: even with a resolvable gh in an ambient PATH
+# dir (the ubuntu condition — /usr/bin/gh), the fixture's PATH cannot see
+# it, because NOGH_PATH whitelists no system dir.
+AMBIENT="$TEST_DIR/ambient-bin"; mkdir -p "$AMBIENT"
+printf '#!/bin/sh\nexit 0\n' > "$AMBIENT/gh"; chmod +x "$AMBIENT/gh"
+gh() { return 127; }   # guard: this shell must not accidentally use a real gh
+PATH_SAVED="$PATH"; export PATH="$AMBIENT:$PATH"
+command -v gh >/dev/null 2>&1 \
+  && ok 1k2-pre "ambient fake gh is resolvable (fixture precondition)" \
+  || bad 1k2-pre "ambient fake gh not resolvable — fixture broken"
+OUT=$(PATH="$NOGH_PATH" "$SCRIPT" "$REPO" 2>/dev/null) && RC=0 || RC=$?
+export PATH="$PATH_SAVED"; unset -f gh
+check 1k2 "gh visible in ambient PATH dir still reads not-on-PATH under NOGH_PATH" \
+  '[[ $RC -eq 0 ]] && grep -A1 "^── ci" <<<"$OUT" | grep -qxF "gh: unavailable (not on PATH)"'
 check 1l  "dirty tree shows the modified file" \
   'grep -A2 "^── dirty tree$" <<<"$OUT" | grep -q "M file.txt"'
 
