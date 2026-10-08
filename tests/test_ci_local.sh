@@ -78,13 +78,20 @@ check 1g  "gate failure propagates make rc verbatim (--strict, beats parity)" \
 rm -f "$STATE/MAKE_RC"
 
 # ── 2. Degrade cases ───────────────────────────────────────────────────────
+# Hermetic absence (CI-FIX-1): PATH is ONLY a scratch bin dir — the stub make
+# plus symlinks to the externals ci-local.sh resolves. No system dir is
+# whitelisted, so the real shellcheck is unreachable wherever the host
+# installed it (/usr/bin on ubuntu runners, Homebrew on macOS).
 BIN_NOSC="$TEST_DIR/bin-nosc"; mkdir -p "$BIN_NOSC"
 cp "$BIN/make" "$BIN_NOSC/make"
-OUT=$(PATH="$BIN_NOSC:/usr/bin:/bin" "$FX" 2>"$STATE/err") && RC=0 || RC=$?
+for tool in bash git sed awk head cat dirname; do
+  ln -s "$(command -v "$tool")" "$BIN_NOSC/$tool"
+done
+OUT=$(PATH="$BIN_NOSC" "$FX" 2>"$STATE/err") && RC=0 || RC=$?
 ERR=$(cat "$STATE/err")
 check 2a  "shellcheck absent: warns, exits 0 after green gate" \
   '[[ $RC -eq 0 ]] && grep -q "shellcheck not on PATH" <<<"$ERR"'
-OUT=$(PATH="$BIN_NOSC:/usr/bin:/bin" "$FX" --strict 2>"$STATE/err") && RC=0 || RC=$?
+OUT=$(PATH="$BIN_NOSC" "$FX" --strict 2>"$STATE/err") && RC=0 || RC=$?
 check 2b  "shellcheck absent: --strict fails" '[[ $RC -eq 1 ]]'
 printf 'name: CI\njobs:\n  check:\n    steps:\n      - run: make check\n' \
   > "$FR/.github/workflows/ci.yml"

@@ -2,7 +2,7 @@
 id: CI-FIX-1
 title: "test_ci_local [2a] hides shellcheck by PATH — fails on ubuntu CI, main red for 5 runs"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: tests/test_ci_local.sh
 parent: maps/universal-herdr-swarm.md
@@ -47,3 +47,17 @@ The local suite cannot catch this class: green here is not evidence for CI.
 
 Standing lesson: any fixture that simulates "tool absent" via a PATH allowlist must
 exclude system dirs that the tool can legitimately live in.
+
+## Resolution (2026-10-07)
+
+Done per criterion 1: `BIN_NOSC` now holds the stub `make` plus symlinks
+(`bash`, `git`, `sed`, `awk`, `head`, `cat`, `dirname`) and tests 2a/2b run with
+`PATH="$BIN_NOSC"` only — no system dir whitelisted. No production change:
+`scripts/ci-local.sh` was not wrong.
+
+Receipts:
+- `bash tests/test_ci_local.sh` → `17 passed, 0 failed` (local, Homebrew shellcheck).
+- Fake `/usr/bin`-style shellcheck on the ambient PATH
+  (`PATH="<fake-sys>:$PATH" command -v shellcheck` resolves it) + full suite →
+  `17 passed, 0 failed` — the ubuntu condition, criterion 2.
+- `make check` → `All suites green (19)`, lint 0 warnings.
