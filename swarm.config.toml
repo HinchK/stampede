@@ -120,6 +120,22 @@ brief = "briefs/looper.md"
 tab = "herd"
 position = "bottom-full"
 
+# Standby orchestrator (FALLBACK-1): disabled by default — never auto-seated
+# by `up`. Bring it up ONLY via `bash lib/standby.sh up <target>` when the
+# agy quota wall is up (the command refuses without exhaustion unless
+# --force). Kind/model differ from the arch seats' pin: this is the cheap
+# flash tier the 2026-10-08 experiment proved sufficient for orchestration
+# mechanics.
+[seats.looper_standby]
+name = "looper-standby"
+role = "Standby Orchestrator (quota-triggered takeover, FALLBACK-1)"
+default_kind = "opencode"
+model = "zai-coding-plan/glm-5.3-flash"
+brief = "briefs/looper-standby.in.md"
+tab = "herd"
+position = "bottom-full"
+enabled = false
+
 [seats.docs]
 name = "agy-docs"
 role = "Documentation & Architecture Records (ADRs)"

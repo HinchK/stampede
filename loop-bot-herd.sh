@@ -446,7 +446,7 @@ _quota_defer_reviewer() { # TICKET SHA ROUND MAX — record the durable marker
   jq -cn --argjson ts "$(date +%s)" --arg t "$1" --arg h "$2" --arg r "$3" --arg m "$4" \
     '{ts: $ts, ticket: $t, sha: $h, round: $r, max: $m}' >> "$QUOTA_DEFER_FILE"
   bad "quota: agy account exhausted — reviewer dispatch for #$1 deferred (marker in quota-deferred.jsonl)"
-  _sup_notify "agy quota exhausted" "reviewer dispatch for #$1 @ $2 deferred — auto-retries when the account clears"
+  _sup_notify "agy quota exhausted" "reviewer dispatch for #$1 @ $2 deferred — auto-retries when the account clears. Standby orchestrator available: bash lib/standby.sh up (FALLBACK-1)"
   "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" review.deferred quota "$1" \
     "$(jq -cn --arg t "$1" --arg h "$2" '{ticket:$t, sha:$h, summary:("reviewer dispatch deferred: agy quota exhausted")}')" \
     --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
