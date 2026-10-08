@@ -2,7 +2,7 @@
 id: HERDR-2
 title: "Adopt herdr pane wait-output for single-target waits (seat-verify, quota probe)"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: herdr-loop-swarm.sh, lib/quota.sh, tests/test_quota.sh, tests/test_cli.sh
 parent: maps/herdr-native-and-seat-utilization.md
@@ -57,3 +57,40 @@ and the stubbed-herdr test names that exercise each branch.
 Do not widen `--lines` assumptions here unless HERDR-1's alternate-screen assessment
 says a seam reads anchored lines beyond 80 rows — then fix that seam with an explicit
 `--lines` and cite the audit row.
+
+## Resolution (2026-10-07)
+
+Done. Probe + branch table:
+
+| Seam | wait-output available | wait-output absent |
+|---|---|---|
+| `herdr_has_wait_output` (lib/common.sh, once-per-process cache) | `pane wait-output --help` rc 0 → cached yes | rc ≠ 0 → cached no + one stderr degradation line |
+| seat-verify `swarm_verify_seats` / new `seat_wait_ready` (lib/lifecycle.sh; audit S18/S23 — the ticket's `owns:` omitted lifecycle.sh but the audit routes S23 here) | one `pane wait-output <pane> --regex 'STANDING BRIEF:' --timeout <ms>`, success labels `brief-ready`; timeout FAILS the seat (verdict authoritative, no fallthrough) | byte-identical pre-HERDR-2 `agent wait --until idle --until done --until working --timeout <ms>`, label `interactive-ready` |
+| launcher auto-queue critical-seat loop (herdr-loop-swarm.sh S18) | same `seat_wait_ready`, pane resolved from seats.json | same, empty pane → agent-wait fallback |
+| `quota_wait_banner` + CLI `wait` (lib/quota.sh, audit S24b) | one `pane wait-output <pane> --regex 'Individual quota reached.*Resets in' --timeout <ms>`, rc normalized to 0/1 | bounded poll of the one-shot probe (the hand-rolled loop this replaces), same no-fabrication contract |
+
+Also per the audit §5 row for the quota probe: `agent read` widened to
+`--lines 200` (banner older than 80 rows read stale-unknown under Herdr
+0.9.3's alternate-screen model). Multi-anchor harvest scan untouched (ADR
+0017 keep verdict). Installed herdr probed: wait-output SUPPORTED.
+
+Stubbed-herdr tests exercising each branch — tests/test_quota.sh: "probe:
+capability checked exactly once per process", "probe: one degradation line,
+logged once (cached)", "wait: exact wait-output argv (pane + --regex banner
++ --timeout ms)", "wait: wait-output timeout → 1 (verdict authoritative)",
+"wait fallback: poll measures banner → 0", "wait fallback: no signal within
+budget → 1 (never fabricated)", "wait: empty pane → poll by seat name
+despite capability", "CLI: wait blocks on the banner path → exit 0", "CLI:
+wait usage error exits 2"; tests/test_cli.sh [16]: "verify: wait-output
+path labels brief-ready", "verify: one capability probe across both seats",
+"verify: seat pane waited with exact --regex/--timeout argv", "verify:
+wait-output path never falls back to agent wait", "verify: fallback labels
+interactive-ready (byte-identical)", "verify: fallback issues the exact
+pre-HERDR-2 agent-wait argv", "verify: one degradation line per process on
+stderr", "verify: wait-output timeout fails the seat with the standing
+message", "verify: wait-output timeout is authoritative (no agent-wait
+fallthrough)", plus launcher seam greps ("critical-seat loop routes through
+seat_wait_ready" / "no direct agent-wait poll left").
+
+Receipts: `make check` → `All suites green (19)`, `Lint clean`, test_quota
+57/57, test_cli 73/73.

@@ -459,5 +459,80 @@ EOF
     && ok "dead-letter history preserved (append-only, 2 records)" || bad "history not preserved"
 fi
 
+# [16] HERDR-2: seat-verify wait seam — `pane wait-output` on the brief
+# anchor when the capability probe says yes, byte-identical agent-wait
+# fallback when it does not, wait-output's verdict authoritative (no silent
+# fallthrough). Stubbed herdr (function override, argv logged, rc scripted),
+# stubbed workspace resolution, fixture seats.json — never a live workspace.
+T16="$SCRATCH/t16"; mkdir -p "$T16/.herdr-swarm"
+# shellcheck disable=SC1091
+source "$REPO_ROOT/lib/common.sh"
+# shellcheck disable=SC1091
+source "$REPO_ROOT/lib/lifecycle.sh"
+find_workspace_by_cwd() { printf 'wT16\n'; }   # override: fixture workspace
+T16_LOG="$SCRATCH/t16-herdr.log"
+herdr() {
+  printf '%s\n' "$*" >> "$T16_LOG"
+  if [[ "${1:-}" == "pane" && "${2:-}" == "wait-output" && "${3:-}" == "--help" ]]; then
+    return "${T16_CAP_RC:-0}"
+  fi
+  if [[ "${1:-}" == "pane" && "${2:-}" == "wait-output" ]]; then
+    return "${T16_WAIT_RC:-0}"
+  fi
+  return "${T16_AGENT_RC:-0}"
+}
+jq -cn '{version: 2, workspace_id: "wT16", seats: [
+  {name: "seat-a", kind: "opencode", pane: "wT16:p2"},
+  {name: "seat-b", kind: "agy", pane: "wT16:p3"}]}' > "$T16/.herdr-swarm/seats.json"
+
+# capability yes + wait success → brief-ready, exact argv, probe cached once
+: > "$T16_LOG"; export T16_CAP_RC=0 T16_WAIT_RC=0 T16_AGENT_RC=0
+rc=0; out=$(swarm_verify_seats "$T16" 2500 2>"$T16/err") || rc=$?
+[[ "$rc" == 0 && "$out" == *"seat-a (opencode in wT16:p2): brief-ready"* ]] \
+  && ok "verify: wait-output path labels brief-ready" || bad "brief-ready: rc=$rc out=$out"
+[[ "$(grep -c '^pane wait-output --help$' "$T16_LOG")" == 1 ]] \
+  && ok "verify: one capability probe across both seats" || bad "probe per seat: $(grep -c '^pane wait-output --help$' "$T16_LOG")"
+grep -qF 'pane wait-output wT16:p2 --regex STANDING BRIEF: --timeout 2500' "$T16_LOG" \
+  && ok "verify: seat pane waited with exact --regex/--timeout argv" || bad "argv: $(grep '^pane' "$T16_LOG")"
+if grep -q '^agent wait ' "$T16_LOG"; then
+  bad "verify: wait-output path also polled agent wait: $(grep '^agent wait ' "$T16_LOG" | head -1)"
+else
+  ok "verify: wait-output path never falls back to agent wait"
+fi
+
+# capability no → byte-identical pre-HERDR-2 behavior + one degradation line
+: > "$T16_LOG"; : > "$T16/err"; export T16_CAP_RC=1
+rc=0; out=$(swarm_verify_seats "$T16" 2500 2>>"$T16/err") || rc=$?
+[[ "$rc" == 0 && "$out" == *"seat-a (opencode in wT16:p2): interactive-ready"* ]] \
+  && ok "verify: fallback labels interactive-ready (byte-identical)" || bad "fallback: rc=$rc out=$out"
+grep -q '^agent wait seat-a --until idle --until done --until working --timeout 2500$' "$T16_LOG" \
+  && ok "verify: fallback issues the exact pre-HERDR-2 agent-wait argv" || bad "fallback argv: $(grep '^agent wait' "$T16_LOG")"
+[[ "$(grep -c 'wait-output unavailable' "$T16/err")" == 1 ]] \
+  && ok "verify: one degradation line per process on stderr" || bad "degradation: $(cat "$T16/err")"
+
+# capability yes + wait timeout → failure is authoritative, no fallthrough
+: > "$T16_LOG"; export T16_CAP_RC=0 T16_WAIT_RC=4
+rc=0; out=$(swarm_verify_seats "$T16" 2500 2>/dev/null) || rc=$?
+[[ "$rc" == 1 && "$out" == *"seat-a: not ready within 2500ms"* ]] \
+  && ok "verify: wait-output timeout fails the seat with the standing message" || bad "timeout: rc=$rc out=$out"
+if grep -q '^agent wait ' "$T16_LOG"; then
+  bad "verify: timeout fell through to agent wait (verdict not authoritative)"
+else
+  ok "verify: wait-output timeout is authoritative (no agent-wait fallthrough)"
+fi
+unset T16_CAP_RC T16_WAIT_RC T16_AGENT_RC
+unset -f herdr find_workspace_by_cwd
+
+# launcher seam (S18): the auto-queue critical-seat loop must route through
+# seat_wait_ready — no direct agent-wait poll left at that call site
+grep -q 'seat_wait_ready "$critical_seat" "$cpane" 2000' "$REPO_ROOT/herdr-loop-swarm.sh" \
+  && ok "launcher: critical-seat loop routes through seat_wait_ready" \
+  || bad "launcher critical-seat seam not rewired"
+if grep -q 'herdr agent wait "$critical_seat"' "$REPO_ROOT/herdr-loop-swarm.sh"; then
+  bad "launcher: direct agent-wait poll still present in the critical-seat loop"
+else
+  ok "launcher: no direct agent-wait poll left in the critical-seat loop"
+fi
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

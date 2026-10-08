@@ -110,8 +110,8 @@ herdr() { printf '%s\n' "$*" >> "$QUOTA_HERDR_LOG"; return 1; }
 [[ "$(quota_probe_kind agy)" == "unknown" ]] \
   && ok "agy: no seat name → unknown" || bad "agy seatless: $(quota_probe_kind agy)"
 unset -f herdr
-grep -q '^agent read quota-seat-x --source recent-unwrapped$' "$QUOTA_HERDR_LOG" \
-  && ok "agy probe is read-only: exactly one agent read, nothing else per call" \
+grep -q '^agent read quota-seat-x --source recent-unwrapped --lines 200$' "$QUOTA_HERDR_LOG" \
+  && ok "agy probe is read-only: exactly one agent read (--lines 200, HERDR-2), nothing else per call" \
   || bad "herdr calls: $(sort -u "$QUOTA_HERDR_LOG" | head -3)"
 if grep -qv '^agent read ' "$QUOTA_HERDR_LOG"; then
   bad "agy probe issued non-read herdr traffic: $(grep -v '^agent read ' "$QUOTA_HERDR_LOG" | head -2)"
@@ -172,6 +172,86 @@ rc=0; out=$(bash "$REPO_ROOT/lib/quota.sh" gate agy quota-seat-x) || rc=$?
 rc=0; bash "$REPO_ROOT/lib/quota.sh" gate agy >/dev/null 2>&1 || rc=$?
 [[ "$rc" == 2 ]] \
   && ok "CLI: usage error exits 2, distinct from the gate's 0/1 contract" || bad "usage rc=$rc"
+unset QUOTA_HERDR_FIXTURE
+
+# ── HERDR-2: wait-output capability probe + blocking banner wait ────────────
+# herdr function stub: rc-scriptable for `pane wait-output` (--help probes
+# capability, other calls are the wait itself), fixture-serving for
+# `agent read` (the fallback poll's probe), argv-logged for exact-arg checks.
+T2_LOG="$SCRATCH/herdr2.log"; : > "$T2_LOG"
+herdr() {
+  printf '%s\n' "$*" >> "$T2_LOG"
+  if [[ "${1:-}" == "pane" && "${2:-}" == "wait-output" && "${3:-}" == "--help" ]]; then
+    return "${T2_CAP_RC:-0}"
+  fi
+  if [[ "${1:-}" == "pane" && "${2:-}" == "wait-output" ]]; then
+    return "${T2_WAIT_RC:-0}"
+  fi
+  if [[ "${1:-}" == "agent" && "${2:-}" == "read" && "${4:-}" == "--source" ]]; then
+    [[ -f "${QUOTA_HERDR_FIXTURE:-}" ]] && cat "${QUOTA_HERDR_FIXTURE:-}"
+  fi
+  return 0
+}
+wait_probe_reset() { _HERDR_WAIT_OUTPUT_CACHE=""; : > "$T2_LOG"; }
+
+# capability probe: cached once per process
+wait_probe_reset; export T2_CAP_RC=0
+herdr_has_wait_output && herdr_has_wait_output \
+  && ok "probe: supported herdr → yes on both calls" || bad "probe yes failed"
+[[ "$(grep -c '^pane wait-output --help$' "$T2_LOG")" == 1 ]] \
+  && ok "probe: capability checked exactly once per process" || bad "probe not cached: $(cat "$T2_LOG")"
+
+# degradation: absent primitive → no, exactly one stderr line, still cached
+wait_probe_reset; export T2_CAP_RC=1
+if ! herdr_has_wait_output 2>"$SCRATCH/cap.err"; then ok "probe: unsupported herdr → no"; else bad "probe should say no"; fi
+herdr_has_wait_output 2>>"$SCRATCH/cap.err" || true
+[[ "$(grep -c 'wait-output unavailable' "$SCRATCH/cap.err")" == 1 ]] \
+  && ok "probe: one degradation line, logged once (cached)" || bad "degradation spam: $(cat "$SCRATCH/cap.err")"
+
+# wait-output path: exact argv (pane, --regex banner, --timeout ms)
+wait_probe_reset; export T2_CAP_RC=0 T2_WAIT_RC=0
+rc=0; quota_wait_banner agy-seat-q wX:p1 5000 >/dev/null 2>&1 || rc=$?
+[[ "$rc" == 0 ]] && ok "wait: banner detected via wait-output → 0" || bad "wait rc=$rc"
+grep -qF 'pane wait-output wX:p1 --regex Individual quota reached.*Resets in --timeout 5000' "$T2_LOG" \
+  && ok "wait: exact wait-output argv (pane + --regex banner + --timeout ms)" || bad "argv: $(cat "$T2_LOG")"
+# wait-output timeout is authoritative (no silent fallthrough to polling)
+export T2_WAIT_RC=3
+rc=0; quota_wait_banner agy-seat-q wX:p1 5000 >/dev/null 2>&1 || rc=$?
+[[ "$rc" == 1 ]] && ok "wait: wait-output timeout → 1 (verdict authoritative)" || bad "timeout rc=$rc"
+export T2_WAIT_RC=0
+
+# fallback path: capability absent → bounded poll of the one-shot probe
+wait_probe_reset; export T2_CAP_RC=1
+q_fixture '⚠ Individual quota reached. Resets in 10m.
+'
+rc=0; quota_wait_banner agy-seat-q wX:p1 3000 100 >/dev/null 2>&1 || rc=$?
+[[ "$rc" == 0 ]] && ok "wait fallback: poll measures banner → 0" || bad "fallback rc=$rc"
+if grep -qv '^pane wait-output --help$' <(grep '^pane' "$T2_LOG"); then
+  bad "fallback issued non-probe pane traffic: $(grep '^pane' "$T2_LOG")"
+else
+  ok "wait fallback: only the capability probe, never the wait call"
+fi
+q_fixture 'healthy seat, no quota message
+'
+rc=0; quota_wait_banner agy-seat-q wX:p1 400 150 >/dev/null 2>&1 || rc=$?
+[[ "$rc" == 1 ]] && ok "wait fallback: no signal within budget → 1 (never fabricated)" || bad "fallback timeout rc=$rc"
+# empty pane id: wait-output unusable even when supported → poll by seat name
+wait_probe_reset; export T2_CAP_RC=0
+q_fixture '⚠ Individual quota reached. Resets in 10m.
+'
+rc=0; quota_wait_banner agy-seat-q "" 3000 100 >/dev/null 2>&1 || rc=$?
+[[ "$rc" == 0 ]] && ok "wait: empty pane → poll by seat name despite capability" || bad "empty-pane rc=$rc"
+unset QUOTA_HERDR_FIXTURE T2_CAP_RC T2_WAIT_RC
+unset -f herdr
+
+# CLI end-to-end: `wait` subcommand (PATH stub returns 0 → capability yes,
+# wait succeeds); usage errors stay exit 2, distinct from 0/1
+q_fixture '⚠ Individual quota reached. Resets in 10m.
+'
+rc=0; bash "$REPO_ROOT/lib/quota.sh" wait quota-seat-x wX:p9 >/dev/null 2>&1 || rc=$?
+[[ "$rc" == 0 ]] && ok "CLI: wait blocks on the banner path → exit 0" || bad "CLI wait rc=$rc"
+rc=0; bash "$REPO_ROOT/lib/quota.sh" wait >/dev/null 2>&1 || rc=$?
+[[ "$rc" == 2 ]] && ok "CLI: wait usage error exits 2" || bad "CLI wait usage rc=$rc"
 unset QUOTA_HERDR_FIXTURE
 
 # ── openrouter probe: configuration matrix ─────────────────────────────────

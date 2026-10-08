@@ -19,6 +19,9 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091  # shared wait-output capability probe (HERDR-2)
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+
 # quota_probe_kind KIND — the seat-kind probe seam (registry kinds: claude,
 # opencode, agy, pi). No seat-kind CLI exposes a parseable local usage
 # surface at landing, so every kind answers `unknown` — an unregistered
@@ -37,7 +40,11 @@ quota_probe_kind() { # KIND [SEAT_NAME]
         return 0
       fi
       local out dur h=0 m=0 s=0
-      out=$(herdr agent read "$seat" --source recent-unwrapped 2>/dev/null || true)
+      # --lines 200: under Herdr 0.9.3's alternate-screen model a banner
+      # older than the default 80 rows reads stale-unknown; the audit's §5
+      # row for this seam sanctions the wider read (HERDR-2 note,
+      # docs/findings/herdr-surface-audit.md).
+      out=$(herdr agent read "$seat" --source recent-unwrapped --lines 200 2>/dev/null || true)
       [[ -n "$out" ]] || { printf 'unknown\n'; return 0; }
       # most recent marker wins (scrollback may carry several)
       dur=$(printf '%s\n' "$out" \
@@ -101,6 +108,38 @@ PYCODE
   printf 'ok:%sUSD\n' "$left"
 }
 
+# quota_wait_banner SEAT PANE [TIMEOUT_MS [POLL_MS]] — the blocking variant
+# of the agy pane scan (HERDR-2 / ADR 0017 D1) for consumers that would
+# otherwise hand-roll a quota_gate poll loop while a banner is pending.
+# Blocks until the quota banner surfaces in the seat's pane: one
+# `herdr pane wait-output` call where the capability probe says yes (exact
+# argv: --regex <banner> --timeout <ms>), else a bounded poll of the
+# one-shot probe — the hand-rolled loop this replaces, same result
+# contract. Exit 0: banner detected (exhaustion measured). Exit 1: no
+# signal within the budget — absence of data is not exhaustion, and no
+# signal is ever fabricated.
+QUOTA_BANNER_REGEX='Individual quota reached.*Resets in'
+quota_wait_banner() { # SEAT PANE [TIMEOUT_MS [POLL_MS]]
+  local seat="$1" pane="${2:-}" timeout_ms="${3:-30000}" poll_ms="${4:-2000}"
+  if [[ -n "$seat" && -n "$pane" ]] && herdr_has_wait_output; then
+    if herdr pane wait-output "$pane" --regex "$QUOTA_BANNER_REGEX" --timeout "$timeout_ms" >/dev/null 2>&1; then
+      return 0
+    fi
+    return 1
+  fi
+  local deadline
+  deadline=$(( $(date +%s) * 1000 + timeout_ms ))
+  while :; do
+    if [[ "$(quota_probe_kind agy "$seat")" =~ ^ok: ]]; then
+      return 0
+    fi
+    if (( $(date +%s) * 1000 + poll_ms > deadline )); then
+      return 1
+    fi
+    sleep "$(printf '%d.%03d' $((poll_ms / 1000)) $((poll_ms % 1000)))"
+  done
+}
+
 # ── gate: point-in-time dispatch-safety check (QUOTA-3) ────────────────────
 # quota_gate KIND [SEAT] → exit 0 = safe to dispatch, exit 1 = measured
 # exhaustion (ok:<N>s — the agy pane-scan's seconds-until-reset). Deliberately
@@ -134,6 +173,13 @@ if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
         exit 2
       fi
       quota_gate "$1" "$2"
+      ;;
+    wait)
+      if [[ $# -lt 2 || $# -gt 3 || -z "$1" || -z "$2" ]]; then
+        printf 'Usage: %s wait <seat> <pane> [timeout_ms]   (blocks until the agy quota banner surfaces)\n' "$0" >&2
+        exit 2
+      fi
+      quota_wait_banner "$1" "$2" "${3:-30000}"
       ;;
     *)
       printf 'Usage: %s gate <kind> <seat>\n' "$0" >&2

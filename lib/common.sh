@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # lib/common.sh — Shared helpers for the swarm libraries
-# Sourced by: lib/profile.sh, lib/config.sh, lib/briefs.sh, lib/lifecycle.sh
+# Sourced by: lib/profile.sh, lib/config.sh, lib/briefs.sh, lib/lifecycle.sh,
+#             lib/quota.sh
 #
 # Provides:
 #   slugify: Herdr-legal agent-name slug emitter (grammar ^[a-z][a-z0-9_-]*$,
 #            empirically established in docs/findings/herdr-semantics.md §C)
+#   herdr_has_wait_output: once-per-process `pane wait-output` capability
+#            probe (HERDR-2 / ADR 0017 D5)
 
 set -euo pipefail
 
@@ -37,6 +40,32 @@ telemetry_session_id() { # STATE_DIR
   mkdir -p "$1"
   printf 'swarm-%s\n' "$(date +%Y%m%d-%H%M%S)" > "$f"
   cat "$f"
+}
+
+# ── herdr pane wait-output capability (HERDR-2 / ADR 0017 D5) ───────────────
+# Single-target output waits should block on `herdr pane wait-output` instead
+# of timeout-and-recheck polls (ADR 0017 D1), but adoption is feature-gated:
+# a Herdr without the primitive degrades to today's behavior, never fails.
+# The probe runs once per process and logs exactly one degradation line when
+# the primitive is absent.
+
+# Brief-delivery anchor: the standing-brief prompt deliver_brief_nonce writes
+# into the seat's pane — the stable, greppable "the brief reached this pane"
+# marker the seat-verify seam waits on.
+# shellcheck disable=SC2034  # consumed by sourcing siblings (lifecycle.sh)
+BRIEF_ACK_REGEX='STANDING BRIEF:'
+
+_HERDR_WAIT_OUTPUT_CACHE=""
+herdr_has_wait_output() {
+  if [[ -z "$_HERDR_WAIT_OUTPUT_CACHE" ]]; then
+    if herdr pane wait-output --help >/dev/null 2>&1; then
+      _HERDR_WAIT_OUTPUT_CACHE=yes
+    else
+      _HERDR_WAIT_OUTPUT_CACHE=no
+      printf 'stampede: herdr pane wait-output unavailable — falling back to poll waits (ADR 0017 D5)\n' >&2
+    fi
+  fi
+  [[ "$_HERDR_WAIT_OUTPUT_CACHE" == yes ]]
 }
 
 # ── timeout(1) resolver (DOG-15) ───────────────────────────────────────────
