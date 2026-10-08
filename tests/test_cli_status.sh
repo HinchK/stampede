@@ -206,5 +206,104 @@ rc=0; out=$("$S" status --help 2>&1) || rc=$?
 rc=0; "$S" status --bogus >/dev/null 2>&1 || rc=$?
 [[ "$rc" == 1 ]] && ok "unknown flag rc=1" || bad "unknown flag rc=$rc"
 
+# ── ROUTE-4: Seat Activity panel ──────────────────────────────────────────
+# Second scratch repo, this one a real git repo: seats.json roster, trace
+# events at controlled ages, commits with controlled dates and the two
+# attribution conventions (integrate records + Co-Authored-By trailers).
+echo "==> seat activity panel (ROUTE-4)"
+
+NOW=$(date +%s)
+ISO() { date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ; }
+D3=$(( NOW - 3 * 86400 ))
+D10=$(( NOW - 10 * 86400 ))
+
+R4="$SCRATCH/r4"
+mkdir -p "$R4/.herdr-swarm/traces"
+git -C "$R4" init -q
+git -C "$R4" config user.email t@t && git -C "$R4" config user.name t
+c() { # EPOCH MESSAGE [BODY] → commit, echo sha (subject first, body second)
+  local ep="$1" msg="$2" body="${3:-}"
+  GIT_AUTHOR_DATE="$(ISO "$ep")" GIT_COMMITTER_DATE="$(ISO "$ep")" \
+    git -C "$R4" commit -q --allow-empty -m "$msg" ${body:+-m "$body"}
+  git -C "$R4" rev-parse HEAD
+}
+# Chronological creation order: git log --since prunes heuristically on
+# non-monotonic histories, so the fixture keeps commit dates non-decreasing
+# down the chain (the shape every real repo has).
+c "$D10" "chore: ancient" >/dev/null                       # outside 7d window
+c "$D3"  "feat: work three (#T3)" >/dev/null               # in 7d, not in 1d → other
+W1=$(c "$NOW" "fix: work one (#T1)")                       # → s1 via integrate ref
+c "$NOW" "feat: work two (#T2)" "Co-Authored-By: s2-r4 <s2@seats>" >/dev/null  # → s2 via trailer
+c "$NOW" "integrate #T1 (s1-r4 @ ${W1:0:7})" >/dev/null    # arbiter record → other
+c "$NOW" "docs: bookkeeping" >/dev/null                    # → other
+
+cat > "$R4/.herdr-swarm/seats.json" <<'EOF'
+{"workspace_id": "w9", "seats": [
+  {"name": "s1-r4", "kind": "opencode", "pane": "w9:p1"},
+  {"name": "s2-r4", "kind": "agy", "pane": "w9:p2"}
+]}
+EOF
+cat > "$R4/.herdr-swarm/traces/swarm-r4.jsonl" <<EOF
+{"timestamp": $NOW, "iso": "x", "session_id": "s", "event_type": "lease.acquired", "agent": "s1-r4", "ticket_num": "T1", "payload": {}}
+{"timestamp": $D3, "iso": "x", "session_id": "s", "event_type": "lease.acquired", "agent": "s2-r4", "ticket_num": "T2", "payload": {}}
+{"timestamp": $D10, "iso": "x", "session_id": "s", "event_type": "lease.acquired", "agent": "s1-r4", "ticket_num": "T0", "payload": {}}
+EOF
+# one verdict record keeps the dashboard out of its empty state
+printf '%s\n' '{"ts": 1, "ticket": "T1", "sha": "a1", "seat": "s1-r4", "suite": "green", "exit_code": 0}' \
+  > "$R4/.herdr-swarm/session-verdicts.jsonl"
+
+rc=0; a4=$("$S" status --rich --json "$R4" 2>/dev/null) || rc=$?
+[[ "$rc" == 0 ]] && ok "r4: --json exits 0 on a git-backed target" || bad "r4 rc=$rc"
+J '.activity.window_days == 7' <<<"$a4" \
+  && ok "r4: default window 7d" || bad "r4 window: $(jq -c .activity.window_days <<<"$a4")"
+J '[.activity.seats[] | select(.seat == "s1-r4") | .dispatches == 1 and .commits == 1] | length == 1 and all' <<<"$a4" \
+  && ok "r4: s1 dispatches 1 (10d-old excluded) · commits 1 (integrate record attributes gated sha)" \
+  || bad "r4 s1: $(jq -c '.activity.seats[] | select(.seat=="s1-r4")' <<<"$a4")"
+J '[.activity.seats[] | select(.seat == "s2-r4") | .dispatches == 1 and .commits == 1] | length == 1 and all' <<<"$a4" \
+  && ok "r4: s2 dispatches 1 · commits 1 (Co-Authored-By trailer)" \
+  || bad "r4 s2: $(jq -c '.activity.seats[] | select(.seat=="s2-r4")' <<<"$a4")"
+J '.activity.total_commits == 5 and .activity.other_commits == 3' <<<"$a4" \
+  && ok "r4: total 5 in-window (ancient excluded) · other 3 (T3, integrate record, bookkeeping)" \
+  || bad "r4 totals: $(jq -c '{t:.activity.total_commits,o:.activity.other_commits}' <<<"$a4")"
+J '([.activity.gaps[] | select(test("auto-queue"))] | length) == 1' <<<"$a4" \
+  && ok "r4: telemetry emission gap recorded, schema not widened" || bad "r4 gaps: $(jq -c .activity.gaps <<<"$a4")"
+
+# --window 1: 3d-old dispatch and 3d-old commit fall out; ancient already out
+rc=0; a1=$("$S" status --rich --json --window 1 "$R4" 2>/dev/null) || rc=$?
+[[ "$rc" == 0 ]] && ok "r4: --window 1 accepted" || bad "r4 --window rc=$rc"
+J '.activity.window_days == 1 and .activity.total_commits == 4
+    and ([.activity.seats[] | select(.seat == "s2-r4") | .dispatches] | first) == null' <<<"$a1" \
+  && ok "r4: window 1 — s2 dispatch n/a (3d-old excluded), T3 commit excluded (4 left)" \
+  || bad "r4 w1: $(jq -c '{w:.activity.window_days,t:.activity.total_commits,s2:[.activity.seats[]|select(.seat=="s2-r4")|.dispatches]}' <<<"$a1")"
+rc=0; "$S" status --rich --window abc "$R4" >/dev/null 2>&1 || rc=$?
+[[ "$rc" -ne 0 ]] && ok "r4: --window abc rejected" || bad "r4: --window abc rc=$rc"
+
+# traces absent → dispatches n/a (never fabricated zeros); commits unaffected
+mv "$R4/.herdr-swarm/traces" "$SCRATCH/traces-parked"
+rc=0; an=$("$S" status --rich --json "$R4" 2>/dev/null) || rc=$?
+J '.activity.seats != [] and ([.activity.seats[] | select(.dispatches != null)] | length) == 0
+    and .activity.total_commits == 5' <<<"$an" \
+  && ok "r4: traces absent → every dispatches null, commits still real" \
+  || bad "r4 n/a: $(jq -c '[.activity.seats[]|{s:.seat,d:.dispatches}]' <<<"$an")"
+rc=0; ah=$("$S" status --rich "$R4" 2>/dev/null) || rc=$?
+printf '%s' "$ah" | grep -q 'n/a' \
+  && ok "r4: human table renders n/a for absent dispatch source" || bad "r4 human n/a missing"
+mv "$SCRATCH/traces-parked" "$R4/.herdr-swarm/traces"
+
+# non-git target (the original REPO fixture) → commits n/a, not zero
+rc=0; ag=$("$S" status --rich --json 2>/dev/null) || rc=$?
+J '.activity.total_commits == null and .activity.other_commits == null' <<<"$ag" \
+  && ok "r4: non-git target → commits null (absence ≠ zero)" \
+  || bad "r4 non-git: $(jq -c '{t:.activity.total_commits,o:.activity.other_commits}' <<<"$ag")"
+
+# read-only: git side untouched (tracked files; the never-committed
+# .herdr-swarm/ is legitimately untracked here), swarm state byte-identical
+cp "$R4/.herdr-swarm/seats.json" "$SCRATCH/seats.before"
+"$S" status --rich "$R4" >/dev/null 2>&1
+"$S" status --rich --json --window 3 "$R4" >/dev/null 2>&1
+git -C "$R4" diff --quiet && git -C "$R4" diff --cached --quiet \
+  && cmp -s "$SCRATCH/seats.before" "$R4/.herdr-swarm/seats.json" \
+  && ok "r4: read-only — no tracked-file drift, no swarm-state writes" || bad "r4: writes detected"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

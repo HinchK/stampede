@@ -13,6 +13,10 @@
 # is never averaged — PUB-10 absence semantics), integrations from the
 # arbiter queue, re-verdicts from the verdicts (ticket) history:
 #   ratio = (verdict records - distinct tickets) / verdict records
+# and — ROUTE-4 — seat activity: dispatch counts from window-filtered
+# `lease.acquired` trace events and commit share from git log attributed
+# via integrate-records/seat trailers (unattributed → other; missing
+# sources render n/a, never fabricated zeros).
 #
 # Output: one ANSI table for humans; --json names its sources for
 # scripting. The human table is rendered FROM the same JSON object the
@@ -49,18 +53,137 @@ _status_iso() {
     || printf '?'
 }
 
+# _status_activity_json REPO STATE_DIR TJSON DAYS → ROUTE-4 Seat Activity
+# aggregation as one JSON object. Two sources, both window-scoped, both
+# degrading to null (never fabricated zeros) when absent:
+#   dispatches — trace `lease.acquired` events (the honest dispatch signal
+#     that exists today; no dedicated dispatch event kind is emitted — the
+#     gap is recorded in .gaps rather than widening the schema silently).
+#   commits — `git log --since=<window>`, seat-attributed via the
+#     conventions this repo already uses: arbiter integration records
+#     `integrate #<t> (<seat> @ <sha>)` attribute the referenced gated sha
+#     to that seat, and Co-Authored-By trailers naming a roster seat
+#     attribute their own commit. Everything else — including the shared
+#     machine author identity and the arbiter's own merge commits — counts
+#     under `other`. Seats come from seats.json (roster zero-fill) unioned
+#     with seats seen in traces/attribution.
+_status_activity_json() {
+  local repo="$1" state="$2" tjson="$3" days="$4"
+  local now cutoff since_iso
+  now=$(date +%s)
+  cutoff=$(( now - days * 86400 ))
+  since_iso=$(_status_iso "$cutoff")
+
+  local dispatch_src="null" dispatch_json="[]"
+  if [[ -d "$state/traces" ]]; then dispatch_src="\"$state/traces\""; fi
+  dispatch_json=$(jq -c --argjson cutoff "$cutoff" '
+    [ .[] | select(.event_type == "lease.acquired" and ((.timestamp // 0) >= $cutoff))
+          | {seat: ((.agent // "?") | tostring), ts: (.timestamp // 0)} ]
+    | group_by(.seat)
+    | map({seat: .[0].seat, dispatches: length, last_ts: (map(.ts) | max | floor)})
+    | sort_by(.seat)' <<<"$tjson" 2>/dev/null) || dispatch_json="[]"
+
+  local seats_src="null" roster=""
+  if [[ -f "$state/seats.json" ]]; then
+    seats_src="\"$state/seats.json\""
+    roster=$(jq -r '.seats[]?.name // empty' "$state/seats.json" 2>/dev/null) || roster=""
+  fi
+
+  local commits_src="null" seat_counts="" total_commits="null" other_commits="null"
+  if git -C "$repo" rev-parse --git-dir >/dev/null 2>&1; then
+    commits_src="\"git log --since=${since_iso}\""
+    # pass 1: integration records → "<seat> <gated-sha>" pairs (subjects
+    # are single lines; the integrate commit itself stays unattributed).
+    local refmap_tsv
+    refmap_tsv=$(git -C "$repo" log --since="$since_iso" --format='%H %s' 2>/dev/null \
+      | sed -nE 's/^[0-9a-f]+ integrate #[^ ]+ \(([^)]+) @ ([0-9a-f]+)\)$/\1 \2/p')
+    # pass 2: attribute each in-window commit by referenced sha first,
+    # then a Co-Authored-By trailer naming a roster seat.
+    local rsep fsep
+    rsep=$(printf '\036'); fsep=$(printf '\037')
+    seat_counts=$(git -C "$repo" log --since="$since_iso" --format="%H${fsep}%b${rsep}" 2>/dev/null \
+      | REFMAP="$refmap_tsv" ROSTER="$roster" awk -v RS="$rsep" -v FS="$fsep" '
+        BEGIN { n = split(ENVIRON["REFMAP"], rl, "\n"); for (i = 1; i <= n; i++) { split(rl[i], p, " "); if (p[2] != "") refm[p[2]] = p[1] } }
+        # git %b ends with a newline, so every record after the first
+        # begins with a blank line — strip it before the sha guard.
+        {
+          h = $1; sub(/^[ \t\n\r]+/, "", h)
+          if (length(h) < 7) next
+          total++
+          seat = ""
+          # integration records reference the gated sha in short form —
+          # prefix-match it against the full sha of this record.
+          for (k in refm) if (length(k) <= length(h) && index(h, k) == 1) { seat = refm[k]; break }
+          if (seat == "" && $2 ~ /Co-Authored-By/) {
+            m = split(ENVIRON["ROSTER"], rs, "\n")
+            for (i = 1; i <= m; i++) if (rs[i] != "" && index($2, rs[i]) > 0) { seat = rs[i]; break }
+          }
+          if (seat == "") other++
+          else cnt[seat]++
+        }
+        END {
+          for (s in cnt) printf "%s %d\n", s, cnt[s]
+          printf "__TOTAL__ %d\n__OTHER__ %d\n", total + 0, other + 0
+        }')
+    total_commits=$(awk '$1 == "__TOTAL__" { print $2 }' <<<"$seat_counts"); total_commits="${total_commits:-0}"
+    other_commits=$(awk '$1 == "__OTHER__" { print $2 }' <<<"$seat_counts"); other_commits="${other_commits:-0}"
+    seat_counts=$(grep -v '^__' <<<"$seat_counts" || true)
+  fi
+
+  jq -n \
+    --argjson window "$days" \
+    --arg since "$since_iso" \
+    --argjson dispatch "$dispatch_json" \
+    --arg roster "$roster" \
+    --arg counts "$seat_counts" \
+    --argjson total "$total_commits" \
+    --argjson other "$other_commits" \
+    --arg dispatch_src "$dispatch_src" \
+    --arg commits_src "$commits_src" \
+    --arg seats_src "$seats_src" '
+    ($counts | split("\n") | map(select(length > 0)) | map(split(" ")) | map({key: .[0], value: (.[1] | tonumber)}) | from_entries) as $c
+    | ($roster | split("\n") | map(select(length > 0))) as $r
+    | [($dispatch[]?.seat), ($c | keys[]?), ($r[])] | unique as $seats
+    | {
+        window_days: $window,
+        since_iso: $since,
+        sources: { dispatches: ($dispatch_src | fromjson? // $dispatch_src),
+                   commits: ($commits_src | fromjson? // $commits_src),
+                   seats: ($seats_src | fromjson? // $seats_src) },
+        gaps: [ "dispatch signal: lease.acquired trace events — emitted only by the supervisor auto-queue path (loop-bot-herd.sh), so looper/human-driven dispatches are not counted",
+                "commit attribution: integrate #<t> (<seat> @ <sha>) records + Co-Authored-By seat trailers; the shared machine author identity lands under other" ],
+        seats: [ $seats[] as $s | {
+                   seat: $s,
+                   dispatches: ([$dispatch[]? | select(.seat == $s)] | if length == 0 then null else (.[0].dispatches // null) end),
+                   last_dispatch_ts: ([$dispatch[]? | select(.seat == $s)] | if length == 0 then null else (.[0].last_ts // null) end),
+                   commits: ($c[$s] // null)
+                 } ],
+        other_commits: $other,
+        total_commits: $total
+      }' 2>/dev/null
+}
+
 stampede_cmd_status() {
   local root config dir="" json=0
   root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
   config="${STAMPEDE_CONFIG:-$root/swarm.config.toml}"
 
+  local window_days=7
   while (( $# > 0 )); do
     case "$1" in
       --rich) : ;;   # the dashboard IS the rich form; --json switches renderer
       --json) json=1 ;;
+      --window)
+        if [[ "${2:-}" =~ ^[0-9]+$ ]] && (( $2 > 0 )); then
+          window_days="$2"; shift
+        else
+          printf 'status: --window wants a positive number of days (got: %s)\n' "${2:-}" >&2
+          return 1
+        fi
+        ;;
       -h|--help)
         cat <<'EOF'
-Usage: stampede status --rich [--json] [dir]
+Usage: stampede status --rich [--json] [--window DAYS] [dir]
 
 Read-only session trust dashboard: tickets by verdict, gate runs and
 durations, integrations enqueued/promoted, per-seat and per-provider
@@ -68,8 +191,9 @@ activity, and the re-verdict ratio — aggregated from .herdr-swarm/traces/,
 session-verdicts.jsonl, and the arbiter queue. A fresh clone with no
 artifacts prints a friendly empty state and exits 0.
 
-  --json    machine-readable output; names its sources
-  dir       target repo (default: $PWD, or $REPO_DIR)
+  --json       machine-readable output; names its sources
+  --window N   seat-activity window in days (default 7)
+  dir          target repo (default: $PWD, or $REPO_DIR)
 EOF
         return 0
         ;;
@@ -223,6 +347,13 @@ EOF
       | sort_by(-.gates, .kind)' <<<"$vjson" 2>/dev/null) || providers_json='[]'
   fi
 
+  # Seat Activity (ROUTE-4): window-scoped dispatch counts and commit
+  # share. Degrades to null counts per missing source — absence is never
+  # rendered as zero.
+  local activity_json
+  activity_json=$(_status_activity_json "$repo" "$state" "$tjson" "$window_days") \
+    || activity_json='{"window_days":7,"since_iso":"?","sources":{},"gaps":[],"seats":[],"other_commits":null,"total_commits":null}'
+
   # ── the single source of truth: one JSON object, both renderers read it ───
   local final
   final=$(jq -n \
@@ -240,6 +371,7 @@ EOF
     --argjson providers "$providers_json" \
     --argjson reverdicts "$reverdicts_json" \
     --argjson reviews "$reviews_json" \
+    --argjson activity "$activity_json" \
     '{
       command: "stampede status --rich",
       read_only: true,
@@ -258,7 +390,8 @@ EOF
       seats: $seats,
       providers: $providers,
       reverdicts: $reverdicts,
-      reviews: $reviews
+      reviews: $reviews,
+      activity: $activity
     }')
 
   if (( json )); then
@@ -347,6 +480,30 @@ EOF
       printf '  %-10s %5s %5s\n' "$pk" "$ps" "$pg"
     done < <(jq -r '.providers[] | [.kind, (.seats|tostring), (.gates|tostring)] | @tsv' <<<"$final")
   fi
+
+  # ── Seat Activity panel (ROUTE-4) — rendered FROM $final like the rest ───
+  # n/a (not 0) marks an absent source: no traces → dispatches unknown;
+  # not a git repo → commits unknown. All-zero rows are a valid quiet herd.
+  local w_days a_seat a_disp a_comm a_last a_other a_total
+  w_days=$(jq -r '.activity.window_days' <<<"$final")
+  a_other=$(jq -r '.activity.other_commits // "n/a"' <<<"$final")
+  a_total=$(jq -r '.activity.total_commits // "n/a"' <<<"$final")
+  printf '\n  %bseat activity%s  window %sd — dispatches: lease.acquired traces · commits: git, seat-attributed = integrate records + seat trailers\n' \
+    "$BOLD" "$RESET" "$w_days"
+  if [[ "$(jq '.activity.seats | length' <<<"$final")" -gt 0 ]]; then
+    printf '  %-26s %11s %8s  %s\n' "SEAT" "DISPATCHES" "COMMITS" "LAST DISPATCH"
+    while IFS=$'\t' read -r a_seat a_disp a_comm a_last; do
+      [[ "$a_disp" == "null" ]] && a_disp="n/a"
+      [[ "$a_comm" == "null" ]] && a_comm="n/a"
+      local a_last_disp="—"
+      if [[ "$a_last" != "null" ]]; then a_last_disp=$(_status_iso "$a_last"); fi
+      printf '  %-26s %11s %8s  %s\n' "$a_seat" "$a_disp" "$a_comm" "$a_last_disp"
+    done < <(jq -r '.activity.seats[] | [.seat, (.dispatches|tostring), (.commits|tostring), (.last_dispatch_ts|tostring)] | @tsv' <<<"$final")
+  else
+    printf '  no seats on record (no seats.json, no trace events, no attributed commits in window)\n'
+  fi
+  printf '  %-26s %11s %8s\n' "other" "—" "$a_other"
+  printf '  %btotal commits in window%s %s\n' "$DIM" "$RESET" "$a_total"
 
   local rec dis extra pct
   rec=$(jq -r '.reverdicts.records' <<<"$final"); dis=$(jq -r '.reverdicts.distinct_tickets' <<<"$final")
