@@ -153,6 +153,32 @@ if not isinstance(reviewer_rounds, int) or isinstance(reviewer_rounds, bool) or 
     sys.exit("config error: reviewer.max_rounds must be an integer >= 1")
 emit('CONFIG_REVIEW_LOOP', 1 if reviewer_loop else 0)
 emit('CONFIG_REVIEW_MAX_ROUNDS', reviewer_rounds)
+# REV-FAILOVER-1 (ADR 0018): optional non-AGY failover reviewer. The value
+# names a [seats.<key>] table whose provider chain contains no "agy" — an
+# agy target shares the exhausted account and would be walled too. Strict
+# validation at parse time, not mid-dispatch: unknown seat or agy-kind
+# chain is a config error, an unset value simply disables failover (the
+# QUOTA-2 defer behavior stands).
+failover_key = reviewer.get('failover_seat', '')
+if failover_key != '':
+    if not isinstance(failover_key, str):
+        sys.exit("config error: reviewer.failover_seat must be a seat key string")
+    fseat = seats.get(failover_key)
+    if fseat is None:
+        sys.exit(f"config error: reviewer.failover_seat '{failover_key}' names no [seats.{failover_key}] table")
+    fkinds = fseat.get('kinds', None)
+    fdk = fseat.get('default_kind', None)
+    if isinstance(fkinds, list):
+        fchain = fkinds
+    elif fkinds is not None:
+        fchain = [fkinds]
+    elif fdk is not None:
+        fchain = [fdk]
+    else:
+        fchain = ['agy']
+    if 'agy' in fchain:
+        sys.exit(f"config error: reviewer.failover_seat '{failover_key}' is agy-kind — the failover reviewer must be a non-AGY seat (ADR 0018)")
+emit('CONFIG_REVIEW_FAILOVER_SEAT', failover_key)
 # Headless safety ceilings (HEADLESS-5): same strict-integer validation as
 # reviewer.max_rounds — these bound unattended retries and wall clocks, so a
 # truthy string or 0 must fail closed at binding time, not mid-run.

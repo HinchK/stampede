@@ -430,15 +430,50 @@ _agy_quota_exhausted() { # REVIEWER_SEAT → rc 0 = account exhausted
   [[ "$probe" =~ ^ok:[0-9]+s$ ]]
 }
 
+# REV-FAILOVER-1 (ADR 0018): resolve the configured non-AGY failover
+# reviewer. Prints the runtime seat name and returns 0 only when the
+# config names a bound seat whose provider chain contains no "agy" (an
+# agy target shares the exhausted account and would be walled too — the
+# kind check here is the runtime backstop behind config.sh's parse-time
+# validation, because tests and operators can inject seat bindings via
+# the environment). Unset, unbound, or agy-kind → rc 1: the caller keeps
+# QUOTA-2's defer behavior exactly. No hardcoded seat names.
+_review_failover_seat() {
+  local key="${CONFIG_REVIEW_FAILOVER_SEAT:-}" namevar kindsvar name kinds
+  [[ -n "$key" ]] || return 1
+  namevar="SEAT_NAME_${key}"
+  kindsvar="SEAT_KINDS_${key}"
+  name="${!namevar:-}"
+  kinds="${!kindsvar:-}"
+  [[ -n "$name" ]] || return 1
+  if [[ " $kinds " == *" agy "* ]]; then
+    warn "review failover: seat '${key}' is agy-kind — ignoring failover config (ADR 0018)"
+    return 1
+  fi
+  printf '%s\n' "$name"
+}
+
 # The actual reviewer dispatch, shared by the direct path, the defer path,
-# and the retry pass — one voice, one telemetry shape.
-_dispatch_reviewer() { # RSEAT TICKET SHA ROUND MAX
-  local rseat="$1" t="$2" sha="$3" r="$4" m="$5"
-  note "review loop: dispatching reviewer for #$t @ ${sha} (round ${r}/${m})"
-  worker_feedback "$rseat" "$t" "$sha" "review-r${r}" "DISPATCH: Review #${t} @ ${sha} (round ${r}/${m}). Follow your seat brief."
+# and the retry pass — one voice, one telemetry shape. MODE "failover"
+# (REV-FAILOVER-1 / ADR 0018) targets a non-reviewer seat, so the message
+# must carry the reviewer contract as a pointer: the rendered reviewer
+# brief defines the verdict anchor, evidence file, findings format, and
+# round budget; the target's own seat brief does NOT.
+_dispatch_reviewer() { # RSEAT TICKET SHA ROUND MAX [MODE]
+  local rseat="$1" t="$2" sha="$3" r="$4" m="$5" mode="${6:-primary}"
+  local msg fo="false" fsuffix=""
+  if [[ "$mode" == "failover" ]]; then
+    fo="true"
+    fsuffix=" [failover: ${rseat}]"
+    msg="REVIEW FAILOVER: Review #${t} @ ${sha} (round ${r}/${m}) — primary reviewer quota-walled. Follow the reviewer brief at ${STATE_DIR}/briefs/reviewer.md and emit its REVIEW VERDICT anchor."
+  else
+    msg="DISPATCH: Review #${t} @ ${sha} (round ${r}/${m}). Follow your seat brief."
+  fi
+  note "review loop: dispatching reviewer for #$t @ ${sha} (round ${r}/${m})${fsuffix}"
+  worker_feedback "$rseat" "$t" "$sha" "review-r${r}" "$msg"
   "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" review.dispatched "$rseat" "$t" \
-    "$(jq -cn --arg t "$t" --arg h "$sha" --arg r "$r" \
-      '{ticket:$t, sha:$h, round:($r|tonumber), summary:("review round " + $r + " dispatched for #" + $t)}')" \
+    "$(jq -cn --arg t "$t" --arg h "$sha" --arg r "$r" --arg fo "$fo" \
+      '{ticket:$t, sha:$h, round:($r|tonumber? // 0), failover:($fo == "true"), summary:((if $fo == "true" then "FAILOVER " else "" end) + "review round " + $r + " dispatched for #" + $t)}')" \
     --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
 }
 
@@ -452,17 +487,11 @@ _quota_defer_reviewer() { # TICKET SHA ROUND MAX — record the durable marker
     --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
 }
 
-# Each poll cycle, before anything else dispatches to an agy seat: still
-# exhausted → report and hold; cleared → retry ALL pending dispatches.
-_quota_retry_deferred() {
-  [[ -f "$QUOTA_DEFER_FILE" ]] || return 0
-  local rseat="${SEAT_NAME_reviewer:-reviewer}"
-  if _agy_quota_exhausted "$rseat"; then
-    note "quota: agy account still exhausted — $(wc -l < "$QUOTA_DEFER_FILE" | tr -d ' ') reviewer dispatch(es) deferred"
-    return 0
-  fi
-  local rec t sha r m
-  ok "quota: agy quota cleared — retrying deferred reviewer dispatch(es)"
+# Replay every durable marker record through _dispatch_reviewer, then
+# remove the marker. One resolution per deferred dispatch (REV-FAILOVER-1:
+# retry-to-primary on clear, or failover while walled — never both).
+_quota_drain_markers() { # SEAT MODE
+  local seat="$1" mode="$2" rec t sha r m
   while IFS= read -r rec; do
     [[ -n "$rec" ]] || continue
     t=$(jq -r '.ticket // empty' <<<"$rec" 2>/dev/null) || continue
@@ -470,9 +499,29 @@ _quota_retry_deferred() {
     r=$(jq -r '.round // empty' <<<"$rec" 2>/dev/null)
     m=$(jq -r '.max // empty' <<<"$rec" 2>/dev/null)
     [[ -n "$t" && -n "$sha" && -n "$r" && -n "$m" ]] || continue
-    _dispatch_reviewer "$rseat" "$t" "$sha" "$r" "$m"
+    _dispatch_reviewer "$seat" "$t" "$sha" "$r" "$m" "$mode"
   done < "$QUOTA_DEFER_FILE"
   rm -f "$QUOTA_DEFER_FILE"
+}
+
+# Each poll cycle, before anything else dispatches to an agy seat: still
+# exhausted → fail the backlog over to a configured non-AGY reviewer
+# (REV-FAILOVER-1 / ADR 0018) or, with none resolvable, hold; cleared →
+# retry ALL pending dispatches to the primary.
+_quota_retry_deferred() {
+  [[ -f "$QUOTA_DEFER_FILE" ]] || return 0
+  local rseat="${SEAT_NAME_reviewer:-reviewer}" fseat
+  if _agy_quota_exhausted "$rseat"; then
+    if fseat=$(_review_failover_seat); then
+      ok "quota: agy account still exhausted — failing over $(wc -l < "$QUOTA_DEFER_FILE" | tr -d ' ') deferred reviewer dispatch(es) to ${fseat}"
+      _quota_drain_markers "$fseat" failover
+    else
+      note "quota: agy account still exhausted — $(wc -l < "$QUOTA_DEFER_FILE" | tr -d ' ') reviewer dispatch(es) deferred"
+    fi
+    return 0
+  fi
+  ok "quota: agy quota cleared — retrying deferred reviewer dispatch(es)"
+  _quota_drain_markers "$rseat" primary
 }
 
 _review_directives() { # DIRECTIVES-LINES TICKET SHA
@@ -488,13 +537,19 @@ _review_directives() { # DIRECTIVES-LINES TICKET SHA
         ;;
       DISPATCH_REVIEWER)
         # d1=reviewer-seat d2=ticket d3=sha d4=round d5=max
-        local rseat="${SEAT_NAME_reviewer:-reviewer}"
-        # QUOTA-2: positive exhaustion signal on the shared agy account →
-        # defer with a durable marker; the retry pass re-fires on clear.
-        # Applies to every dispatch during the pause window, not just the
-        # first — the gate is the probe, not the marker.
+        local rseat="${SEAT_NAME_reviewer:-reviewer}" fseat
+        # QUOTA-2: a positive exhaustion signal on the shared agy account
+        # fails over to the configured non-AGY reviewer (REV-FAILOVER-1 /
+        # ADR 0018) — one reviewer per verdict, no dual-active; only when
+        # no failover resolves does the durable-marker defer remain. The
+        # gate is the probe, not the marker — it applies to every dispatch
+        # during the pause window, not just the first.
         if _agy_quota_exhausted "$rseat"; then
-          _quota_defer_reviewer "$d2" "$d3" "$d4" "$d5"
+          if fseat=$(_review_failover_seat); then
+            _dispatch_reviewer "$fseat" "$d2" "$d3" "$d4" "$d5" failover
+          else
+            _quota_defer_reviewer "$d2" "$d3" "$d4" "$d5"
+          fi
         else
           _dispatch_reviewer "$rseat" "$d2" "$d3" "$d4" "$d5"
         fi
@@ -573,6 +628,20 @@ _review_scan_verdicts() { # SEAT PANE-OUTPUT
 
     local dirs rc=0
     dirs=$(review_loop_on_review_verdict "$ticket" "$sha" "$verdict" "$STATE_DIR" 2>/dev/null) || rc=$?
+    # REV-FAILOVER-1 / ADR 0018: durably attribute which reviewer seat —
+    # primary or failover — delivered this verdict. The telemetry event
+    # below already names the seat; this writes it into reviews.json too,
+    # guarded on a successful transition so a failed state machine never
+    # gains a bare record, and never creating an entry that does not
+    # already exist.
+    if (( rc == 0 )) && [[ -f "${STATE_DIR}/reviews.json" ]] \
+      && jq --arg t "$ticket" --arg s "$seat" \
+           'if .reviews[$t] then .reviews[$t].reviewer = $s else . end' \
+           "${STATE_DIR}/reviews.json" > "${STATE_DIR}/reviews.json.tmp" 2>/dev/null; then
+      mv "${STATE_DIR}/reviews.json.tmp" "${STATE_DIR}/reviews.json"
+    else
+      rm -f "${STATE_DIR}/reviews.json.tmp"
+    fi
     "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" review.verdict "$seat" "$ticket" \
       "$(jq -cn --arg t "$ticket" --arg h "$sha" --arg v "$verdict" --arg r "$round" --arg f "$fc" \
         '($r|tonumber? // 0) as $rn | ($f|tonumber? // 0) as $fn |

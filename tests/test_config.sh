@@ -185,6 +185,38 @@ check "6e" "shipped config: reviewer loop ON by default (PROVE-2)" \
 check "6e2" "shipped config: reviewer seat in roster (PROVE-2)" \
   '[[ $(config_get_seats "$SHIPPED") == *reviewer* ]]'
 
+# ── 6r. reviewer failover seat binding (REV-FAILOVER-1 / ADR 0018) ─────────
+C6R="$TEST_DIR/reviewer-failover.toml"
+cat > "$C6R" <<'TOML'
+[reviewer]
+loop = true
+
+[seats.alpha]
+name = "alpha"
+default_kind = "agy"
+
+[seats.fo1]
+name = "fo-1"
+kinds = ["opencode", "claude"]
+
+[seats.fo2]
+name = "fo-2"
+default_kind = "agy"
+TOML
+check "6r" "unset failover_seat → CONFIG_REVIEW_FAILOVER_SEAT empty" \
+  'eval "$(config_dump_env x "$C6R")" && [[ -z ${CONFIG_REVIEW_FAILOVER_SEAT:-} ]]'
+sed 's/^loop = true$/loop = true\nfailover_seat = "fo1"/' "$C6R" > "$C6R.tmp" && mv "$C6R.tmp" "$C6R"
+check "6r2" "failover_seat names a non-AGY seat → bound" \
+  'eval "$(config_dump_env x "$C6R")" && [[ $CONFIG_REVIEW_FAILOVER_SEAT == "fo1" ]]'
+sed 's/^failover_seat = "fo1"$/failover_seat = "fo2"/' "$C6R" > "$C6R.tmp" && mv "$C6R.tmp" "$C6R"
+check "6r3" "failover_seat naming an agy-kind seat → parse-time config error" \
+  '! config_dump_env x "$C6R" >/dev/null 2>&1'
+sed 's/^failover_seat = "fo2"$/failover_seat = "ghost"/' "$C6R" > "$C6R.tmp" && mv "$C6R.tmp" "$C6R"
+check "6r4" "failover_seat naming no seat table → parse-time config error" \
+  '! config_dump_env x "$C6R" >/dev/null 2>&1'
+check "6r5" "shipped config: failover bound to a non-AGY seat (arch_1)" \
+  'eval "$(config_dump_env x "$SHIPPED")" && [[ $CONFIG_REVIEW_FAILOVER_SEAT == "arch_1" ]]'
+
 # ── 7. headless safety ceilings (HEADLESS-5) ───────────────────────────────
 C7="$TEST_DIR/headless-defaults.toml"
 cat > "$C7" <<'TOML'

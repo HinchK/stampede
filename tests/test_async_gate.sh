@@ -544,7 +544,11 @@ unset HEADLESS_MODE
 # fresh greens during the pause defer too; the retry pass fires all of them
 # the moment the probe clears; a fresh dispatch after clear goes straight
 # through. Review loop ON, reviewer seat = seat-r (stub serves QUOTA_OUT).
+# Sourcing the supervisor evals the shipped swarm.config.toml, which now
+# binds reviewer.failover_seat by default (REV-FAILOVER-1) — §16 pins the
+# NO-FAILOVER contract, so the binding is unset here; §17 exercises it.
 export CONFIG_REVIEW_LOOP=1 CONFIG_REVIEW_MAX_ROUNDS=2 SEAT_NAME_reviewer=seat-r
+unset CONFIG_REVIEW_FAILOVER_SEAT
 VERDICT_A=""; VERDICT_B=""; VERDICT_R=""
 export QUOTA_OUT='⚠ Individual quota reached. Please upgrade your subscription. Resets in 10m.'
 DEFER="$STATE/quota-deferred.jsonl"
@@ -661,6 +665,125 @@ rc=$?
   && assert_ok 16p "HERDR_ENV unset: no notification, defer seam rc unchanged (0)" \
   || assert_bad 16p "notif='$(cat "$NOTIF")' rc=$rc"
 export HERDR_ENV=1   # restore for any trailing assertions in this pane
+
+# ── 17: non-AGY reviewer failover on quota exhaustion (REV-FAILOVER-1) ────
+# ADR 0018: with a failover seat configured (CONFIG_REVIEW_FAILOVER_SEAT
+# naming a bound non-AGY seat), an exhausted agy account routes reviewer
+# dispatch to the failover seat instead of deferring — one reviewer per
+# verdict, no dual-active; the failover seat's verdict drives the same
+# REV-1..5 state machine and is attributed in reviews.json + telemetry; the
+# account clearing returns dispatch to the primary; deferred markers fail
+# over (never both); an agy-kind or unset failover keeps QUOTA-2's defer.
+export CONFIG_REVIEW_LOOP=1 CONFIG_REVIEW_MAX_ROUNDS=2 SEAT_NAME_reviewer=seat-r
+export QUOTA_OUT='⚠ Individual quota reached. Please upgrade your subscription. Resets in 10m.'
+CONFIG_REVIEW_FAILOVER_SEAT=arch_1 SEAT_NAME_arch_1=seat-f1 SEAT_KINDS_arch_1="opencode claude"
+export CONFIG_REVIEW_FAILOVER_SEAT SEAT_NAME_arch_1 SEAT_KINDS_arch_1
+VERDICT_A=""; VERDICT_B=""; VERDICT_R=""; VERDICT_F=""
+EXPECTED_SEATS+=(seat-f1)
+herdr() {
+  if [[ "${1:-}" == "notification" ]]; then
+    [[ "${2:-}" == "--help" ]] && return "${NOTIF_PROBE_RC:-0}"
+    if [[ "${2:-}" == "show" ]]; then printf '%s || %s\n' "$3" "$5" >> "$NOTIF" 2>/dev/null; return 0; fi
+    return 0
+  fi
+  if [[ "${1:-}" == "agent" && "${2:-}" == "read" ]]; then
+    printf 'read %s\n' "$3" >> "$READS"
+    [[ "${3:-}" == "seat-a" && -n "$VERDICT_A" ]] && printf '%s\n' "$VERDICT_A"
+    [[ "${3:-}" == "seat-b" && -n "$VERDICT_B" ]] && printf '%s\n' "$VERDICT_B"
+    [[ "${3:-}" == "seat-r" && -n "$VERDICT_R" ]] && printf '%s\n' "$VERDICT_R"
+    [[ "${3:-}" == "seat-r" && -n "${QUOTA_OUT:-}" ]] && printf '%s\n' "$QUOTA_OUT"
+    [[ "${3:-}" == "seat-f1" && -n "$VERDICT_F" ]] && printf '%s\n' "$VERDICT_F"
+  fi
+  if [[ "${1:-}" == "agent" && "${2:-}" == "prompt" ]]; then
+    printf '%s :: %s\n' "$3" "$4" >> "$PROMPTS"
+  fi
+  return 0
+}
+
+# [17a] fresh green during exhaustion + failover → dispatched to the
+# failover seat (contract pointer in message), primary untouched, no marker
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m rf1
+SHA_RF1=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #RF-1 $SHA_RF1"
+: > "$PROMPTS"; rm -f "$DEFER"
+harvest_verdicts >/dev/null 2>&1; sleep 0.6; gate_reap >/dev/null 2>&1; sleep 0.5
+grep -q "seat-f1 :: REVIEW FAILOVER: Review #RF-1 @ ${SHA_RF1} (round 1/2)" "$PROMPTS" \
+  && grep -q "briefs/reviewer.md" "$PROMPTS" \
+  && assert_ok 17a "exhausted + failover configured: dispatch routes to failover seat with brief pointer" \
+  || assert_bad 17a "failover dispatch missing: $(cat "$PROMPTS")"
+! grep -q "seat-r :: " "$PROMPTS" \
+  && assert_ok 17a2 "primary reviewer NOT prompted during failover" || assert_bad 17a2 "primary prompted too"
+[[ ! -f "$DEFER" ]] \
+  && assert_ok 17a3 "no defer marker when failover serves the dispatch" || assert_bad 17a3 "marker written despite failover"
+[[ "$(grep -cE '(seat-r|seat-f1) :: (DISPATCH: Review|REVIEW FAILOVER)' "$PROMPTS")" -eq 1 ]] \
+  && assert_ok 17b "no dual-active: exactly one reviewer dispatch for the verdict" \
+  || assert_bad 17b "reviewer dispatch count: $(grep -cE '(seat-r|seat-f1) :: (DISPATCH: Review|REVIEW FAILOVER)' "$PROMPTS")"
+
+# [17c] the failover seat's verdict drives the same REV-1..5 machine and is
+# attributed (reviews.json .reviewer + telemetry agent)
+VERDICT_F="REVIEW VERDICT #RF-1 $SHA_RF1 PASS"
+harvest_verdicts >/dev/null 2>&1
+[[ "$(rstate RF-1)" == "review_passed" ]] \
+  && assert_ok 17c "failover verdict transitions review_passed" || assert_bad 17c "state $(rstate RF-1)"
+[[ "$(qcount RF-1 "$SHA_RF1")" -eq 1 ]] \
+  && assert_ok 17c2 "failover PASS enqueues to arbiter (same machine)" || assert_bad 17c2 "enqueue n=$(qcount RF-1 "$SHA_RF1")"
+[[ "$(jq -r --arg t RF-1 '.reviews[$t].reviewer // "none"' "$STATE/reviews.json" 2>/dev/null)" == "seat-f1" ]] \
+  && assert_ok 17c3 "reviews.json attributes the verdict to the failover seat" \
+  || assert_bad 17c3 "reviewer attribution missing"
+grep -q '"agent": "seat-f1"' "$STATE"/traces/*.jsonl 2>/dev/null \
+  && grep -q '"failover": true' "$STATE"/traces/*.jsonl 2>/dev/null \
+  && assert_ok 17c4 "telemetry names the failover seat and failover flag" \
+  || assert_bad 17c4 "failover telemetry missing"
+
+# [17d] account clears → dispatch returns to the primary
+unset QUOTA_OUT
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m rf2
+SHA_RF2=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #RF-2 $SHA_RF2"; VERDICT_F=""
+: > "$PROMPTS"
+harvest_verdicts >/dev/null 2>&1; sleep 0.6; gate_reap >/dev/null 2>&1; sleep 0.5
+grep -q "seat-r :: DISPATCH: Review #RF-2 @ ${SHA_RF2} (round 1/2)" "$PROMPTS" \
+  && assert_ok 17d "quota cleared: dispatch returns to the primary reviewer" \
+  || assert_bad 17d "primary dispatch missing: $(cat "$PROMPTS")"
+! grep -q "seat-f1 :: " "$PROMPTS" \
+  && assert_ok 17d2 "failover seat idle after account clears" || assert_bad 17d2 "failover still serving"
+
+# [17e] markers created WITHOUT failover fail over when one appears —
+# exactly one resolution per deferred verdict (ADR 0018: never both)
+unset CONFIG_REVIEW_FAILOVER_SEAT
+export QUOTA_OUT='⚠ Individual quota reached. Please upgrade your subscription. Resets in 10m.'
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m rf3
+SHA_RF3=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #RF-3 $SHA_RF3"
+: > "$PROMPTS"; rm -f "$DEFER"
+harvest_verdicts >/dev/null 2>&1; sleep 0.6; gate_reap >/dev/null 2>&1; sleep 0.5
+[[ -f "$DEFER" ]] && ! grep -q "seat-f1 :: " "$PROMPTS" \
+  && assert_ok 17e "no failover configured: QUOTA-2 defer stands (marker written)" \
+  || assert_bad 17e "defer-without-failover broken: $(cat "$DEFER" 2>/dev/null)"
+export CONFIG_REVIEW_FAILOVER_SEAT=arch_1
+: > "$PROMPTS"
+_quota_retry_deferred >/dev/null 2>&1
+grep -q "seat-f1 :: REVIEW FAILOVER: Review #RF-3 @ ${SHA_RF3}" "$PROMPTS" \
+  && [[ ! -f "$DEFER" ]] && ! grep -q "seat-r :: " "$PROMPTS" \
+  && assert_ok 17e2 "retry pass fails deferred markers over and drains them (primary untouched)" \
+  || assert_bad 17e2 "marker failover: $(cat "$PROMPTS") / marker=$(cat "$DEFER" 2>/dev/null)"
+
+# [17f] an agy-kind failover target is refused at resolution time (config
+# has a parse-time guard; this is the runtime backstop) → defer stands
+SEAT_KINDS_arch_1="agy"; export SEAT_KINDS_arch_1
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m rf4
+SHA_RF4=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #RF-4 $SHA_RF4"
+: > "$PROMPTS"; rm -f "$DEFER"
+harvest_verdicts >/dev/null 2>&1; sleep 0.6; gate_reap >/dev/null 2>&1; sleep 0.5
+[[ -f "$DEFER" ]] && ! grep -q "seat-f1 :: " "$PROMPTS" && ! grep -q "seat-r :: " "$PROMPTS" \
+  && assert_ok 17f "agy-kind failover target refused — defer stands" \
+  || assert_bad 17f "agy failover not refused: $(cat "$PROMPTS")"
+
+# §17 cleanup: restore the failover-free default for anything trailing
+SEAT_KINDS_arch_1="opencode claude"; export SEAT_KINDS_arch_1
+unset CONFIG_REVIEW_FAILOVER_SEAT QUOTA_OUT VERDICT_F
+rm -f "$DEFER"
 
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
