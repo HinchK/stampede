@@ -6,6 +6,7 @@
 # empty, never a localhost default. Scratch configs; cleans up after itself.
 #
 # shellcheck disable=SC2016  # assertion bodies are single-quoted eval strings
+# shellcheck disable=SC2034  # harness vars (SHIPPED) are consumed inside those eval strings
 set -euo pipefail
 
 TEST_DIR=$(mktemp -d /tmp/test-cfg-$$-XXXX)

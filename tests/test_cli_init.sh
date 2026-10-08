@@ -6,6 +6,8 @@
 # case), and acceptance through the REAL parser — every generated config
 # must satisfy config_dump_env, because 'never writes invalid config' is
 # the whole point of the command.
+#
+# shellcheck disable=SC2154  # SEAT_*/CONFIG_* vars are assigned dynamically by `eval "$(config_dump_env …)"` and only then asserted
 
 set -u
 PASS=0; FAIL=0

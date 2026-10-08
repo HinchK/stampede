@@ -4,6 +4,7 @@
 # for claude/opencode/agy), no network, no Herdr daemon, no PTY anywhere.
 #
 # shellcheck disable=SC2016  # assertion bodies are single-quoted eval strings
+# shellcheck disable=SC2034  # harness vars (out_line/REC/zchild/tchild) are consumed inside those eval strings
 set -euo pipefail
 
 TEST_DIR=$(mktemp -d /tmp/test-headless-$$-XXXX)
@@ -15,6 +16,7 @@ FAIL=0
 cleanup() { rm -rf "$TEST_DIR"; }
 # preserve the failing status through cleanup (bash 3.2 EXIT-trap quirk:
 # a plain trap body can re-report success and hide a red run)
+rc=0
 trap 'rc=$?; rm -rf "$TEST_DIR"; exit $rc' EXIT
 
 ok()   { printf '  ✓ [%s] %s\n' "$1" "${2:-}"; PASS=$((PASS + 1)); }

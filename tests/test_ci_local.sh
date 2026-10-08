@@ -5,6 +5,7 @@
 # real `make check` never runs.
 #
 # shellcheck disable=SC2016  # assertion bodies are single-quoted eval strings
+# shellcheck disable=SC2034  # harness vars (OUT/RC/ERR) are consumed inside those eval strings
 set -euo pipefail
 
 TEST_DIR=$(mktemp -d /tmp/test-cilocal-$$-XXXX)
@@ -117,6 +118,66 @@ check 3b  "unknown flag rejected non-zero" '[[ $RC -ne 0 ]]'
 run "$FX" --strict --extra
 check 3c  "too many args rejected" '[[ $RC -ne 0 ]]'
 
+# ── 5. --gnu-sim ladder (CI-PARITY-1) ───────────────────────────────────────
+# Runtime stubs: `info` rc scripted per runtime (default 1 = daemon absent, so
+# absence is hermetic even on hosts with a live docker in /usr/bin); `run`
+# logs argv to GNU_ARGS and exits GNU_RC (default 0). The local make/shellcheck
+# stubs are reused from $BIN.
+BIN_RT="$TEST_DIR/bin-rt"; mkdir -p "$BIN_RT"
+cp "$BIN/make" "$BIN_RT/make"
+cp "$BIN/shellcheck" "$BIN_RT/shellcheck"
+printf '#!/bin/sh\nif [ "$1" = info ]; then [ -f "%s/DOCKER_INFO_RC" ] && exit "$(cat "%s/DOCKER_INFO_RC")"; exit 1; fi\nif [ "$1" = run ]; then printf '"'"'%%s\\n'"'"' "$*" >> "%s/GNU_ARGS"; [ -f "%s/GNU_RC" ] && exit "$(cat "%s/GNU_RC")"; exit 0; fi\nexit 0\n' \
+  "$STATE" "$STATE" "$STATE" "$STATE" "$STATE" > "$BIN_RT/docker"
+printf '#!/bin/sh\nif [ "$1" = info ]; then [ -f "%s/PODMAN_INFO_RC" ] && exit "$(cat "%s/PODMAN_INFO_RC")"; exit 1; fi\nif [ "$1" = run ]; then printf '"'"'%%s\\n'"'"' "$*" >> "%s/GNU_ARGS"; [ -f "%s/GNU_RC" ] && exit "$(cat "%s/GNU_RC")"; exit 0; fi\nexit 0\n' \
+  "$STATE" "$STATE" "$STATE" "$STATE" "$STATE" > "$BIN_RT/podman"
+chmod +x "$BIN_RT/docker" "$BIN_RT/podman"
+gnu_reset() { : > "$STATE/GNU_ARGS"; : > "$STATE/MAKE_ARGS"; rm -f "$STATE/GNU_RC" "$STATE/MAKE_RC" "$STATE/DOCKER_INFO_RC" "$STATE/PODMAN_INFO_RC"; }
+
+# 5a runtime present: container run IS the gate; local make never runs
+gnu_reset; printf '0\n' > "$STATE/DOCKER_INFO_RC"
+OUT=$(PATH="$BIN_RT:/usr/bin:/bin" "$FX" --gnu-sim 2>"$STATE/err") && RC=0 || RC=$?
+ERR=$(cat "$STATE/err")
+check 5a  "gnu-sim: docker present → gate runs in container, exits 0" \
+  '[[ $RC -eq 0 ]] && grep -q "GNU-sim: gate runs under docker (ubuntu:24.04)" <<<"$OUT"'
+check 5b  "gnu-sim: exact container argv (mount, workdir, image, make check)" \
+  '[[ $(cat "$STATE/GNU_ARGS") == "run --rm -v '"$FR"':/work -w /work ubuntu:24.04 make check" ]]'
+check 5c  "gnu-sim: local make check skipped when the runtime is present" \
+  '[[ ! -s "$STATE/MAKE_ARGS" ]]'
+# 5d container failure propagates verbatim
+gnu_reset; printf '0\n' > "$STATE/DOCKER_INFO_RC"; printf '7\n' > "$STATE/GNU_RC"
+OUT=$(PATH="$BIN_RT:/usr/bin:/bin" "$FX" --gnu-sim 2>/dev/null) && RC=0 || RC=$?
+check 5d  "gnu-sim: container gate failure propagates verbatim (rc 7)" '[[ $RC -eq 7 ]]'
+# 5e image override via env
+gnu_reset; printf '0\n' > "$STATE/DOCKER_INFO_RC"
+OUT=$(CI_GNU_SIM_IMAGE=debian:stable PATH="$BIN_RT:/usr/bin:/bin" "$FX" --gnu-sim 2>/dev/null) && RC=0 || RC=$?
+check 5e  "gnu-sim: CI_GNU_SIM_IMAGE overrides the default image" \
+  'grep -q "debian:stable" "$STATE/GNU_ARGS"'
+# 5f runtime absent: explicit parity-unproven warning, local gate authoritative
+gnu_reset
+OUT=$(PATH="$BIN_RT:/usr/bin:/bin" "$FX" --gnu-sim 2>"$STATE/err") && RC=0 || RC=$?
+ERR=$(cat "$STATE/err")
+check 5f  "gnu-sim: no runtime → warn unproven, local gate green, exit 0" \
+  '[[ $RC -eq 0 ]] && grep -q "GNU parity unproven — no container runtime found (tried: docker, podman)" <<<"$ERR"'
+check 5g  "gnu-sim: degraded mode runs the LOCAL make check" \
+  '[[ $(tail -n1 "$STATE/MAKE_ARGS") == "-C '"$FR"' check" ]]'
+# 5h runtime absent + strict: parity unproven fails after a green local gate
+gnu_reset
+OUT=$(PATH="$BIN_RT:/usr/bin:/bin" "$FX" --gnu-sim --strict 2>"$STATE/err") && RC=0 || RC=$?
+ERR=$(cat "$STATE/err")
+check 5h  "gnu-sim: no runtime + --strict → exit 1, unproven named" \
+  '[[ $RC -eq 1 ]] && grep -q -- "--strict: GNU parity unproven" <<<"$ERR"'
+# 5i podman fallback when docker's daemon is absent
+gnu_reset; printf '0\n' > "$STATE/PODMAN_INFO_RC"
+OUT=$(PATH="$BIN_RT:/usr/bin:/bin" "$FX" --gnu-sim 2>/dev/null) && RC=0 || RC=$?
+check 5i  "gnu-sim: podman probed after docker; runs under podman" \
+  '[[ $RC -eq 0 ]] && grep -q "gate runs under podman" <<<"$OUT"'
+# 5j strict + runtime present + pin parity ok → exit 0 (GNU proven by the run)
+gnu_reset; printf '0\n' > "$STATE/DOCKER_INFO_RC"
+OUT=$(PATH="$BIN_RT:/usr/bin:/bin" "$FX" --gnu-sim --strict 2>"$STATE/err") && RC=0 || RC=$?
+check 5j  "gnu-sim: runtime present + strict + pin ok → exit 0" '[[ $RC -eq 0 ]]'
+# 5k flag surfaces in help
+run "$FX" --help
+check 5k  "--help documents --gnu-sim" 'grep -q -- "--gnu-sim" <<<"$OUT"'
 # ── 4. Real-repo integration (read-only) ───────────────────────────────────
 REAL_PIN=$(sed -nE 's/^[[:space:]]*SC_VERSION:[[:space:]]*"?([^"[:space:]]+)"?/\1/p' \
   "$SCRIPT_DIR/.github/workflows/ci.yml" | head -n1)

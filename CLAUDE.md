@@ -21,7 +21,7 @@ make test                              # all suites under /bin/bash (bash 3.2 is
 make lint                              # shellcheck 0-warning bar + bash -n + py_compile
 # CI parity (DOG-18): `make check` IS the gate — reach for it first; ci-local only adds the pin-parity signal
 scripts/ci-local.sh [--strict]          # runs make check (rc authoritative) + warns when local shellcheck != CI's pinned SC_VERSION (--strict: exit 1 on unproven parity)
-# Suites — 20 as of this writing (HERDR-4); re-verify with `ls tests/*.sh | wc -l`
+# Suites — 21 as of this writing (CI-PARITY-1); re-verify with `ls tests/*.sh | wc -l`
 # (each builds an ephemeral scratch git repo under /tmp and cleans up after itself.
 #  Per-suite assertion counts are deliberately omitted — they drift fastest; the
 #  suite's own summary line prints the live count.)

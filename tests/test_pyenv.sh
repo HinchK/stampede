@@ -5,6 +5,7 @@
 # never a ModuleNotFoundError traceback). Scratch dirs; cleans up after itself.
 #
 # shellcheck disable=SC2016  # assertion bodies are single-quoted eval strings
+# shellcheck disable=SC2034  # harness vars (OUT/ERR) are consumed inside those eval strings
 set -euo pipefail
 
 TEST_DIR=$(mktemp -d /tmp/test-pyenv-$$-XXXX)

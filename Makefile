@@ -7,7 +7,14 @@
 
 SHELL   := /bin/bash
 TESTS   := $(sort $(wildcard tests/test_*.sh))
-LINT_SH := bin/stampede herdr-loop-swarm.sh loop-bot-herd.sh $(wildcard lib/*.sh) $(wildcard lib/cli/*.sh)
+# Two lint tiers (CI-PARITY-1): production shell keeps its de-facto strict bar
+# (0 findings at ANY severity — it has been style-clean since PROVE-6); test
+# suites are held to the stated repo bar, 0 WARNINGS, because their assertion
+# idiom legitimately carries info-level notes (SC2015 ok/bad one-liners,
+# SC2016 single-quoted eval bodies, SC2329 stubs invoked indirectly). That
+# baseline is documented here so the split is a decision, not an accident.
+LINT_SH      := bin/stampede herdr-loop-swarm.sh loop-bot-herd.sh $(wildcard lib/*.sh) $(wildcard lib/*/*.sh) $(wildcard scripts/*.sh)
+LINT_TESTS_SH := $(wildcard tests/*.sh)
 
 .PHONY: test lint check version-check
 
@@ -41,9 +48,11 @@ lint:
 	@set -e; \
 	PYTHON_BIN=$$($(SHELL) lib/pyenv.sh); \
 	shellcheck $(LINT_SH); \
-	for f in $(LINT_SH); do bash -n "$$f"; done; \
+	shellcheck --severity=warning $(LINT_TESTS_SH); \
+	for f in $(LINT_SH) $(LINT_TESTS_SH); do bash -n "$$f"; done; \
 	"$$PYTHON_BIN" -m py_compile lib/telemetry.py; \
-	printf 'Lint clean (%d shell files)\n' "$(words $(LINT_SH))"
+	printf 'Lint clean (%d shell files: %d strict, %d warnings-bar)\n' \
+	  "$$(($(words $(LINT_SH)) + $(words $(LINT_TESTS_SH))))" "$(words $(LINT_SH))" "$(words $(LINT_TESTS_SH))"
 
 # Everything CI (or a worker's Suite Gate) should run before a verdict.
 check: lint test
