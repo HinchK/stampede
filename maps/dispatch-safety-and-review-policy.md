@@ -58,8 +58,11 @@ tight enough in grilling to ticket now:
 | **FALLBACK-1** | arch-1-hinchk-stampede | **resolved** (b054afc) | — | Standby orchestrator seat: quota-triggered, single-command takeover and stand-down |
 | **CI-FIX-3** | arch-1-hinchk-stampede | **resolved** (564bde7) | — | test_standby uses BSD 'sed -i ""' — fails on ubuntu CI, main red again after FALLBACK-1 |
 | **REV-07** | — (decision, unclaimed) | backlog | — | Decide multi-reviewer quorum policy — build, or accepted-limit ADR; needs its own grilling session |
+| **REV-JQ-1** | arch (unclaimed) | backlog | — | Review lane jq --argjson error on unquoted or empty findings count |
+| **TEST-PATH-1** | arch (unclaimed) | backlog | — | Hermeticize tests/test_profile.sh:78 PATH against runner tool shadow hazard |
+| **INTEG-REC-1** | arch (unclaimed) | backlog | — | Manual / fast-forward integration path emits durable session verdict record |
 
-All five implementation tickets (`QUOTA-3`, `QUOTA-4`, `REV-06`, `FALLBACK-1`, `CI-FIX-3`) are resolved. `REV-07` (quorum decision) remains on backlog.
+All five implementation tickets (`QUOTA-3`, `QUOTA-4`, `REV-06`, `FALLBACK-1`, `CI-FIX-3`) are resolved. `REV-07` (quorum decision), `REV-JQ-1`, `TEST-PATH-1`, and `INTEG-REC-1` remain on backlog.
 
 ## Not yet specified
 
