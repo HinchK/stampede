@@ -108,7 +108,8 @@ else
 fi
 
 # [2] enabled + wall clear + real looper live → refuse without --force
-sed -i '' 's/^enabled = false$/enabled = true/' "$CFG"
+# (portable edit — CI-FIX-3: no `sed -i`; BSD and GNU sed disagree on -i)
+sed 's/^enabled = false$/enabled = true/' "$CFG" > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
 out=$(bash "$S" up "$T" 2>&1); rc=$?
 [[ "$rc" -ne 0 && "$out" == *"refusing"*"--force"* ]] \
   && ok 2 "clear quota + live looper: up refuses, names --force" || bad 2 "rc=$rc out=$out"
