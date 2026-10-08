@@ -89,13 +89,26 @@ _arb_telemetry() { # EVENT_TYPE TICKET SEAT SHA PAYLOAD_JSON
 # record, stalling ROUTE-5 docs sweeps on their green-verdict precondition.
 # The sha is canonicalised to its full 40-char form (the same boundary rule
 # as REVIEW-SHA-1) so the record matches the supervisor's harvest-time form.
-_arb_verdict_record() { # TICKET SEAT SHA
-  local t="$1" seat="$2" sha="$3" full
+# HASH-1: the row carries the arbiter's host + pid, and — when the combined
+# tree was actually suite-gated — a sha256 over the gate-log bytes, binding
+# the green claim to its evidence.
+_arb_verdict_record() { # TICKET SEAT SHA [GATE_LOG]
+  local t="$1" seat="$2" sha="$3" gate_log="${4:-}"
+  local full
   full=$(git -C "$ARB_REPO" rev-parse "${sha}^{commit}") || return 1
   mkdir -p "$ARB_STATE"
+  local extra="{}" d=""
+  d=$(evidence_sha256 "$gate_log") || d=""
+  if [[ -n "$d" ]]; then
+    extra=$(jq -cn --arg host "$(evidence_host)" --argjson pid "$$" --arg d "$d" \
+      '{host: $host, pid: $pid, gate_log_sha256: $d}')
+  else
+    extra=$(jq -cn --arg host "$(evidence_host)" --argjson pid "$$" '{host: $host, pid: $pid}')
+  fi
   jq -cn --argjson ts "$(date +%s)" --arg t "$t" --arg seat "$seat" --arg sha "$full" \
+    --argjson extra "$extra" \
     '{ts: $ts, ticket: $t, sha: $sha, seat: $seat, suite: "green", exit_code: 0,
-      verdict: ("INTEGRATED #" + $t + " " + $sha)}' \
+      verdict: ("INTEGRATED #" + $t + " " + $sha)} + $extra' \
     >> "${ARB_STATE}/session-verdicts.jsonl"
 }
 
@@ -263,6 +276,7 @@ _arb_integrate() { # TICKET SEAT SHA I0
   fi
 
   # 2. pre-gate the combined tree (arbiter TMPDIR; log kept for diagnosis)
+  local gate_log=""   # HASH-1: bound to the verdict record when a gate ran
   if _arb_cmd_runnable; then
     # The bound resolves BEFORE the gate runs. Without a timeout(1) the gate
     # exits 127, which this function used to record as integration_red —
@@ -276,7 +290,7 @@ _arb_integrate() { # TICKET SEAT SHA I0
       return 1
     fi
     local gate_dir="${ARB_STATE}/gate-logs"
-    local gate_log="${gate_dir}/arbiter-${ticket}-${sha:0:7}.log"
+    gate_log="${gate_dir}/arbiter-${ticket}-${sha:0:7}.log"
     mkdir -p "$gate_dir" "${ARB_STATE}/arbiter-tmp"
     if ! (cd "$ARB_WT" && TMPDIR="${ARB_STATE}/arbiter-tmp" \
           "$TIMEOUT_BIN" "${SUITE_TIMEOUT_S:-300}" sh -c "$TEST_CMD") >"$gate_log" 2>&1; then
@@ -308,7 +322,7 @@ _arb_integrate() { # TICKET SEAT SHA I0
     "{integration_before: \"${i0}\", merge_sha: \"${candidate}\"}"
   # INTEG-REC-1: the passing gate must be visible to the ROUTE-5 docs sweep
   # even when no supervisor harvest ever ran for this (ticket, sha).
-  _arb_verdict_record "$ticket" "$seat" "$sha"
+  _arb_verdict_record "$ticket" "$seat" "$sha" "$gate_log"
   _arb_telemetry arbiter.integrated "$ticket" "$seat" "$sha" \
     "$(jq -cn --arg m "$candidate" --arg b "$i0" \
        '{summary:("integrated @ " + $m[0:7]), merge_sha: $m, integration_before: $b}')"

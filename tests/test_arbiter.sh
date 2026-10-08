@@ -146,6 +146,27 @@ check "verdict record carries the canonical full 40-char sha" \
 check "canonical sha equals the committed full sha" \
   '[[ $(jq -r -s --arg t 214 "[.[] | select((.ticket|tostring) == \$t and .suite == \"green\")] | .[0].sha" "$SV") == "$SHA_N" ]]'
 
+# ── 2d. HASH-1: evidence hash + host/pid on integration verdict rows ──────
+check "#201 verdict row carries host (non-empty) and numeric pid" \
+  'jq -e -s --arg t 201 "[.[] | select((.ticket|tostring) == \$t and .suite == \"green\")] | .[0] | (.host | type == \"string\" and length > 0) and (.pid | type == \"number\")" "$SV" >/dev/null'
+EXPECT_A_SHA=$(shasum -a 256 "$REPO/.herdr-swarm/gate-logs/arbiter-201-${SHA_A:0:7}.log" | awk '{print $1}')
+check "#201 gate_log_sha256 matches an independent shasum -a 256 of the gate log" \
+  '[[ $(jq -r -s --arg t 201 "[.[] | select((.ticket|tostring) == \$t and .suite == \"green\")] | .[0].gate_log_sha256 // \"none\"" "$SV") == "'"$EXPECT_A_SHA"'" ]]'
+# ungated integration (no TEST_CMD): host/pid still recorded, no hash fabricated
+git -C "$REPO" branch "swarm/ptest/seat-p" main
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wp" "swarm/ptest/seat-p"
+printf 'papa\n' > "$TEST_DIR/wp/papa.txt"
+SHA_P=$(commit_at "$TEST_DIR/wp" "seat-p work")
+TEST_CMD="" arbiter_enqueue 215 seat-p "$SHA_P" >/dev/null 2>&1
+TEST_CMD="" arbiter_drain 2>/dev/null
+ck 215 integrated "ungated integration completes (no TEST_CMD)"
+check "#215 ungated row: host/pid present, gate_log_sha256 absent (never fabricated)" \
+  'jq -e -s --arg t 215 "[.[] | select((.ticket|tostring) == \$t and .suite == \"green\")] | .[0] | (.host | type == \"string\" and length > 0) and (.pid | type == \"number\") and (.gate_log_sha256 == null)" "$SV" >/dev/null'
+# legacy rows without the fields keep parsing (HASH-1 backward compat)
+printf '{"ts": 1, "ticket": "LEG-1", "sha": "deadbeef", "seat": "s-old", "suite": "green", "exit_code": 0}\n' >> "$SV"
+check "legacy row without evidence fields reads clean via // empty" \
+  '[[ -z $(jq -r -s --arg t LEG-1 "[.[] | select(.ticket == \$t)] | .[0].gate_log_sha256 // empty" "$SV") ]] && jq -e -s --arg t LEG-1 "any(.[]; .ticket == \$t and .suite == \"green\")" "$SV" >/dev/null'
+
 # ── 3. conflict handling ───────────────────────────────────────────────────
 printf 'ALPHA-CONFLICT\n' > "$TEST_DIR/wc/alpha.txt"
 SHA_C=$(commit_at "$TEST_DIR/wc" "seat-c conflicting work")

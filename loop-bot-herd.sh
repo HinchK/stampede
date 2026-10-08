@@ -42,6 +42,22 @@ SUITE_TIMEOUT_S="${SUITE_TIMEOUT_S:-300}"
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck disable=SC1091  # dynamically resolved sibling libs
 source "$SCRIPT_DIR/lib/common.sh"
+
+# HASH-1: tamper-evident verdict rows. Every record appended to
+# $SESSION_LOG embeds the supervising host + pid; rows backed by an actual
+# gate run also embed a sha256 over that run's gate-log bytes, binding the
+# claim to its evidence. Legacy rows (no fields) keep parsing — readers use
+# `.gate_log_sha256 // empty`-style access.
+_verdict_evidence() { # [GATE_LOG] → JSON fragment for the row tail
+  local frag="" d
+  frag="\"host\": \"$(evidence_host)\", \"pid\": $$"
+  if [[ -n "${1:-}" ]]; then
+    d=$(evidence_sha256 "$1") || d=""
+    [[ -n "$d" ]] && frag+=", \"gate_log_sha256\": \"$d\""
+  fi
+  printf '%s' "$frag"
+}
+
 # shellcheck disable=SC1091  # tomllib-capable interpreter (DOG-1)
 source "$SCRIPT_DIR/lib/pyenv.sh"
 resolve_python
@@ -387,7 +403,7 @@ gate_reap() {
       fi
     fi
 
-    echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"exit_code\": $rc_val, \"log\": \"$gate_log\"}" >> "$SESSION_LOG"
+    echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"exit_code\": $rc_val, \"log\": \"$gate_log\", $(_verdict_evidence "$gate_log")}" >> "$SESSION_LOG"
     "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" suite.verdict "$seat" "$ticket" \
       "$(jq -cn --arg s "$suite_ok" --arg sha "$sha" --arg seat "$seat" --arg t "$ticket" \
         '{suite:$s, sha:$sha, summary:("suite " + $s + " @ " + $sha), details:("seat=" + $seat + " ticket=#" + $t)}')" \
@@ -741,7 +757,7 @@ worker_feedback() { # SEAT TICKET SHA TAG MESSAGE
 _headless_deadletter() { # TICKET SHA REASON
   local ticket="$1" sha="$2" reason="$3"
   bad "headless: #$ticket @ ${sha} → DEAD_LETTER — ${reason}"
-  echo "{\"ts\": $(date +%s), \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"headless\", \"suite\": \"dead_letter\", \"reason\": \"$reason\"}" >> "$SESSION_LOG"
+  echo "{\"ts\": $(date +%s), \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"headless\", \"suite\": \"dead_letter\", \"reason\": \"$reason\", $(_verdict_evidence)}" >> "$SESSION_LOG"
   dead_letter_record "$ticket" "$sha" "$reason" "$SESSION_ID"
   lease_release "$ticket" >/dev/null 2>&1 || true
   looper_notice "LOOP-BOT: #$ticket @ ${sha} moved to DEAD_LETTER (${reason}) — lease released; human evaluation required."
@@ -819,7 +835,7 @@ harvest_verdicts() {
       # object store. Fabricated/stale shas are never suite-gated.
       if ! git -C "$REPO_DIR" cat-file -e "${sha}^{commit}" 2>/dev/null; then
         warn "verdict for #$ticket @ ${sha}: commit not found in repo — skipped, human evaluation required"
-        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"skipped\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"skipped\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence)}" >> "$SESSION_LOG"
         looper_notice "LOOP-BOT: verdict for #$ticket @ ${sha} names a commit absent from the repo — do NOT retire the ticket; human evaluation required."
         continue
       fi
@@ -827,7 +843,7 @@ harvest_verdicts() {
       # worktree; a missing/mismatched one is unresolvable, never root-gated.
       if ! resolve_seat_gate "$seat"; then
         warn "verdict for #$ticket @ ${sha}: seat '$seat' gate unresolvable (isolated worktree missing or wrong branch) — NOT gated"
-        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"unresolvable\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"unresolvable\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence)}" >> "$SESSION_LOG"
         looper_notice "LOOP-BOT: verdict for #$ticket @ ${sha} from $seat could not be resolved to a gate directory (worktree missing or on the wrong branch). Do NOT retire the ticket — human evaluation required."
         continue
       fi
@@ -837,7 +853,7 @@ harvest_verdicts() {
       # Pre-condition drift: the tree must be exactly the verdict's commit.
       if ! gate_tree_matches "$GATE_DIR" "$sha"; then
         warn "verdict for #$ticket @ ${sha}: gate tree is STALE (HEAD moved or dirty/untracked files) — not gating"
-        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"stale\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"stale\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence)}" >> "$SESSION_LOG"
         if _headless_ceiling_breached "$ticket"; then
           _headless_deadletter "$ticket" "$sha" "gate tree stale (ceiling reached)"
         else
@@ -876,7 +892,7 @@ harvest_verdicts() {
         # the run regardless of exit code.
         if ! gate_tree_matches "$GATE_DIR" "$sha"; then
           suite_ok="invalidated"; bad "suite run for #$ticket @ ${sha} INVALIDATED — tree changed during the gate"
-          echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+          echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence "$gate_log")}" >> "$SESSION_LOG"
           if _headless_ceiling_breached "$ticket"; then
             _headless_deadletter "$ticket" "$sha" "tree drifted during the gate (ceiling reached)"
           else
@@ -884,10 +900,10 @@ harvest_verdicts() {
           fi
         elif [[ "$gate_rc" -eq 0 ]]; then
           suite_ok="green"; ok "suite gate GREEN for #$ticket @ ${sha} (log: $gate_log)"
-          echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+          echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence "$gate_log")}" >> "$SESSION_LOG"
         else
           suite_ok="RED"; bad "suite gate RED for #$ticket @ ${sha} — NOT filed; arch must fix before done (log: $gate_log)"
-          echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+          echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence "$gate_log")}" >> "$SESSION_LOG"
           if _headless_ceiling_breached "$ticket"; then
             _headless_deadletter "$ticket" "$sha" "suite RED — re-verdict ceiling reached"
           else
@@ -898,9 +914,9 @@ harvest_verdicts() {
       elif [[ "$(ctl_get suite_gate)" == "true" ]]; then
         # No runnable suite for this project — never fake-green, record as skipped
         warn "TEST_CMD not runnable (${TEST_CMD:-<empty>}) — recording verdict for #$ticket without suite gate"
-        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence "$gate_log")}" >> "$SESSION_LOG"
       else
-        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence)}" >> "$SESSION_LOG"
       fi
 
       # Telemetry: suite verdict event (streams live into the Ops pane)

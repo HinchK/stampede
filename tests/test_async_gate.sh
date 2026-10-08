@@ -143,6 +143,27 @@ sleep 2.5
 gate_reap >/dev/null 2>&1
 expect 1e "$(last_suite_of 301)" green "slow seat A recorded after completion"
 
+# ── 1f: HASH-1 — evidence hash + supervising host/pid on the reaped row ────
+ROW301=$(jq -c -s '[.[] | select((.ticket | tostring) == "301")] | .[0]' "$LOG")
+EXPECT_301_SHA=$(shasum -a 256 "$STATE/gate-logs/seat-a-${SHA_A:0:7}.log" | awk '{print $1}')
+[[ "$(jq -r '.gate_log_sha256 // "none"' <<<"$ROW301")" == "$EXPECT_301_SHA" ]] \
+  && assert_ok 1f1 "gate_log_sha256 matches an independent shasum -a 256 of the gate log" \
+  || assert_bad 1f1 "hash mismatch: $(jq -r '.gate_log_sha256 // "none"' <<<"$ROW301") vs $EXPECT_301_SHA"
+jq -e '(.host | type == "string" and length > 0) and (.pid | type == "number")' <<<"$ROW301" >/dev/null \
+  && assert_ok 1f2 "row carries host (non-empty) and numeric pid" \
+  || assert_bad 1f2 "host/pid: $ROW301"
+[[ "$(jq -r '.host' <<<"$ROW301")" == "$(hostname -s 2>/dev/null || printf '%s' "${HOSTNAME:-unknown}")" ]] \
+  && assert_ok 1f3 "host matches this supervising host" \
+  || assert_bad 1f3 "host: $(jq -r '.host' <<<"$ROW301")"
+[[ "$(jq -r '.pid' <<<"$ROW301")" == "$$" ]] \
+  && assert_ok 1f4 "pid is the supervising process" \
+  || assert_bad 1f4 "pid: $(jq -r '.pid' <<<"$ROW301") vs $$"
+ROW302=$(jq -c -s '[.[] | select((.ticket | tostring) == "302")] | .[0]' "$LOG")
+EXPECT_302_SHA=$(shasum -a 256 "$STATE/gate-logs/seat-b-${SHA_B:0:7}.log" | awk '{print $1}')
+[[ "$(jq -r '.gate_log_sha256 // "none"' <<<"$ROW302")" == "$EXPECT_302_SHA" ]] \
+  && assert_ok 1f5 "second seat's row independently hashed (302)" \
+  || assert_bad 1f5 "302 hash mismatch"
+
 # ── 6: one job per (ticket, sha) across passes ─────────────────────────────
 n301=$(jq -r -s '[.[] | select((.ticket | tostring) == "301")] | length' "$LOG")
 harvest_verdicts >/dev/null 2>&1   # verdict lines still visible in panes
@@ -437,6 +458,15 @@ printf 'ARCH DONE #H-3 deadbeefdeadbeef\n' > "$STATE/logs/seat-b.log"
 harvest_verdicts >/dev/null 2>&1
 [[ "$(last_suite_of H-3)" == "skipped" ]] \
   && assert_ok 14c "fabricated sha still skipped (fail-closed unchanged)" || assert_bad 14c "H-3 $(last_suite_of H-3)"
+ROWH3=$(jq -c -s '[.[] | select((.ticket | tostring) == "H-3")] | .[0]' "$LOG")
+jq -e '(.host | type == "string" and length > 0) and (.pid | type == "number") and (.gate_log_sha256 == null)' <<<"$ROWH3" >/dev/null \
+  && assert_ok 14c2 "HASH-1: skipped row carries host/pid but no gate_log_sha256 (no gate ran)" \
+  || assert_bad 14c2 "H-3 evidence fields: $ROWH3"
+# legacy rows (pre-HASH-1 shape) still parse under the same readers
+printf '{"ts": 1, "ticket": "LEG-1", "sha": "aa", "seat": "s-old", "suite": "green", "exit_code": 0}\n' >> "$LOG"
+jq -e -s --arg t LEG-1 'any(.[]; .ticket == $t and .suite == "green" and (.gate_log_sha256 == null))' "$LOG" >/dev/null \
+  && assert_ok 14c4 "HASH-1: legacy row without evidence fields reads clean (absent → null)" \
+  || assert_bad 14c4 "legacy row broke a reader"
 [[ -f "$STATE/headless-notices.log" ]] && grep -q "absent from the repo" "$STATE/headless-notices.log" \
   && assert_ok 14c2 "looper notice durably logged (no swallowed alert)" || assert_bad 14c2 "no durable notice"
 ! grep -q "looper ::" "$PROMPTS" \
