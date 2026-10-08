@@ -85,6 +85,18 @@ export REPO_DIR="$REPO"
 export STAMPEDE_CONFIG="$SCRATCH/config.toml"
 S="$REPO_ROOT/bin/stampede"
 J() { jq -e "$1"; }  # readability for assertion pipelines
+
+# STATUS-INDET-1 hermeticity: `stampede status --rich` derives seat presence
+# via `herdr pane list` at read time. This suite must never query the host's
+# real herdr — stub it for every invocation (empty pane table by default;
+# the presence section below re-scripts the stub per scenario).
+mkdir -p "$SCRATCH/herd-bin"
+cat > "$SCRATCH/herd-bin/herdr" <<'EOF'
+#!/bin/sh
+printf '{"result":{"panes":[]}}\n'
+EOF
+chmod +x "$SCRATCH/herd-bin/herdr"
+export PATH="$SCRATCH/herd-bin:$PATH"
 # NOTE: sourcing lib/pyenv.sh above arms `set -e` in this shell (the lib
 # sets it itself). Every command expected to fail is captured errexit-safe
 # (`|| rc=$?`) so one red exit cannot kill the suite silently.
@@ -304,6 +316,120 @@ cp "$R4/.herdr-swarm/seats.json" "$SCRATCH/seats.before"
 git -C "$R4" diff --quiet && git -C "$R4" diff --cached --quiet \
   && cmp -s "$SCRATCH/seats.before" "$R4/.herdr-swarm/seats.json" \
   && ok "r4: read-only — no tracked-file drift, no swarm-state writes" || bad "r4: writes detected"
+
+# ── STATUS-INDET-1: seat presence INDETERMINATE floor ──────────────────────
+# Presence is derived at read time: seats.json (the ledger) supplies pane id
+# + expected dir (worktree for isolated seats, repo root otherwise); the
+# stubbed `herdr pane list` supplies the live pane table. Only positive
+# confirmation renders present; everything else renders INDETERMINATE with
+# a basis — never a confident claim from the recorded label.
+echo "==> seat presence (STATUS-INDET-1)"
+PH="$SCRATCH/herd-bin/herdr"
+R4P=$(cd "$R4" && pwd -P)
+# isolated seat: expected dir is its WORKTREE, not the repo root
+mkdir -p "$R4/.herdr-swarm/worktrees/s3-r4"
+cat > "$R4/.herdr-swarm/seats.json" <<EOF
+{"workspace_id": "w9", "seats": [
+  {"name": "s1-r4", "kind": "opencode", "pane": "w9:p1"},
+  {"name": "s2-r4", "kind": "agy", "pane": "w9:p2"},
+  {"name": "s3-r4", "kind": "opencode", "pane": "w9:p9", "worktree_dir": "$R4/.herdr-swarm/worktrees/s3-r4", "isolated": true}
+]}
+EOF
+
+# (1) healthy: live panes, cwd exactly the expected dirs → present
+cat > "$PH" <<EOF
+#!/bin/sh
+printf '{"result":{"panes":[{"pane_id":"w9:p1","cwd":"$R4P"},{"pane_id":"w9:p2","cwd":"$R4P"},{"pane_id":"w9:p9","cwd":"$R4P/.herdr-swarm/worktrees/s3-r4"}]}}\n'
+EOF
+rc=0; pj=$("$S" status --rich --json "$R4" 2>/dev/null) || rc=$?
+[[ "$rc" == 0 ]] && ok "presence: healthy query exits 0" || bad "presence rc=$rc"
+J '.presence.status == "ok" and .presence.basis == null and .presence.source != null
+    and ([.presence.seats[] | select(.seat == "s1-r4") | .presence] | first) == "present"
+    and ([.presence.seats[] | select(.seat == "s2-r4") | .presence] | first) == "present"
+    and ([.presence.seats[] | select(.seat == "s3-r4") | .presence] | first) == "present"' <<<"$pj" \
+  && ok "presence: anchor seats present (root cwd) + isolated seat present (worktree cwd)" \
+  || bad "presence healthy: $(jq -c .presence <<<"$pj")"
+rc=0; phout=$("$S" status --rich "$R4" 2>/dev/null) || rc=$?
+printf '%s' "$phout" | grep -Eq 'w9:p1 +present' \
+  && ok "presence: human row renders present" || bad "human present row missing"
+
+# (2) cwd mismatch: pane alive but in the wrong dir (root instead of ITS worktree)
+cat > "$PH" <<EOF
+#!/bin/sh
+printf '{"result":{"panes":[{"pane_id":"w9:p1","cwd":"/definitely/elsewhere"},{"pane_id":"w9:p2","cwd":"$R4P"},{"pane_id":"w9:p9","cwd":"$R4P"}]}}\n'
+EOF
+rc=0; pj=$("$S" status --rich --json "$R4" 2>/dev/null) || rc=$?
+J '[.presence.seats[] | select(.seat == "s1-r4") | .presence] | first == "INDETERMINATE"' <<<"$pj" \
+  && ok "presence: cwd mismatch renders INDETERMINATE, not present" \
+  || bad "presence mismatch: $(jq -c '.presence.seats[] | select(.seat=="s1-r4")' <<<"$pj")"
+J "[.presence.seats[] | select(.seat == \"s1-r4\") | .basis] | first == \"cwd mismatch: pane in /definitely/elsewhere, seat expects $R4P\"" <<<"$pj" \
+  && ok "presence: mismatch basis names pane cwd and expected dir" \
+  || bad "mismatch basis: $(jq -c '.presence.seats[] | select(.seat=="s1-r4") | .basis' <<<"$pj")"
+J '[.presence.seats[] | select(.seat == "s3-r4") | .basis] | first | startswith("cwd mismatch") and contains("seat expects")' <<<"$pj" \
+  && ok "presence: pane in repo ROOT still mismatches an isolated seat (expects worktree)" \
+  || bad "s3 basis: $(jq -c '.presence.seats[] | select(.seat=="s3-r4") | .basis' <<<"$pj")"
+rc=0; phout=$("$S" status --rich "$R4" 2>/dev/null) || rc=$?
+printf '%s' "$phout" | grep -q 'INDETERMINATE (basis: cwd mismatch: pane in /definitely/elsewhere' \
+  && ok "presence: human row renders the INDETERMINATE basis" || bad "human mismatch row missing"
+
+# (3) dead pane: pane id absent from the live table
+cat > "$PH" <<EOF
+#!/bin/sh
+printf '{"result":{"panes":[{"pane_id":"w9:p1","cwd":"$R4P"},{"pane_id":"w9:p9","cwd":"$R4P/.herdr-swarm/worktrees/s3-r4"}]}}\n'
+EOF
+rc=0; pj=$("$S" status --rich --json "$R4" 2>/dev/null) || rc=$?
+J '[.presence.seats[] | select(.seat == "s2-r4") | .basis] | first == "dead pane: w9:p2 not in pane list"' <<<"$pj" \
+  && ok "presence: dead pane basis names the missing pane" \
+  || bad "dead pane basis: $(jq -c '.presence.seats[] | select(.seat=="s2-r4") | .basis' <<<"$pj")"
+
+# (4) pane query failure: herdr present but the query itself fails
+printf '#!/bin/sh\nexit 1\n' > "$PH"
+rc=0; pj=$("$S" status --rich --json "$R4" 2>/dev/null) || rc=$?
+J '.presence.status == "ok" and ([.presence.seats[] | select(.presence != "INDETERMINATE")] | length) == 0
+    and ([.presence.seats[] | .basis] | all(. == "pane query failed: herdr pane list exited rc=1"))' <<<"$pj" \
+  && ok "presence: failed pane query renders every seat INDETERMINATE (rc basis)" \
+  || bad "query-failure rows: $(jq -c '.presence.seats[] | {s:.seat,b:.basis}' <<<"$pj")"
+
+# (5) herdr not on PATH at all — probed in-process with a minimal bin that
+# cannot contain herdr regardless of what the host has installed (removing
+# the stub would expose the developer machine's real herdr: TEST-PATH-1's
+# defect class, here in the test itself).
+mkdir -p "$SCRATCH/presence-bin"
+ln -sf "$(command -v jq)" "$SCRATCH/presence-bin/jq"
+ln -sf "$(command -v cat)" "$SCRATCH/presence-bin/cat"
+rc=0; out5=$(PATH="$SCRATCH/presence-bin" "$(command -v bash)" -c "
+  source '$REPO_ROOT/lib/cli/stampede-status.sh'
+  _status_presence_json '$R4/.herdr-swarm' '$R4'
+" 2>/dev/null) || rc=$?
+[[ "$rc" == 0 ]] \
+  && J '.status == "ok" and ([.seats[] | .basis] | all(. == "pane query failed: herdr not on PATH"))' <<<"$out5" \
+  && ok "presence: absent herdr renders INDETERMINATE (never confidently absent)" \
+  || bad "no-herdr rows: $(jq -c '.seats[] | .basis' <<<"$out5")"
+cat > "$PH" <<'EOF'
+#!/bin/sh
+printf '{"result":{"panes":[]}}\n'
+EOF
+
+# (6) missing seats.json: panel-level INDETERMINATE, not an empty panel
+mv "$R4/.herdr-swarm/seats.json" "$SCRATCH/seats.parked"
+rc=0; pj=$("$S" status --rich --json "$R4" 2>/dev/null) || rc=$?
+J '.presence.status == "indeterminate" and .presence.basis == "seats.json unreadable: missing" and .presence.seats == []' <<<"$pj" \
+  && ok "presence: missing seats.json → INDETERMINATE (basis: seats.json unreadable: missing)" \
+  || bad "missing ledger: $(jq -c '{s:.presence.status,b:.presence.basis}' <<<"$pj")"
+rc=0; phout=$("$S" status --rich "$R4" 2>/dev/null) || rc=$?
+printf '%s' "$phout" | grep -q 'seats: INDETERMINATE (basis: seats.json unreadable: missing)' \
+  && ok "presence: human panel renders the seats.json INDETERMINATE line" || bad "human missing-ledger line"
+
+# (7) corrupt seats.json: same floor, invalid-json basis
+printf 'this is not json\n' > "$R4/.herdr-swarm/seats.json"
+rc=0; pj=$("$S" status --rich --json "$R4" 2>/dev/null) || rc=$?
+J '.presence.status == "indeterminate" and .presence.basis == "seats.json unreadable: invalid json"' <<<"$pj" \
+  && ok "presence: corrupt seats.json → INDETERMINATE (basis: invalid json)" \
+  || bad "corrupt ledger: $(jq -c '{s:.presence.status,b:.presence.basis}' <<<"$pj")"
+rc=0; phout=$("$S" status --rich "$R4" 2>/dev/null) || rc=$?
+printf '%s' "$phout" | grep -q 'seats: INDETERMINATE (basis: seats.json unreadable: invalid json)' \
+  && ok "presence: human panel renders the invalid-json INDETERMINATE line" || bad "human corrupt-ledger line"
+mv "$SCRATCH/seats.parked" "$R4/.herdr-swarm/seats.json"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

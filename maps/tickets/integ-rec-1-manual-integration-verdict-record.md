@@ -5,7 +5,7 @@ type: wayfinder:task
 status: resolved
 assignee: arch
 owns: lib/arbiter.sh
-parent: maps/pick-up-where-we-left-off.md
+parent: maps/dispatch-safety-and-review-policy.md
 ---
 
 # INTEG-REC-1 -- arbiter integration emits durable session verdict record
@@ -41,12 +41,11 @@ bash tests/test_arbiter.sh && make check
 
 ## Resolution (2026-10-08)
 
-Resolved in commit `eb805dd10bf658bca72875e2c54269a06ec2105b` (`eb805dd`), implemented by
-`arch-2-hinchk-stampede` (swept to resolved on their branch at `a15164f`; this sweep mirrors it
-under the resumption map).
+Resolved in commit `eb805dd10bf658bca72875e2c54269a06ec2105b` (`eb805dd`).
 
-Delivered: `lib/arbiter.sh` (+19) — integration paths append a durable green verdict record to
-`session-verdicts.jsonl` consistent with the supervisor schema, full 40-char SHAs; tests in
-`tests/test_arbiter.sh` (+29) cover the drain-emits-verdict contract. Independent `make check`
-green per implementer's report; supervisor harvest/integration of the branch pending at sweep
-time — the record emission is exactly what closes this ticket's own sweep-precondition gap.
+Delivered across all criteria:
+1. **Verdict record on integration**: `lib/arbiter.sh` gained `_arb_verdict_record` (lib/arbiter.sh:86), called from `_arb_integrate` step 4 (lib/arbiter.sh:314) — after the test gate passes AND the CAS ref update succeeds — appending `{"ts": <unix_ts>, "ticket": ..., "sha": ..., "seat": ..., "suite": "green", "exit_code": 0, "verdict": "INTEGRATED #<ticket> <sha>"}` to `${STATE_DIR}/session-verdicts.jsonl`, matching the supervisor's schema (loop-bot-herd.sh:390).
+2. **Both merge paths**: the append lives at the single success convergence point, so the fast-forward path and the off-branch `--no-ff` merge path both file the record; conflicts (`conflict`), RED gates (`integration_red`), ungateable gates, and CAS retries file nothing.
+3. **Canonical SHAs**: `_arb_verdict_record` resolves the sha via `git rev-parse "${sha}^{commit}"` before writing, so even a short-sha enqueue records the full 40-character form (same boundary rule as REVIEW-SHA-1).
+4. **Tests**: `tests/test_arbiter.sh` section 2b/2c asserts the ff path (#201) and merge path (#202) each file a full-schema green record, a 7-char-sha enqueue records the canonical 40-char sha, and sections 3/4 assert conflict (#203) and integration_red (#204) file NO green record. Suite passes 96/96.
+5. **Verification**: `make check` green (21 suites); `make lint` clean (48 shell files: 27 strict, 21 warnings-bar, 0 warnings).

@@ -5,7 +5,7 @@ type: wayfinder:task
 status: resolved
 assignee: arch
 owns: tests/test_profile.sh
-parent: maps/pick-up-where-we-left-off.md
+parent: maps/dispatch-safety-and-review-policy.md
 ---
 
 # TEST-PATH-1 -- hermeticize test_profile [4c] against runner PATH tool shadowing
@@ -43,12 +43,10 @@ bash tests/test_profile.sh && make check
 
 ## Resolution (2026-10-08)
 
-Resolved in commit `89b9ef4902219aca81b4d7e9036ac869b6916b7d` (`89b9ef4`), implemented by
-`arch-2-hinchk-stampede` (swept to resolved on their branch at `52549af`; this sweep mirrors it
-under the resumption map).
+Resolved in commit `89b9ef4902219aca81b4d7e9036ac869b6916b7d` (`89b9ef4`).
 
-Delivered: `tests/test_profile.sh` (+23/−2) — test `4c` no longer allowlists `/usr/bin:/bin`;
-a hermetic bin directory shadows `uv`/`poetry` so an ambient tool (host or future Ubuntu runner
-image) cannot leak into `detect_test_cmd`, closing the 4th observed instance of the CI-FIX
-runner-shadow class (after CI-FIX-1/2/3). Independent `make check` green per implementer's
-report; supervisor harvest/integration of the branch pending at sweep time.
+Delivered across all criteria:
+1. **Hermetic bin**: check 4c now runs with `PATH="$HERMETIC_BIN"` — a scratch dir holding symlinks only to utilities `detect_test_cmd` may exec (`cat grep sed awk head cut find`, resolved host-portably via `command -v`; the python branch itself needs none — `command -v`/`[[ ]]`/`echo` are builtins). `uv` and `poetry` are absent by construction; no host system directory is allowlisted.
+2. **Leak-proof receipt**: new check `4c-hazard` plants a runner-style `uv` in an ambient bin and proves BOTH directions — visible on PATH it flips detection to `uv run pytest -q` (the hazard is real), while the hermetic 4c PATH cannot see it and still asserts `pytest -q`.
+3. **No regressions**: 4a/4b untouched (4b keeps its deliberate `PROBE_BIN:$PATH` positive case); suite passes 19/19.
+4. **Verification**: `bash tests/test_profile.sh` 19/19; `make check` green (21 suites); `make lint` 0 warnings.

@@ -338,6 +338,147 @@ SALV9=$(find "$REPO/.herdr-swarm/salvage" -maxdepth 1 -type d -name 'iso-seat-*'
 check "root checkout untouched by teardown" \
   '[[ -z "$(git -C "$REPO" status --porcelain | grep -v "^?? .herdr-swarm")" ]]'
 
+# ── 9b. teardown snapshots state BEFORE closing panes (SNAP-1) ─────────────
+# The workspace path with a stubbed herdr: transcript tails via the
+# seat-output seam (bounded), ledgers copied, ordering proven (the stub's
+# pane close records whether a snapshot existed), missing sources degrading
+# to absent members + warnings, and total snapshot failure non-fatal.
+# GATE hygiene: an ambient HERDR_WORKSPACE_ID (this suite can run from a
+# Herdr-managed pane) would make find_workspace_by_cwd resolve the REAL
+# workspace id through the stub — scrub the identity so resolution flows
+# through the stubbed workspace list, deterministically.
+unset HERDR_PANE_ID HERDR_WORKSPACE_ID
+ORDER="$TEST_DIR/snap-order.log"; : > "$ORDER"
+SNAP_ERR="$TEST_DIR/snap-err.txt"
+herdr() {
+  case "$1 $2" in
+    "workspace list")
+      printf '{"result":{"workspaces":[{"workspace_id":"wSNAP"}]}}\n' ;;
+    "pane list")
+      printf '{"result":{"panes":[{"pane_id":"wSNAP:p1","cwd":"%s"},{"pane_id":"wSNAP:p2","cwd":"%s"}]}}\n' "$REPO" "$REPO" ;;
+    "agent list")
+      printf '{"result":{"agents":[{"name":"snap-a","workspace_id":"wSNAP","pane_id":"wSNAP:p1","cwd":"%s"},{"name":"snap-b","workspace_id":"wSNAP","pane_id":"wSNAP:p2","cwd":"%s"}]}}\n' "$REPO" "$REPO" ;;
+    "agent read")
+      if [[ "$3" == "snap-b" ]]; then return 1; fi   # snap-b: unreadable seat
+      seq 1 5000 | sed 's/^/scroll-/'
+      printf 'SNAP-TAIL-MARKER\n' ;;
+    "pane close")
+      if compgen -G "$REPO/.herdr-swarm/snapshots/*/" >/dev/null; then
+        printf 'close %s: snapshot-present\n' "$3" >> "$ORDER"
+      else
+        printf 'close %s: snapshot-ABSENT\n' "$3" >> "$ORDER"
+      fi
+      return 0 ;;
+    "workspace close")
+      printf 'ws-close\n' >> "$ORDER"
+      return 0 ;;
+    "notification show")
+      return 0 ;;
+    *)
+      return 1 ;;
+  esac
+}
+
+jq -cn --arg ws "wSNAP" \
+  '{version: 2, workspace_id: $ws, seats: [
+     {name: "snap-a", kind: "opencode", pane: "wSNAP:p1",
+      worktree_dir: "'"$REPO"'", branch: "main", isolated: false},
+     {name: "snap-b", kind: "agy", pane: "wSNAP:p2",
+      worktree_dir: "'"$REPO"'", branch: "main", isolated: false}]}' \
+  > "$REPO/.herdr-swarm/seats.json"
+printf '{"ts": 1, "ticket": "S-1", "sha": "aa", "seat": "snap-a", "suite": "green", "exit_code": 0}\n' \
+  > "$REPO/.herdr-swarm/session-verdicts.jsonl"
+printf '{"ts": 1, "ticket": "S-1", "seat": "snap-a", "sha": "aa", "status": "integrated"}\n' \
+  > "$REPO/.herdr-swarm/integration.jsonl"
+printf '{"version":1,"reviews":{"S-1":{"state":"review_passed","round":1}}}\n' \
+  > "$REPO/.herdr-swarm/reviews.json"
+
+# Run A — success: every source present, tails bounded, snapshot BEFORE close
+: > "$ORDER"
+if SWARM_SNAPSHOT_TAIL_LINES=400 swarm_down "$REPO" 1 0 >/dev/null 2>"$SNAP_ERR"; then
+  ok "9b1 teardown with snapshot completes rc 0"
+else
+  bad "9b1 teardown with snapshot rc != 0"
+fi
+SNAP_A=$(ls -1 "$REPO/.herdr-swarm/snapshots" 2>/dev/null | sort | tail -n1)
+[[ -n "$SNAP_A" ]] \
+  && ok "9b2 snapshot dir .herdr-swarm/snapshots/<UTC-ts>/ created" \
+  || bad "9b2 no snapshot dir"
+SNAP_A="$REPO/.herdr-swarm/snapshots/$SNAP_A"
+for m in seats.json session-verdicts.jsonl integration.jsonl reviews.json; do
+  [[ -f "$SNAP_A/$m" ]] && ok "9b3 snapshot member $m copied" || bad "9b3 snapshot member $m missing"
+done
+cmp -s "$REPO/.herdr-swarm/seats.json" "$SNAP_A/seats.json" \
+  && ok "9b4 seats.json snapshot is a verbatim copy" || bad "9b4 seats.json snapshot differs"
+T="$SNAP_A/transcripts/snap-a.log"
+if [[ -f "$T" ]]; then
+  ok "9b5 transcript tail captured via seat-output seam"
+  [[ $(wc -l < "$T") -eq 400 ]] \
+    && ok "9b6 transcript bounded to last 400 lines (from 5001)" || bad "9b6 tail bound: $(wc -l < "$T")"
+  [[ "$(tail -n 1 "$T")" == "SNAP-TAIL-MARKER" ]] \
+    && ok "9b7 tail keeps the newest line (marker present)" || bad "9b7 marker lost"
+  ! grep -q '^scroll-1$' "$T" \
+    && ok "9b8 tail dropped the oldest lines (scroll-1 gone)" || bad "9b8 scroll-1 still present"
+else
+  bad "9b5 transcript tail captured via seat-output seam"
+fi
+[[ ! -f "$SNAP_A/transcripts/snap-b.log" ]] \
+  && ok "9b9 unreadable seat degrades to absent transcript" || bad "9b9 snap-b transcript unexpectedly present"
+grep -q "no transcript for snap-b" "$SNAP_ERR" \
+  && ok "9b10 unreadable seat warned on stderr" || bad "9b10 no warning for snap-b"
+grep -q "close wSNAP:p1: snapshot-present" "$ORDER" && grep -q "close wSNAP:p2: snapshot-present" "$ORDER" \
+  && ok "9b11 snapshot existed BEFORE panes closed (both panes)" || bad "9b11 close ordering: $(cat "$ORDER")"
+
+# Run B — missing ledger source degrades to absent member + warning
+sleep 1   # distinct <UTC-ts> dir per teardown
+rm -f "$REPO/.herdr-swarm/reviews.json"
+: > "$ORDER"
+if SWARM_SNAPSHOT_TAIL_LINES=400 swarm_down "$REPO" 1 0 >/dev/null 2>"$SNAP_ERR"; then
+  ok "9b12 teardown rc 0 with a missing ledger source"
+else
+  bad "9b12 teardown failed on missing ledger"
+fi
+SNAP_B=$(ls -1 "$REPO/.herdr-swarm/snapshots" | sort | tail -n1)
+if [[ "$REPO/.herdr-swarm/snapshots/$SNAP_B" != "$SNAP_A" ]]; then
+  ok "9b13 each teardown snapshots into its own <UTC-ts> dir"
+else
+  bad "9b13 snapshot dirs collided"
+fi
+[[ ! -f "$REPO/.herdr-swarm/snapshots/$SNAP_B/reviews.json" ]] \
+  && ok "9b14 absent reviews.json degrades to absent member" || bad "9b14 reviews.json fabricated"
+grep -q "reviews.json absent — not captured" "$SNAP_ERR" \
+  && ok "9b15 absent member warned on stderr" || bad "9b15 no warning for absent reviews.json"
+
+# Run C — snapshot cannot be created at all: loud, non-fatal, panes still close
+sleep 1
+rm -rf "$REPO/.herdr-swarm/snapshots"
+printf 'blocker\n' > "$REPO/.herdr-swarm/snapshots"   # a file where the dir must go
+: > "$ORDER"
+if swarm_down "$REPO" 1 0 >/dev/null 2>"$SNAP_ERR"; then
+  ok "9b16 total snapshot failure is non-fatal (teardown rc 0)"
+else
+  bad "9b16 snapshot failure aborted teardown"
+fi
+grep -q "swarm_down: snapshot: cannot create" "$SNAP_ERR" \
+  && ok "9b17 snapshot failure warns on stderr" || bad "9b17 no failure warning"
+grep -q "close wSNAP:p1: snapshot-ABSENT" "$ORDER" \
+  && ok "9b18 panes still closed after snapshot failure" || bad "9b18 panes not closed: $(cat "$ORDER")"
+rm -f "$REPO/.herdr-swarm/snapshots"
+
+# Run D — --keep-workspace closes panes too: snapshot still happens
+: > "$ORDER"
+if swarm_down "$REPO" 1 1 >/dev/null 2>/dev/null; then
+  ok "9b19 --keep-workspace teardown rc 0"
+else
+  bad "9b19 --keep-workspace teardown failed"
+fi
+SNAP_D=$(ls -1 "$REPO/.herdr-swarm/snapshots" 2>/dev/null | sort | tail -n1)
+[[ -n "$SNAP_D" && -f "$REPO/.herdr-swarm/snapshots/$SNAP_D/seats.json" ]] \
+  && ok "9b20 --keep-workspace path snapshots too" || bad "9b20 no snapshot under --keep-workspace"
+grep -q "close wSNAP:p1: snapshot-present" "$ORDER" && ! grep -q "ws-close" "$ORDER" \
+  && ok "9b21 keep-ws closed panes (after snapshot) but kept the workspace" || bad "9b21 keep-ws flow: $(cat "$ORDER")"
+unset -f herdr
+
 # ── 16. failed provision is a failure, not a phantom success (HL-WT-1) ─────
 # The incident shape from PROVE-HEADLESS-1 F3: a prior run's LOCKED worktree
 # entry survives while its directory is gone (state wiped between runs) —
