@@ -83,6 +83,22 @@ _arb_telemetry() { # EVENT_TYPE TICKET SEAT SHA PAYLOAD_JSON
     --trace-dir "${ARB_STATE}/traces" >/dev/null 2>&1 || true
 }
 
+# INTEG-REC-1: durable green verdict for the integrated (ticket, sha). The
+# supervisor files session-verdicts records only when it harvests an ARCH
+# DONE anchor itself; operator-driven drains and fast-forwards left no
+# record, stalling ROUTE-5 docs sweeps on their green-verdict precondition.
+# The sha is canonicalised to its full 40-char form (the same boundary rule
+# as REVIEW-SHA-1) so the record matches the supervisor's harvest-time form.
+_arb_verdict_record() { # TICKET SEAT SHA
+  local t="$1" seat="$2" sha="$3" full
+  full=$(git -C "$ARB_REPO" rev-parse "${sha}^{commit}") || return 1
+  mkdir -p "$ARB_STATE"
+  jq -cn --argjson ts "$(date +%s)" --arg t "$t" --arg seat "$seat" --arg sha "$full" \
+    '{ts: $ts, ticket: $t, sha: $sha, seat: $seat, suite: "green", exit_code: 0,
+      verdict: ("INTEGRATED #" + $t + " " + $sha)}' \
+    >> "${ARB_STATE}/session-verdicts.jsonl"
+}
+
 # ── lock: atomic mkdir, pid-stamped, stale after process death ────────────
 arbiter_lock() { # STATE_DIR
   local lk="$1/arbiter.lock" tries=0 pid
@@ -290,6 +306,9 @@ _arb_integrate() { # TICKET SEAT SHA I0
   # 4. success
   _arb_set_status "$ticket" "$sha" "integrated" \
     "{integration_before: \"${i0}\", merge_sha: \"${candidate}\"}"
+  # INTEG-REC-1: the passing gate must be visible to the ROUTE-5 docs sweep
+  # even when no supervisor harvest ever ran for this (ticket, sha).
+  _arb_verdict_record "$ticket" "$seat" "$sha"
   _arb_telemetry arbiter.integrated "$ticket" "$seat" "$sha" \
     "$(jq -cn --arg m "$candidate" --arg b "$i0" \
        '{summary:("integrated @ " + $m[0:7]), merge_sha: $m, integration_before: $b}')"

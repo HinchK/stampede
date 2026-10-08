@@ -18,6 +18,7 @@ TEST_DIR=$(mktemp -d /tmp/test-arb-$$-XXXX)
 TEST_DIR=$(cd "$TEST_DIR" && pwd -P)
 REPO="$TEST_DIR/repo"
 Q="$REPO/.herdr-swarm/integration.jsonl"
+SV="$REPO/.herdr-swarm/session-verdicts.jsonl"
 IREF="refs/heads/swarm/ptest/integration"
 PASS=0
 FAIL=0
@@ -121,12 +122,38 @@ check "integration tree contains both seats' files (merge or ff chain)" '
 check "main untouched by drain" \
   '[[ $(git -C "$REPO" rev-parse main) == "$sha_base" ]]'
 
+# ── 2b. INTEG-REC-1: integration files a durable green verdict ─────────────
+# #201 exercised the fast-forward path, #202 the off-branch --no-ff merge —
+# both must land a supervisor-schema green record in session-verdicts.jsonl
+# so ROUTE-5 docs sweeps find their precondition without a supervisor harvest.
+check "drain created the session verdict log" \
+  '[[ -f "$SV" ]]'
+check "#201 (ff path) filed green verdict: full sha, exit 0, INTEGRATED line" \
+  'jq -e -s --arg t 201 --arg s "$SHA_A" "any(.[]; (.ticket|tostring) == \$t and .sha == \$s and .seat == \"seat-a\" and .suite == \"green\" and .exit_code == 0 and .verdict == (\"INTEGRATED #\" + \$t + \" \" + \$s))" "$SV" >/dev/null'
+check "#202 (merge path) filed green verdict: full sha, exit 0, INTEGRATED line" \
+  'jq -e -s --arg t 202 --arg s "$SHA_B" "any(.[]; (.ticket|tostring) == \$t and .sha == \$s and .seat == \"seat-b\" and .suite == \"green\" and .exit_code == 0 and .verdict == (\"INTEGRATED #\" + \$t + \" \" + \$s))" "$SV" >/dev/null'
+
+# 2c. canonicalisation: a short-sha enqueue still records the FULL 40-char sha
+git -C "$REPO" branch "swarm/ptest/seat-n" main
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wn" "swarm/ptest/seat-n"
+printf 'november\n' > "$TEST_DIR/wn/november.txt"
+SHA_N=$(commit_at "$TEST_DIR/wn" "seat-n work")
+arbiter_enqueue 214 seat-n "${SHA_N:0:7}"
+arbiter_drain 2>/dev/null
+ck 214 integrated "short-sha record still integrates"
+check "verdict record carries the canonical full 40-char sha" \
+  '[[ $(jq -r -s --arg t 214 "[.[] | select((.ticket|tostring) == \$t and .suite == \"green\")] | .[0].sha | length" "$SV") == 40 ]]'
+check "canonical sha equals the committed full sha" \
+  '[[ $(jq -r -s --arg t 214 "[.[] | select((.ticket|tostring) == \$t and .suite == \"green\")] | .[0].sha" "$SV") == "$SHA_N" ]]'
+
 # ── 3. conflict handling ───────────────────────────────────────────────────
 printf 'ALPHA-CONFLICT\n' > "$TEST_DIR/wc/alpha.txt"
 SHA_C=$(commit_at "$TEST_DIR/wc" "seat-c conflicting work")
 arbiter_enqueue 203 seat-c "$SHA_C"
 arbiter_drain 2>/dev/null
 ck 203 conflict "conflicting branch recorded as conflict"
+check "conflict files NO green verdict record (#203)" \
+  '[[ $(jq -s --arg t 203 "[.[] | select((.ticket|tostring) == \$t and .suite == \"green\")] | length" "$SV") == 0 ]]'
 check "conflict record lists the file" \
   '[[ $(jq -r -s --arg t2 203 "[.[] | select((.ticket|tostring) == \$t2)] | .[-1].files[0]" "$Q") == "alpha.txt" ]]'
 check "integration ref unmoved after conflict" \
@@ -143,6 +170,8 @@ REF_BEFORE=$(git -C "$REPO" rev-parse "$IREF")
 arbiter_enqueue 204 seat-c "$SHA_R"
 arbiter_drain 2>/dev/null
 ck 204 integration_red "RED combined tree recorded as integration_red"
+check "RED integration files NO green verdict record (#204)" \
+  '[[ $(jq -s --arg t 204 "[.[] | select((.ticket|tostring) == \$t and .suite == \"green\")] | length" "$SV") == 0 ]]'
 check "integration ref NOT advanced on RED" \
   '[[ $(git -C "$REPO" rev-parse '"$IREF"') == "$REF_BEFORE" ]]'
 
