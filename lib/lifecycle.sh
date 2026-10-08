@@ -6,7 +6,9 @@
 # Provides:
 #   swarm_status:         Inspects active workspace, seated agents, profile, test health
 #   swarm_down:           Gracefully retires recorded seat panes / agents, closes
-#                         workspace (unless --keep-workspace), preserving audit logs
+#                         workspace (unless --keep-workspace), snapshotting
+#                         conversation + ledger state before closing panes
+#                         (SNAP-1) and preserving audit logs
 #   find_workspace_by_cwd: Strict cwd-identity workspace resolution (D1 fix)
 #   review_loop_*:        Autonomous reviewer-loop state machine (REV-3)
 #
@@ -455,6 +457,65 @@ _swarm_retire_worktrees() { # ABS_TARGET ISOLATED_SEATS(tab-separated records)
   done <<<"$records"
 }
 
+# ── teardown snapshot (SNAP-1) ──────────────────────────────────────────────
+# Capture conversation + ledger state BEFORE any pane closes: per-seat
+# transcript tails (bounded to the last ${SWARM_SNAPSHOT_TAIL_LINES:-400}
+# lines) via the supervisor's seat-output seam (`herdr agent read`), plus
+# the durable ledgers, into .herdr-swarm/snapshots/<UTC-ts>/. Capture only —
+# restore/resume is out of scope (see the map's fog section). Any failure is
+# non-fatal but loud: the caller warns and teardown proceeds (the panes are
+# closing either way; a broken snapshot must not strand the swarm).
+
+_swarm_snapshot_notify() { # TITLE BODY — HERDR-5 mechanism: fire-and-forget,
+  # and a notification failure must never fail the teardown
+  herdr notification show "[stampede] $1" --body "$2" >/dev/null 2>&1 || true
+}
+
+_swarm_snapshot() { # ABS_TARGET PANE_SOURCE SEATS_FILE WS_ID → prints dir path
+  local abs_target="$1" pane_source="$2" seats_file="$3" ws_id="$4"
+  local state_dir="${abs_target}/.herdr-swarm"
+  local snap
+  snap="${state_dir}/snapshots/$(date -u +%Y%m%dT%H%M%SZ)"
+  if ! mkdir -p "${snap}/transcripts" 2>/dev/null; then
+    printf 'swarm_down: snapshot: cannot create %s\n' "$snap" >&2
+    return 1
+  fi
+
+  # Ledgers: present ones copy verbatim; absent ones warn and stay absent —
+  # a missing source degrades to a missing member, never a failed teardown.
+  local lf
+  for lf in seats.json session-verdicts.jsonl integration.jsonl reviews.json; do
+    if [[ -f "${state_dir}/${lf}" ]]; then
+      cp "${state_dir}/${lf}" "${snap}/${lf}" 2>/dev/null \
+        || printf 'swarm_down: snapshot: copy failed for %s\n' "$lf" >&2
+    else
+      printf 'swarm_down: snapshot: %s absent — not captured\n' "$lf" >&2
+    fi
+  done
+
+  # Transcript tails, roster sourced the same way as the pane retirement
+  # plan (ledger first, live registry fallback), each bounded to the last
+  # N lines so one chatty seat cannot balloon the snapshot.
+  local roster="" seat _pane out
+  if [[ "$pane_source" == "seats.json ledger" ]]; then
+    roster=$(jq -r '.seats[]? | "\(.name)\t\(.pane // empty)"' "$seats_file" 2>/dev/null) || roster=""
+  else
+    roster=$(herdr agent list 2>/dev/null | jq -r --arg ws "$ws_id" \
+      '.result.agents[]? | select(.workspace_id == $ws) | "\(.name)\t\(.pane_id)"') || roster=""
+  fi
+  while IFS=$'\t' read -r seat _pane; do
+    [[ -n "$seat" ]] || continue
+    if out=$(herdr agent read "$seat" 2>/dev/null) && [[ -n "$out" ]]; then
+      tail -n "${SWARM_SNAPSHOT_TAIL_LINES:-400}" <<<"$out" > "${snap}/transcripts/${seat}.log" \
+        || printf 'swarm_down: snapshot: transcript write failed for %s\n' "$seat" >&2
+    else
+      printf 'swarm_down: snapshot: no transcript for %s (agent read empty/failed)\n' "$seat" >&2
+    fi
+  done <<<"$roster"
+
+  printf '%s\n' "$snap"
+}
+
 # Graceful Swarm Teardown.
 # Closes only panes recorded in .herdr-swarm/seats.json (when the ledger is
 # fresh for the matched workspace); otherwise closes agent panes registered in
@@ -537,6 +598,19 @@ swarm_down() { # TARGET_DIR ASSUME_YES KEEP_WS
       printf '  %s✖ Aborted — nothing was closed.%s\n\n' "$RED" "$RESET"
       return 1
     fi
+  fi
+
+  # Execute: snapshot conversation + ledger state BEFORE any pane closes
+  # (SNAP-1) — non-fatal but loud: teardown proceeds even when the snapshot
+  # cannot be taken. Runs in every teardown path that closes panes,
+  # including --keep-workspace.
+  local snap_dir
+  if snap_dir=$(_swarm_snapshot "$abs_target" "$pane_source" "$seats_file" "$ws_id"); then
+    printf '  %s✓ Snapshot captured (ledgers + transcript tails): %s%s\n' "$GREEN" "$snap_dir" "$RESET"
+  else
+    printf '  %s⚠ Snapshot FAILED — teardown continues; ledgers remain under .herdr-swarm/%s\n' "$YELLOW" "$RESET"
+    _swarm_snapshot_notify "swarm snapshot failed" \
+      "teardown of ${abs_target} could not snapshot before closing panes; in-flight conversation state was not preserved"
   fi
 
   # Execute: retire agents by closing their panes
