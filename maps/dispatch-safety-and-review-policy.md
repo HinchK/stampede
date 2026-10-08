@@ -46,6 +46,7 @@ tight enough in grilling to ticket now:
 - 2026-10-07 (execution): REV-06 resolved (823365f) — docs/maps fast-path passed review and merged into integration at bf84323.
 - 2026-10-07 (execution): QUOTA-4 resolved (35a6e49) — looper standing brief gates AGY dispatches, passed review and merged into integration at 2ee247e.
 - 2026-10-08 (execution): FALLBACK-1 resolved (b054afc) — standby orchestrator seat with takeover and stand-down implemented in lib/standby.sh, briefs/looper-standby.in.md, tests/test_standby.sh, and swarm.config.toml.
+- 2026-10-08 (execution): CI-FIX-3 resolved (564bde7) — test_standby sed replacement made portable across BSD/macOS and GNU/Linux.
 
 ## Tickets
 
@@ -55,10 +56,10 @@ tight enough in grilling to ticket now:
 | **QUOTA-4** | arch-2-hinchk-stampede | **resolved** (35a6e49) | QUOTA-3 | Wire the gate into `looper`'s standing brief before it dispatches to `reviewer`/`agy-docs`/`agy-gh` |
 | **REV-06** | arch-1-hinchk-stampede | **resolved** (823365f) | — | Docs/maps-only commits fast-path past the reviewer dispatch, straight to enqueue |
 | **FALLBACK-1** | arch-1-hinchk-stampede | **resolved** (b054afc) | — | Standby orchestrator seat: quota-triggered, single-command takeover and stand-down |
-| **CI-FIX-3** | arch (unclaimed) | backlog | — | test_standby uses BSD 'sed -i ""' — fails on ubuntu CI, main red again after FALLBACK-1 |
+| **CI-FIX-3** | arch-1-hinchk-stampede | **resolved** (564bde7) | — | test_standby uses BSD 'sed -i ""' — fails on ubuntu CI, main red again after FALLBACK-1 |
 | **REV-07** | — (decision, unclaimed) | backlog | — | Decide multi-reviewer quorum policy — build, or accepted-limit ADR; needs its own grilling session |
 
-All four implementation tickets (`QUOTA-3`, `QUOTA-4`, `REV-06`, `FALLBACK-1`) are resolved. `CI-FIX-3` (test portability fix) and `REV-07` (quorum decision) remain on backlog.
+All five implementation tickets (`QUOTA-3`, `QUOTA-4`, `REV-06`, `FALLBACK-1`, `CI-FIX-3`) are resolved. `REV-07` (quorum decision) remains on backlog.
 
 ## Not yet specified
 

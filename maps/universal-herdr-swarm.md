@@ -112,12 +112,12 @@ A hardened, project-agnostic multi-agent swarm orchestrator (`up · watch · dow
 - **CI-FIX-2** (resolved, commit `d8b4d98`, [`maps/tickets/ci-fix-2-repo-state-gh-absent-fixture.md`](tickets/ci-fix-2-repo-state-gh-absent-fixture.md)): Hermetic "gh absent" fixture in `tests/test_repo_state.sh` (`PATH="$NOGH_BIN"` with symlinks only, no system dir allowlisting), eliminating runner `/usr/bin/gh` leakage and making CI pass on `ubuntu-latest`. Promoted to `main`.
 - **QUOTA-5** (resolved, commit `5ba1fbf`, [`maps/tickets/quota-5-banner-parse-and-account-wide-scan.md`](tickets/quota-5-banner-parse-and-account-wide-scan.md)): `lib/quota.sh` gate parses real two-line `Individual quota reached... Resets in <dur>` banner, scans account-wide across all active `agy` seats in `seats.json`, and guards against stale banners with `quota-banner-seen.json`. Integrated at `fbfd44d` and promoted to `main`.
 - **REVIEW-SHA-1** (resolved, commit `843f085`, [`maps/tickets/review-sha-1-normalize-sha-for-review-loop.md`](tickets/review-sha-1-normalize-sha-for-review-loop.md)): Full 40-character SHA canonicalization at verdict harvest (`loop-bot-herd.sh`) and `review_canonical_sha` in `lib/lifecycle.sh`, eliminating false-positive short-vs-full `sha-mismatch` review loop stalls. Promoted to `main`.
-- **[Dispatch Safety & Review Policy](dispatch-safety-and-review-policy.md):** complete. QUOTA-3 (`lib/quota.sh gate agy <seat>`), REV-06 (docs/maps fast-path past reviewer round), QUOTA-4 (`looper` standing brief AGY quota gate check), and FALLBACK-1 (standby orchestrator seat for quota walls) implemented and integrated. CI-FIX-3 and REV-07 multi-reviewer quorum decision remain on backlog.
+- **[Dispatch Safety & Review Policy](dispatch-safety-and-review-policy.md):** complete. QUOTA-3 (`lib/quota.sh gate agy <seat>`), REV-06 (docs/maps fast-path past reviewer round), QUOTA-4 (`looper` standing brief AGY quota gate check), FALLBACK-1 (standby orchestrator seat for quota walls), and CI-FIX-3 (test_standby BSD sed portability) implemented and integrated. REV-07 multi-reviewer quorum decision remains on backlog.
 - **[Herdr-Native Coordination & Seat Utilization](herdr-native-and-seat-utilization.md):** complete. HERDR-1..5 (wait-output, doctor agent explain, single-submission briefs, native notifications) and ROUTE-1..5 (agy-gh research mandate, looper thin orchestration, arch research/diagnosis mode, status utilization panel, agy-docs post-integration sweep) all resolved and promoted to `main` at `8eae776`.
 
 ## Active Frontier
 
-- **[Dispatch Safety & Review Policy (Follow-ups)](dispatch-safety-and-review-policy.md):** CI-FIX-3 (test_standby BSD sed portability) and REV-07 (multi-reviewer quorum policy decision).
+- **[Dispatch Safety & Review Policy (Follow-ups)](dispatch-safety-and-review-policy.md):** REV-07 (multi-reviewer quorum policy decision).
 
 ## Not yet specified
 
