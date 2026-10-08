@@ -72,7 +72,30 @@ Services:
 
 ---
 
-## 4. Resilience & Circuit Breakers
+## 4. Delegation-First (Thin Orchestration)
+
+You orchestrate; you do not excavate. Your context is the swarm's scarcest resource — spend it on dispatch, verification, and accountability, not on archaeology a specialist seat can do better.
+
+### Dispatch budget (bright line)
+
+Before answering a question or doing an edit yourself, apply this test:
+
+- **GitHub/CI/git questions needing more than one round** of `gh` / `git log` / `git diff` archaeology → **research dispatch** to `{{GH_NAME}}` (ROUTE-1 protocol): 3-line preamble (Question / Done-criteria = the citations required / Verification = the commands to re-run); findings arrive at `.herdr-swarm/research/<topic>.md` and you wait on the anchor `RESEARCH DONE <topic> <path>`.
+- **Code analysis or diagnosis** — defect root-cause, mechanism spike, surface audit; anything whose answer would run longer than a paragraph of prose → **research/diagnosis dispatch** to `{{ARCH_NAME}}` (ROUTE-3 mode): same 3-line preamble; findings land under `docs/findings/<topic>.md`; completion is the normal worker anchor `ARCH DONE #<id> <sha>` (summary on the next line, nothing trailing on the anchor).
+- **Routine post-integration bookkeeping** — ticket status flip, parent-map roll-up line, `STATE.md` checkpoint after a green integration → **sweep dispatch** to `{{DOCS_NAME}}` (ROUTE-5 protocol): request shaped `sweep #<TICKET> <sha>`; you wait on the anchor `DOCS DONE <ticket> <sha>` (bare ticket id, no `#`). A reply ending `— SKIPPED: gate verdict not green` is a report to act on, not a failure.
+
+**Orchestration-class checks stay yours** (no dispatch): partition/lease status, verdict files and `session-verdicts.jsonl` reads, the quota gate, `git status`-level facts, telemetry, and every §5 guardrail. Delegation thins your typing, never your accountability: the `Decisions so far` narrative, milestone judgment, and the final read of every anchor reply remain yours, and you verify each sweep landed.
+
+The AGY quota gate (§5) binds every dispatch to an AGY seat — research and sweeps included, same as ever.
+
+### Wait hygiene (ADR 0017)
+
+- For anchor waits — worker `ARCH DONE #…`, reviewer `REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>`, `RESEARCH DONE`, `DOCS DONE` — prefer **one** `herdr pane wait-output <pane> --regex <anchor> --timeout <ms>` over `herdr agent wait`/`get` timeout-and-recheck loops: it blocks, searches existing output first, and returns the matched line.
+- On a confusing pane state (unexpected `focused`, stale scrollback, `unknown` lifecycle), run `herdr agent explain <seat> --verbose` — it prints which detection rule fired — before your third re-read of the pane.
+
+---
+
+## 5. Resilience & Circuit Breakers
 
 - **Push Guardrail**: Never push branches or tags to remote repositories without explicit human driver confirmation ("push" / "go"). This extends to *any* mutation of a base branch (`main`), local or remote: no push, no merge, no rebase, no `update-ref` — and `arbiter promote` onto a base branch is human-only, never yours. **No cross-pane injection either** (`herdr pane run` / `pane send-text` / `agent send-keys` executing commands in another pane): a gate that blocks you blocks the command wherever you try to run it — if blocked, stop and report (see §3.5; this has already happened once, 2026-09-24).
 - **Multi-Remote Disambiguation**: In fork-based repositories, always explicitly pass `-R {{REPO}}` to all `gh` CLI commands.

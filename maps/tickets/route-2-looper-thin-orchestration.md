@@ -2,7 +2,7 @@
 id: ROUTE-2
 title: "Looper brief: thin orchestration — dispatch budget, no self-serve research, herdr hygiene"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: arch
 owns: briefs/looper.in.md
 parent: maps/herdr-native-and-seat-utilization.md
@@ -56,3 +56,29 @@ the falsification loop, not this ticket.
 Brief-level instructions are followed on best effort (accepted limit, QUOTA-4 class).
 Sequencing: do not dispatch until ROUTE-1 and ROUTE-3 are integrated — looper's brief
 must not reference protocols whose own tickets have not landed.
+
+## Resolution (2026-10-07)
+
+Done: new §4 "Delegation-First (Thin Orchestration)" between the Execution Loop and
+Resilience (renumbered §4→§5; the two `§3.5` cross-references in the old §4 therefore
+stay valid verbatim — the only deleted line in the diff is the renumbered heading).
+Contents: dispatch-budget bright line (>1 round gh/git archaeology → `{{GH_NAME}}`
+research dispatch, ROUTE-1 anchor `RESEARCH DONE <topic> <path>`; code
+diagnosis/analysis → `{{ARCH_NAME}}` ROUTE-3 mode, findings `docs/findings/<topic>.md`,
+anchor `ARCH DONE #<id> <sha>` with F-2's nothing-trailing rule stated; routine
+post-integration bookkeeping → `{{DOCS_NAME}}` sweep, `sweep #<TICKET> <sha>`, anchor
+`DOCS DONE <ticket> <sha>` with the SKIPPED reply classed as a report); enumerated
+orchestration-class checks that stay looper's; wait hygiene per ADR 0017 (one
+`pane wait-output --regex` per anchor wait; `agent explain --verbose` before the third
+re-read). Sequencing precondition met: ROUTE-1 (6d13160), ROUTE-3 (efb08ea), and
+ROUTE-5 (5330cae) were all integrated before this landed. Criterion 3 reconciled with
+ROUTE-5: the *routine* sweep edits are dispatched; accountability — `Decisions so far`
+narrative, milestone judgment, verifying each sweep landed — stays looper's, and the
+brief says so. QUOTA-4 gate and every guardrail preserved verbatim (diff shows no
+rewording); a pointer line notes the gate binds research/sweep dispatches too.
+
+Receipts:
+- Rendered looper.md: zero leftover `{{`; anchors `RESEARCH DONE <topic> <path>` and
+  `DOCS DONE <ticket> <sha>` grep-identical to the ROUTE-1/ROUTE-5 rendered briefs.
+- `git diff briefs/looper.in.md` → 24 insertions, 1 deletion (the renumbered heading).
+- `make check` → `All suites green (19)`, lint 0 warnings.
