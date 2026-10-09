@@ -354,6 +354,19 @@ grep -q '"recipient": "seat-b"' "$STATE"/traces/*.jsonl 2>/dev/null \
 grep -q '"findings_count": 2' "$STATE"/traces/*.jsonl 2>/dev/null \
   && assert_ok 13d5 "verdict telemetry counts findings from the evidence file" || assert_bad 13d5 "findings_count wrong"
 
+# [13h] the fix after a BLOCK is a new sha on an already-green ticket: it must
+# be gated and re-reviewed, not dropped by the green-retire rule
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m rev5h
+SHA_RH=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #REV-11 $SHA_RH"; VERDICT_R=""
+: > "$PROMPTS"
+harvest_verdicts >/dev/null 2>&1
+sleep 0.6; gate_reap >/dev/null 2>&1
+jq -e -s --arg s "$SHA_RH" 'any(.[]; .ticket == "REV-11" and .sha == $s and .suite == "green")' "$LOG" >/dev/null 2>&1 \
+  && assert_ok 13h "re-verdict after BLOCK is gated at the new sha" || assert_bad 13h "new sha never gated"
+[[ "$(rstate REV-11)" == "awaiting_review" ]] && grep -q "seat-r :: DISPATCH: Review #REV-11 @ ${SHA_RH} (round 2/2)" "$PROMPTS" \
+  && assert_ok 13h2 "re-verdict goes back to the reviewer as round 2" || assert_bad 13h2 "state $(rstate REV-11): $(cat "$PROMPTS")"
+
 # [13f] REV-JQ-1: evidence file with ZERO findings — `grep -c` prints "0"
 # AND exits 1, so the old `|| printf '0'` concatenated a second 0 onto the
 # count ("0\n0"), jq --argjson parse-errored, and the whole review.verdict

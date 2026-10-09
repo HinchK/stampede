@@ -777,6 +777,16 @@ _headless_ceiling_breached() { # TICKET [PENDING=0]
   (( n + pending >= max ))
 }
 
+# Green is not final while a critique round is pending or the arbiter handed
+# the ticket back: the fix arrives as a NEW sha and must still be gated.
+_ticket_reopened() { # TICKET → rc 0 = a re-verdict is expected
+  jq -e --arg t "$1" '.reviews[$t].state == "critique_dispatched"' \
+    "${STATE_DIR}/reviews.json" >/dev/null 2>&1 && return 0
+  jq -e -s --arg t "$1" '[.[] | select((.ticket | tostring) == $t)] | last
+    | .status == "conflict" or .status == "integration_red"' \
+    "${STATE_DIR}/integration.jsonl" >/dev/null 2>&1
+}
+
 harvest_verdicts() {
   local seat out
   # Next-pass eviction (HEADLESS-5 hazard 2): pidfiles of workers that died
@@ -819,7 +829,8 @@ harvest_verdicts() {
       if [[ -f "$SESSION_LOG" ]]; then
         # Permanent retire: this ticket already gated GREEN (only green retires).
         # tostring both sides (ARB-STR / REV-5): records mix numeric and string ids.
-        if jq -e -s --arg t "$ticket" 'any(.[]; (.ticket | tostring) == $t and .suite == "green")' "$SESSION_LOG" >/dev/null 2>&1; then
+        if jq -e -s --arg t "$ticket" 'any(.[]; (.ticket | tostring) == $t and .suite == "green")' "$SESSION_LOG" >/dev/null 2>&1 \
+           && ! _ticket_reopened "$ticket"; then
           continue
         fi
         # (ticket, sha) dedup: this exact code state was already CONCLUSIVELY
