@@ -6,12 +6,12 @@ here, ids and history stable) · **Intakes** the two fresh 2026-10-08 inputs tha
 looper-temp handoff (`.herdr-swarm/research/looper-temp-handoff.md`) and the OpenRig comparison review
 (`.herdr-swarm/research/2026-10-08-openrig-comparison-review.md`).
 
-## Destination
+## Destination (Complete)
 
-The swarm resumes on a fully-reconciled, fully-verified footing: the three staged implementation defects are fixed
-and integrated, the two decisions owed to the human (review quorum, OpenRig borrows) are made with real options on
-the table, and nothing left open on 2026-10-08 remains unstated — every item is ticketed, decided, or explicitly
-parked.
+**Milestone Complete (2026-10-08).** The swarm has resumed on a fully-reconciled, fully-verified footing: all staged
+implementation defects are fixed and integrated, the two decisions owed to the human (review quorum, OpenRig borrows)
+are made and recorded with durable receipts, and all five staged backlog tickets (REV-FAILOVER-1, SEEDED-1, HASH-1,
+STATUS-INDET-1, SNAP-1) are resolved, verified, and integrated.
 
 ## Where we actually left off (verified 2026-10-08, receipts)
 
@@ -80,6 +80,8 @@ parked.
 - 2026-10-08 (execution): SEEDED-1 resolved (`6147732`, arch-1) — seeded-regression pairs proving test teeth
   for verdict dedupe (`test_async_gate.sh` §18) and CAS ref advance (`test_arbiter.sh` §11) via `tests/helpers/seed.sh`
   (`with_seeded_defect`), documented in `CONTRIBUTING.md`.
+- 2026-10-08 (execution): STATUS-INDET-1 resolved (`7b91419`), SNAP-1 resolved (`9582ec6`), and HASH-1 resolved (`d9c71c3`).
+  All five staged backlog tickets are resolved and integrated; milestone is complete.
 
 ## Tickets
 
@@ -92,13 +94,11 @@ parked.
 | **BORROW-1** | human (settled), arch-1 (recorded) | **resolved** (triage receipt) | — | OpenRig §7 triage: 4 adopts, 1 fold, 2 fog, §8 declines affirmed |
 | **REV-FAILOVER-1** | arch-1-hinchk-stampede | **resolved** (`35360d9`) | — | Non-AGY reviewer failover on quota exhaustion (ADR 0018's staged mechanism) |
 | **SEEDED-1** | arch-1-hinchk-stampede | **resolved** (`6147732`) | — | Seeded-regression pairs for verdict dedupe + CAS paths — suites must fail when the defect is planted |
-| **HASH-1** | arch (unclaimed) | backlog | — | Evidence hashes (`sha256` gate log + host/pid) on session verdict records |
-| **STATUS-INDET-1** | arch (unclaimed) | backlog | — | `INDETERMINATE` floor for `stampede status` — derived at read time, never collapsed by labels |
-| **SNAP-1** | arch (unclaimed) | backlog | — | Snapshot transcript tails + ledgers before `swarm down` closes panes (capture only) |
+| **HASH-1** | arch-2-hinchk-stampede | **resolved** (`d9c71c3`) | — | Evidence hashes (`sha256` gate log + host/pid) on session verdict records |
+| **STATUS-INDET-1** | arch-2-hinchk-stampede | **resolved** (`7b91419`) | — | `INDETERMINATE` floor for `stampede status` — derived at read time, never collapsed by labels |
+| **SNAP-1** | arch-2-hinchk-stampede | **resolved** (`9582ec6`) | — | Snapshot transcript tails + ledgers before `swarm down` closes panes (capture only) |
 
-Note: REV-FAILOVER-1 and HASH-1 both own `loop-bot-herd.sh` — they cannot co-dispatch; the partition lease
-serializes them. Dispatch recommendation: REV-FAILOVER-1 first (closes the ADR 0018 SPOF), then SEEDED-1
-(cheap, sharpens every later gate change), then HASH-1 / STATUS-INDET-1 / SNAP-1 in any order.
+Note: All tickets in this milestone are resolved and integrated; milestone complete.
 
 ## Not yet specified
 
