@@ -24,21 +24,18 @@ substitute_template() {
 
   mkdir -p "$(dirname "$output_out")"
 
-  "$PYTHON_BIN" -c "
+  "$PYTHON_BIN" - "$template_in" "$output_out" "$vars_json" <<'PYCODE'
 import json, sys
 
-with open('$template_in', 'r', encoding='utf-8') as f:
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
     content = f.read()
 
-vars_dict = json.loads('''$vars_json''')
+for k, v in json.loads(sys.argv[3]).items():
+    content = content.replace('{{' + k + '}}', str(v))
 
-for k, v in vars_dict.items():
-    placeholder = '{{' + k + '}}'
-    content = content.replace(placeholder, str(v))
-
-with open('$output_out', 'w', encoding='utf-8') as f:
+with open(sys.argv[2], 'w', encoding='utf-8') as f:
     f.write(content)
-"
+PYCODE
 }
 
 # Render all brief templates for a target repository and slug
