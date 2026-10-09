@@ -1,7 +1,7 @@
 # HANDOFF — audit must-fix 1 to 5
 
 **Goal:** fix findings 1 to 5 of the 2026-10-09 ponytail audit (second, merged report).
-**Branch:** `fix/audit-must-fix-1-5` (off `main` @ 8636b62). Not pushed. Nothing merges to `main` without the human.
+**Branch:** `fix/audit-must-fix-1-5` (off `main` @ 8636b62). Pushed for review as a PR. Nothing merges to `main` without the human.
 
 ## Tasks
 
