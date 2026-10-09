@@ -76,7 +76,7 @@ vars_map = {
     'SLUG': '$slug',
     'SCRIPT_DIR': os.environ.get('SCRIPT_DIR', ''),
     'ARBITER_BIN': os.environ.get('ARBITER_BIN', ''),
-    'ARCH_NAME': os.environ.get('SEAT_NAME_arch', 'arch-$slug'),
+    'ARCH_NAME': os.environ.get('SEAT_NAME_arch_1') or os.environ.get('SEAT_NAME_arch', 'arch-$slug'),
     'LOOPER_NAME': os.environ.get('SEAT_NAME_looper', 'looper-$slug'),
     'PM_NAME': os.environ.get('SEAT_NAME_pm', 'pm-$slug'),
     'DOCS_NAME': os.environ.get('SEAT_NAME_docs', 'agy-docs-$slug'),

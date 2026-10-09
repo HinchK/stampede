@@ -705,7 +705,7 @@ looper_notice() { # MESSAGE — pane: herdr prompt · headless: durable log
     _headless_notice "$1"
     return 0
   fi
-  herdr agent prompt looper "$1" >/dev/null 2>&1 || true
+  herdr agent prompt "${SEAT_NAME_looper:-looper}" "$1" >/dev/null 2>&1 || true
 }
 
 # Ledger (seats.json v2) field for a seat: worktree_dir / kind.

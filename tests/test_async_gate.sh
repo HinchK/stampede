@@ -317,6 +317,8 @@ grep -q "seat-r :: DISPATCH: Review #REV-10 @ ${SHA_RD} (round 1/2)" "$PROMPTS" 
   && assert_ok 13b3 "reviewer seat prompted with round/max" || assert_bad 13b3 "no reviewer prompt: $(cat "$PROMPTS")"
 grep -q '"event_type": "review.dispatched"' "$STATE"/traces/*.jsonl 2>/dev/null \
   && assert_ok 13b4 "review.dispatched telemetry emitted" || assert_bad 13b4 "no dispatched telemetry"
+grep -q "^${SEAT_NAME_looper} :: LOOP-BOT: filed verdict for #REV-10" "$PROMPTS" \
+  && assert_ok 13b5 "green notice reaches the namespaced looper seat" || assert_bad 13b5 "looper notice target: $(grep LOOP-BOT "$PROMPTS" | head -1)"
 
 # [13c] reviewer PASS → review_passed + enqueue (exactly once across passes)
 VERDICT_R="REVIEW VERDICT #REV-10 $SHA_RD PASS"
@@ -482,7 +484,7 @@ jq -e -s --arg t LEG-1 'any(.[]; .ticket == $t and .suite == "green" and (.gate_
   || assert_bad 14c4 "legacy row broke a reader"
 [[ -f "$STATE/headless-notices.log" ]] && grep -q "absent from the repo" "$STATE/headless-notices.log" \
   && assert_ok 14c2 "looper notice durably logged (no swallowed alert)" || assert_bad 14c2 "no durable notice"
-! grep -q "looper ::" "$PROMPTS" \
+! grep -q "^looper[^ ]* ::" "$PROMPTS" \
   && assert_ok 14c3 "no herdr prompt to looper in headless mode" || assert_bad 14c3 "looper prompt leaked"
 
 # [14e] headless re-verdict ceiling (HEADLESS-5): second conclusive RED for
