@@ -10,9 +10,9 @@
 - [x] 3. Seat names: `looper_notice` and `ARCH_NAME` (`loop-bot-herd.sh:708`, `lib/briefs.sh:79`, `lib/standby.sh:97`)
 - [x] 4. `CLI_DIR` unbound when no directory is passed (`herdr-loop-swarm.sh:84`)
 - [x] 5. `substitute_template` pastes values into Python source (`lib/briefs.sh:20-42`; test in `tests/test_briefs.sh`)
-- [ ] 6. `make check`, report real counts
+- [x] 6. `make check`: rc 0 — lint clean (49 files), 21 of 21 suites green, 0 failing assertions
 
-**Current task:** 6
+**Current task:** none — all done, waiting on human review
 
 **Next action if interrupted:** run the suite of the last ticked task, then continue at the first unticked box. One commit per task, exact paths only (`docs/findings/open-source-landscape.md` is someone else's untracked file — never `git add -A`).
 

@@ -317,7 +317,7 @@ grep -q "seat-r :: DISPATCH: Review #REV-10 @ ${SHA_RD} (round 1/2)" "$PROMPTS" 
   && assert_ok 13b3 "reviewer seat prompted with round/max" || assert_bad 13b3 "no reviewer prompt: $(cat "$PROMPTS")"
 grep -q '"event_type": "review.dispatched"' "$STATE"/traces/*.jsonl 2>/dev/null \
   && assert_ok 13b4 "review.dispatched telemetry emitted" || assert_bad 13b4 "no dispatched telemetry"
-grep -q "^${SEAT_NAME_looper} :: LOOP-BOT: filed verdict for #REV-10" "$PROMPTS" \
+grep -q "^${SEAT_NAME_looper:?} :: LOOP-BOT: filed verdict for #REV-10" "$PROMPTS" \
   && assert_ok 13b5 "green notice reaches the namespaced looper seat" || assert_bad 13b5 "looper notice target: $(grep LOOP-BOT "$PROMPTS" | head -1)"
 
 # [13c] reviewer PASS → review_passed + enqueue (exactly once across passes)
