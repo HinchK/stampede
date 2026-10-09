@@ -79,7 +79,7 @@ _arb_set_status() { # TICKET SHA STATUS [EXTRA_JQ]
 
 _arb_telemetry() { # EVENT_TYPE TICKET SEAT SHA PAYLOAD_JSON
   "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log \
-    "$(telemetry_session_id "$ARB_STATE")" "$1" "$2" - "$3" "$4" \
+    "$(telemetry_session_id "$ARB_STATE")" "$1" "$3" "$2" "$5" \
     --trace-dir "${ARB_STATE}/traces" >/dev/null 2>&1 || true
 }
 
@@ -211,6 +211,11 @@ _arb_worktree() { # START_COMMIT — ensure detached worktree at START_COMMIT; r
   return 1
 }
 
+_arb_wt_unusable() { # TICKET SEAT SHA — the stall must show in the Ops stream, not only the drain log
+  _arb_telemetry arbiter.gate_unavailable "$1" "$2" "$3" \
+    "$(jq -cn '{summary:"gate harness unavailable: arbiter worktree unusable — left queued"}')"
+}
+
 # ── drain ──────────────────────────────────────────────────────────────────
 # Serialized queue processor: oldest queued record first, one at a time.
 arbiter_drain() {
@@ -266,9 +271,9 @@ _arb_integrate() { # TICKET SEAT SHA I0
   local candidate
   if git -C "$ARB_REPO" merge-base --is-ancestor "$i0" "$sha" 2>/dev/null; then
     candidate="$sha"
-    _arb_worktree "$candidate" || return 1
+    _arb_worktree "$candidate" || { _arb_wt_unusable "$ticket" "$seat" "$sha"; return 1; }
   else
-    _arb_worktree "$i0" || return 1
+    _arb_worktree "$i0" || { _arb_wt_unusable "$ticket" "$seat" "$sha"; return 1; }
     if ! git -C "$ARB_WT" merge --no-ff --no-edit \
          -m "integrate #${ticket} (${seat} @ ${sha:0:7})" "$sha" >/dev/null 2>&1; then
       local files

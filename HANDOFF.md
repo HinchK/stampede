@@ -11,6 +11,7 @@
 - [x] 4. `CLI_DIR` unbound when no directory is passed (`herdr-loop-swarm.sh:84`)
 - [x] 5. `substitute_template` pastes values into Python source (`lib/briefs.sh:20-42`; test in `tests/test_briefs.sh`)
 - [x] 6. `make check`: rc 0 — lint clean (49 files), 21 of 21 suites green, 0 failing assertions
+- [x] 7. (beyond the ask, droppable) arbiter telemetry was never written: argument order in `_arb_telemetry`; stuck-worktree stall now emits `arbiter.gate_unavailable`. `make check` rc 0 again, 21 of 21.
 
 **Current task:** none — all done, waiting on human review
 

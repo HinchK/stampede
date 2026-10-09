@@ -604,6 +604,7 @@ ARB_WT_LOCK="$(git -C "$REPO/.herdr-swarm/worktrees/arbiter-ptest" rev-parse --a
 arbiter_enqueue 216 seat-w "$SHA_W"
 arbiter_drain 2>/dev/null
 ck 216 queued "stuck arbiter worktree: record left queued, never gated"
+check "stuck arbiter worktree: stall is visible in telemetry" 'grep -q "arbiter worktree unusable" "$REPO"/.herdr-swarm/traces/*.jsonl'
 check "stuck arbiter worktree: integration ref unmoved" \
   '[[ "$(git -C "$REPO" rev-parse '"$IREF"')" == "$IREF_S0" ]]'
 rm -f "$ARB_WT_LOCK"
