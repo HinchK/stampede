@@ -74,6 +74,9 @@ parked.
   receipt; INTEG-REC-1 resolved (`eb805dd`, arch-2) and TEST-PATH-1 resolved (`89b9ef4`, arch-2). All three
   verdict anchors emitted; supervisor harvest/integration pending at chart-update time — statuses cite the
   implementation shas, not yet base promotion.
+- 2026-10-08 (execution): REV-FAILOVER-1 resolved (`35360d9`, arch-1) — non-AGY reviewer failover on quota exhaustion
+  via config binding, supervisor failover dispatch with contract pointer, and reviews.json attribution; verified via 12
+  new §17 tests in `test_async_gate.sh` and 5 new 6r tests in `test_config.sh`.
 
 ## Tickets
 
@@ -84,7 +87,7 @@ parked.
 | **TEST-PATH-1** | arch-2-hinchk-stampede | **resolved** (`89b9ef4`, integration pending) | — | Hermeticize `tests/test_profile.sh` PATH — 4th instance of the CI-FIX runner-shadow class |
 | **REV-07** | human (settled), arch-1 (recorded) | **resolved** (ADR 0018) | — | Single-reviewer accepted limit; quota SPOF closed by failover, not quorum |
 | **BORROW-1** | human (settled), arch-1 (recorded) | **resolved** (triage receipt) | — | OpenRig §7 triage: 4 adopts, 1 fold, 2 fog, §8 declines affirmed |
-| **REV-FAILOVER-1** | arch (unclaimed) | backlog | — | Non-AGY reviewer failover on quota exhaustion (ADR 0018's staged mechanism) |
+| **REV-FAILOVER-1** | arch-1-hinchk-stampede | **resolved** (`35360d9`) | — | Non-AGY reviewer failover on quota exhaustion (ADR 0018's staged mechanism) |
 | **SEEDED-1** | arch (unclaimed) | backlog | — | Seeded-regression pairs for verdict dedupe + CAS paths — suites must fail when the defect is planted |
 | **HASH-1** | arch (unclaimed) | backlog | — | Evidence hashes (`sha256` gate log + host/pid) on session verdict records |
 | **STATUS-INDET-1** | arch (unclaimed) | backlog | — | `INDETERMINATE` floor for `stampede status` — derived at read time, never collapsed by labels |
