@@ -77,6 +77,9 @@ parked.
 - 2026-10-08 (execution): REV-FAILOVER-1 resolved (`35360d9`, arch-1) — non-AGY reviewer failover on quota exhaustion
   via config binding, supervisor failover dispatch with contract pointer, and reviews.json attribution; verified via 12
   new §17 tests in `test_async_gate.sh` and 5 new 6r tests in `test_config.sh`.
+- 2026-10-08 (execution): SEEDED-1 resolved (`6147732`, arch-1) — seeded-regression pairs proving test teeth
+  for verdict dedupe (`test_async_gate.sh` §18) and CAS ref advance (`test_arbiter.sh` §11) via `tests/helpers/seed.sh`
+  (`with_seeded_defect`), documented in `CONTRIBUTING.md`.
 
 ## Tickets
 
@@ -88,7 +91,7 @@ parked.
 | **REV-07** | human (settled), arch-1 (recorded) | **resolved** (ADR 0018) | — | Single-reviewer accepted limit; quota SPOF closed by failover, not quorum |
 | **BORROW-1** | human (settled), arch-1 (recorded) | **resolved** (triage receipt) | — | OpenRig §7 triage: 4 adopts, 1 fold, 2 fog, §8 declines affirmed |
 | **REV-FAILOVER-1** | arch-1-hinchk-stampede | **resolved** (`35360d9`) | — | Non-AGY reviewer failover on quota exhaustion (ADR 0018's staged mechanism) |
-| **SEEDED-1** | arch (unclaimed) | backlog | — | Seeded-regression pairs for verdict dedupe + CAS paths — suites must fail when the defect is planted |
+| **SEEDED-1** | arch-1-hinchk-stampede | **resolved** (`6147732`) | — | Seeded-regression pairs for verdict dedupe + CAS paths — suites must fail when the defect is planted |
 | **HASH-1** | arch (unclaimed) | backlog | — | Evidence hashes (`sha256` gate log + host/pid) on session verdict records |
 | **STATUS-INDET-1** | arch (unclaimed) | backlog | — | `INDETERMINATE` floor for `stampede status` — derived at read time, never collapsed by labels |
 | **SNAP-1** | arch (unclaimed) | backlog | — | Snapshot transcript tails + ledgers before `swarm down` closes panes (capture only) |
