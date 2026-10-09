@@ -592,6 +592,36 @@ slug_of() { ( eval "$1 _arb_cfg" >/dev/null 2>&1; printf '%s' "${ARB_SLUG:-}" );
 [[ "$(slug_of 'unset PROJECT_SLUG; unset SWARM_CONFIG_NAME;')" == "repo" ]] \
   && ok "10k basename is the last-resort fallback" || bad "10k fallback: $(slug_of 'unset PROJECT_SLUG; unset SWARM_CONFIG_NAME;')"
 
+# ── 12. a stuck arbiter worktree is never gated as the candidate ───────────
+# A failed checkout used to leave the old tree in place, gated green.
+git -C "$REPO" branch "swarm/ptest/seat-w" "$IREF"
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/ww" "swarm/ptest/seat-w"
+printf '#!/bin/sh\nexit 1\n' > "$TEST_DIR/ww/check.sh"
+SHA_W=$(commit_at "$TEST_DIR/ww" "seat-w breaks the suite")
+IREF_S0=$(git -C "$REPO" rev-parse "$IREF")
+ARB_WT_LOCK="$(git -C "$REPO/.herdr-swarm/worktrees/arbiter-ptest" rev-parse --absolute-git-dir)/index.lock"
+: > "$ARB_WT_LOCK"
+arbiter_enqueue 216 seat-w "$SHA_W"
+arbiter_drain 2>/dev/null
+ck 216 queued "stuck arbiter worktree: record left queued, never gated"
+check "stuck arbiter worktree: integration ref unmoved" \
+  '[[ "$(git -C "$REPO" rev-parse '"$IREF"')" == "$IREF_S0" ]]'
+rm -f "$ARB_WT_LOCK"
+arbiter_drain 2>/dev/null
+ck 216 integration_red "worktree freed: the candidate's own suite is gated (RED)"
+
+# A worktree dir without its .git link resolves to the ROOT repo.
+ROOT_HEAD_S0=$(git -C "$REPO" rev-parse --abbrev-ref HEAD)
+mv "$REPO/.herdr-swarm/worktrees/arbiter-ptest/.git" "$TEST_DIR/arb-wt-gitlink"
+jq -s -c 'map(if .ticket == "216" then .status = "queued" else . end) | .[]' "$Q" > "$Q.tmp" && mv "$Q.tmp" "$Q"
+arbiter_drain 2>/dev/null
+ck 216 queued "unlinked arbiter worktree: record left queued"
+check "unlinked arbiter worktree: root checkout stays on its branch" \
+  '[[ "$(git -C "$REPO" rev-parse --abbrev-ref HEAD)" == "$ROOT_HEAD_S0" ]]'
+mv "$TEST_DIR/arb-wt-gitlink" "$REPO/.herdr-swarm/worktrees/arbiter-ptest/.git"
+arbiter_drain 2>/dev/null
+ck 216 integration_red "worktree relinked: drain resumes"
+
 # ── 11: seeded-regression pair — CAS drops expected-old (SEEDED-1) ─────────
 # The pair discipline (tests/helpers/seed.sh): the §5 race scenario must go
 # RED when the compare-and-swap is seeded into a plain update-ref — the

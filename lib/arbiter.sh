@@ -190,15 +190,25 @@ arbiter_queued_count() {
 }
 
 # ── detached worktree management ───────────────────────────────────────────
-_arb_worktree() { # START_COMMIT — ensure detached worktree at START_COMMIT
+_arb_worktree() { # START_COMMIT — ensure detached worktree at START_COMMIT; rc 1 = not there
+  local want rc=0
+  want=$(git -C "$ARB_REPO" rev-parse --verify --quiet "${1}^{commit}") || rc=1
   if [[ ! -d "$ARB_WT" ]]; then
     mkdir -p "$(dirname "$ARB_WT")"
-    git -C "$ARB_REPO" worktree add --detach "$ARB_WT" "$1" >/dev/null 2>&1
+    git -C "$ARB_REPO" worktree add --detach "$ARB_WT" "$1" >/dev/null 2>&1 || rc=1
+  elif [[ "$(git -C "$ARB_WT" rev-parse --show-toplevel 2>/dev/null)" != "$(cd "$ARB_WT" && pwd -P)" ]]; then
+    rc=1   # no .git link here: git would resolve to the ROOT checkout and move it
   else
-    git -C "$ARB_WT" checkout --detach -q "$1" >/dev/null 2>&1
-    git -C "$ARB_WT" reset --hard -q "$1" >/dev/null 2>&1
+    git -C "$ARB_WT" checkout --detach -q "$1" >/dev/null 2>&1 || rc=1
+    git -C "$ARB_WT" reset --hard -q "$1" >/dev/null 2>&1 || rc=1
+    git -C "$ARB_WT" clean -qfd >/dev/null 2>&1 || true
   fi
-  git -C "$ARB_WT" clean -qfd >/dev/null 2>&1 || true
+  # A stale tree gated as this commit would be a verdict on code never measured.
+  if (( rc == 0 )) && [[ "$(git -C "$ARB_WT" rev-parse HEAD 2>/dev/null)" == "$want" ]]; then
+    return 0
+  fi
+  printf 'arbiter: worktree %s could not be put at %s — nothing gated, record left queued\n' "$ARB_WT" "${1:0:7}" >&2
+  return 1
 }
 
 # ── drain ──────────────────────────────────────────────────────────────────
@@ -256,9 +266,9 @@ _arb_integrate() { # TICKET SEAT SHA I0
   local candidate
   if git -C "$ARB_REPO" merge-base --is-ancestor "$i0" "$sha" 2>/dev/null; then
     candidate="$sha"
-    _arb_worktree "$candidate"
+    _arb_worktree "$candidate" || return 1
   else
-    _arb_worktree "$i0"
+    _arb_worktree "$i0" || return 1
     if ! git -C "$ARB_WT" merge --no-ff --no-edit \
          -m "integrate #${ticket} (${seat} @ ${sha:0:7})" "$sha" >/dev/null 2>&1; then
       local files
