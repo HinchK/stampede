@@ -143,6 +143,27 @@ sleep 2.5
 gate_reap >/dev/null 2>&1
 expect 1e "$(last_suite_of 301)" green "slow seat A recorded after completion"
 
+# ── 1f: HASH-1 — evidence hash + supervising host/pid on the reaped row ────
+ROW301=$(jq -c -s '[.[] | select((.ticket | tostring) == "301")] | .[0]' "$LOG")
+EXPECT_301_SHA=$(shasum -a 256 "$STATE/gate-logs/seat-a-${SHA_A:0:7}.log" | awk '{print $1}')
+[[ "$(jq -r '.gate_log_sha256 // "none"' <<<"$ROW301")" == "$EXPECT_301_SHA" ]] \
+  && assert_ok 1f1 "gate_log_sha256 matches an independent shasum -a 256 of the gate log" \
+  || assert_bad 1f1 "hash mismatch: $(jq -r '.gate_log_sha256 // "none"' <<<"$ROW301") vs $EXPECT_301_SHA"
+jq -e '(.host | type == "string" and length > 0) and (.pid | type == "number")' <<<"$ROW301" >/dev/null \
+  && assert_ok 1f2 "row carries host (non-empty) and numeric pid" \
+  || assert_bad 1f2 "host/pid: $ROW301"
+[[ "$(jq -r '.host' <<<"$ROW301")" == "$(hostname -s 2>/dev/null || printf '%s' "${HOSTNAME:-unknown}")" ]] \
+  && assert_ok 1f3 "host matches this supervising host" \
+  || assert_bad 1f3 "host: $(jq -r '.host' <<<"$ROW301")"
+[[ "$(jq -r '.pid' <<<"$ROW301")" == "$$" ]] \
+  && assert_ok 1f4 "pid is the supervising process" \
+  || assert_bad 1f4 "pid: $(jq -r '.pid' <<<"$ROW301") vs $$"
+ROW302=$(jq -c -s '[.[] | select((.ticket | tostring) == "302")] | .[0]' "$LOG")
+EXPECT_302_SHA=$(shasum -a 256 "$STATE/gate-logs/seat-b-${SHA_B:0:7}.log" | awk '{print $1}')
+[[ "$(jq -r '.gate_log_sha256 // "none"' <<<"$ROW302")" == "$EXPECT_302_SHA" ]] \
+  && assert_ok 1f5 "second seat's row independently hashed (302)" \
+  || assert_bad 1f5 "302 hash mismatch"
+
 # ── 6: one job per (ticket, sha) across passes ─────────────────────────────
 n301=$(jq -r -s '[.[] | select((.ticket | tostring) == "301")] | length' "$LOG")
 harvest_verdicts >/dev/null 2>&1   # verdict lines still visible in panes
@@ -296,6 +317,8 @@ grep -q "seat-r :: DISPATCH: Review #REV-10 @ ${SHA_RD} (round 1/2)" "$PROMPTS" 
   && assert_ok 13b3 "reviewer seat prompted with round/max" || assert_bad 13b3 "no reviewer prompt: $(cat "$PROMPTS")"
 grep -q '"event_type": "review.dispatched"' "$STATE"/traces/*.jsonl 2>/dev/null \
   && assert_ok 13b4 "review.dispatched telemetry emitted" || assert_bad 13b4 "no dispatched telemetry"
+grep -q "^${SEAT_NAME_looper:?} :: LOOP-BOT: filed verdict for #REV-10" "$PROMPTS" \
+  && assert_ok 13b5 "green notice reaches the namespaced looper seat" || assert_bad 13b5 "looper notice target: $(grep LOOP-BOT "$PROMPTS" | head -1)"
 
 # [13c] reviewer PASS → review_passed + enqueue (exactly once across passes)
 VERDICT_R="REVIEW VERDICT #REV-10 $SHA_RD PASS"
@@ -332,6 +355,58 @@ grep -q '"recipient": "seat-b"' "$STATE"/traces/*.jsonl 2>/dev/null \
   && assert_ok 13d4 "review.critique telemetry names recipient" || assert_bad 13d4 "no critique telemetry"
 grep -q '"findings_count": 2' "$STATE"/traces/*.jsonl 2>/dev/null \
   && assert_ok 13d5 "verdict telemetry counts findings from the evidence file" || assert_bad 13d5 "findings_count wrong"
+
+# [13h] the fix after a BLOCK is a new sha on an already-green ticket: it must
+# be gated and re-reviewed, not dropped by the green-retire rule
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m rev5h
+SHA_RH=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #REV-11 $SHA_RH"; VERDICT_R=""
+: > "$PROMPTS"
+harvest_verdicts >/dev/null 2>&1
+sleep 0.6; gate_reap >/dev/null 2>&1
+jq -e -s --arg s "$SHA_RH" 'any(.[]; .ticket == "REV-11" and .sha == $s and .suite == "green")' "$LOG" >/dev/null 2>&1 \
+  && assert_ok 13h "re-verdict after BLOCK is gated at the new sha" || assert_bad 13h "new sha never gated"
+[[ "$(rstate REV-11)" == "awaiting_review" ]] && grep -q "seat-r :: DISPATCH: Review #REV-11 @ ${SHA_RH} (round 2/2)" "$PROMPTS" \
+  && assert_ok 13h2 "re-verdict goes back to the reviewer as round 2" || assert_bad 13h2 "state $(rstate REV-11): $(cat "$PROMPTS")"
+
+# [13f] REV-JQ-1: evidence file with ZERO findings — `grep -c` prints "0"
+# AND exits 1, so the old `|| printf '0'` concatenated a second 0 onto the
+# count ("0\n0"), jq --argjson parse-errored, and the whole review.verdict
+# payload was silently dropped. The event must now emit with findings_count 0.
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m rev5f
+SHA_RF=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #REV-12 $SHA_RF"; VERDICT_R=""
+harvest_verdicts >/dev/null 2>&1
+sleep 0.6; gate_reap >/dev/null 2>&1
+printf 'verdict: PASS\nthis evidence file has no findings-marker lines\n' \
+  > "$STATE/reviews/REV-12-$SHA_RF.md"
+VERDICT_R="REVIEW VERDICT #REV-12 $SHA_RF PASS"
+harvest_verdicts >/dev/null 2>&1
+grep -qF '"summary": "review PASS for #REV-12 (round 1, 0 findings)"' "$STATE"/traces/*.jsonl 2>/dev/null \
+  && assert_ok 13f "zero-findings evidence: verdict telemetry emits with findings_count 0" \
+  || assert_bad 13f "no/incorrect telemetry for REV-12"
+[[ "$(rstate REV-12)" == "review_passed" ]] \
+  && assert_ok 13f2 "zero-findings PASS still transitions review_passed" || assert_bad 13f2 "state $(rstate REV-12)"
+
+# [13g] REV-JQ-1: non-numeric round in reviews.json (valid JSON, corrupt
+# value) must degrade to round 0 in telemetry — without breaking the state
+# machine transition. Under the old payload jq this was `tonumber` on "bad"
+# → parse error → payload dropped.
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m rev5g
+SHA_RG=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #REV-13 $SHA_RG"; VERDICT_R=""
+harvest_verdicts >/dev/null 2>&1
+sleep 0.6; gate_reap >/dev/null 2>&1
+jq --arg t REV-13 '.reviews[$t].round = "bad"' "$STATE/reviews.json" > "$STATE/reviews.json.tmp" \
+  && mv "$STATE/reviews.json.tmp" "$STATE/reviews.json"
+printf '[CONCERNS] docs/x.md:1 — typo\n' > "$STATE/reviews/REV-13-$SHA_RG.md"
+VERDICT_R="REVIEW VERDICT #REV-13 $SHA_RG PASS"
+harvest_verdicts >/dev/null 2>&1
+grep -qF '"summary": "review PASS for #REV-13 (round 0, 1 findings)"' "$STATE"/traces/*.jsonl 2>/dev/null \
+  && assert_ok 13g "corrupt round degrades to 0 in telemetry; findings still counted" \
+  || assert_bad 13g "no/incorrect telemetry for REV-13"
+[[ "$(rstate REV-13)" == "review_passed" ]] \
+  && assert_ok 13g2 "state machine unaffected by corrupt round" || assert_bad 13g2 "state $(rstate REV-13)"
 
 # [13e] supervisor sources cleanly under TERM=dumb (tput hardening receipt)
 RROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -398,9 +473,18 @@ printf 'ARCH DONE #H-3 deadbeefdeadbeef\n' > "$STATE/logs/seat-b.log"
 harvest_verdicts >/dev/null 2>&1
 [[ "$(last_suite_of H-3)" == "skipped" ]] \
   && assert_ok 14c "fabricated sha still skipped (fail-closed unchanged)" || assert_bad 14c "H-3 $(last_suite_of H-3)"
+ROWH3=$(jq -c -s '[.[] | select((.ticket | tostring) == "H-3")] | .[0]' "$LOG")
+jq -e '(.host | type == "string" and length > 0) and (.pid | type == "number") and (.gate_log_sha256 == null)' <<<"$ROWH3" >/dev/null \
+  && assert_ok 14c2 "HASH-1: skipped row carries host/pid but no gate_log_sha256 (no gate ran)" \
+  || assert_bad 14c2 "H-3 evidence fields: $ROWH3"
+# legacy rows (pre-HASH-1 shape) still parse under the same readers
+printf '{"ts": 1, "ticket": "LEG-1", "sha": "aa", "seat": "s-old", "suite": "green", "exit_code": 0}\n' >> "$LOG"
+jq -e -s --arg t LEG-1 'any(.[]; .ticket == $t and .suite == "green" and (.gate_log_sha256 == null))' "$LOG" >/dev/null \
+  && assert_ok 14c4 "HASH-1: legacy row without evidence fields reads clean (absent → null)" \
+  || assert_bad 14c4 "legacy row broke a reader"
 [[ -f "$STATE/headless-notices.log" ]] && grep -q "absent from the repo" "$STATE/headless-notices.log" \
   && assert_ok 14c2 "looper notice durably logged (no swallowed alert)" || assert_bad 14c2 "no durable notice"
-! grep -q "looper ::" "$PROMPTS" \
+! grep -q "^looper[^ ]* ::" "$PROMPTS" \
   && assert_ok 14c3 "no herdr prompt to looper in headless mode" || assert_bad 14c3 "looper prompt leaked"
 
 # [14e] headless re-verdict ceiling (HEADLESS-5): second conclusive RED for
@@ -505,7 +589,11 @@ unset HEADLESS_MODE
 # fresh greens during the pause defer too; the retry pass fires all of them
 # the moment the probe clears; a fresh dispatch after clear goes straight
 # through. Review loop ON, reviewer seat = seat-r (stub serves QUOTA_OUT).
+# Sourcing the supervisor evals the shipped swarm.config.toml, which now
+# binds reviewer.failover_seat by default (REV-FAILOVER-1) — §16 pins the
+# NO-FAILOVER contract, so the binding is unset here; §17 exercises it.
 export CONFIG_REVIEW_LOOP=1 CONFIG_REVIEW_MAX_ROUNDS=2 SEAT_NAME_reviewer=seat-r
+unset CONFIG_REVIEW_FAILOVER_SEAT
 VERDICT_A=""; VERDICT_B=""; VERDICT_R=""
 export QUOTA_OUT='⚠ Individual quota reached. Please upgrade your subscription. Resets in 10m.'
 DEFER="$STATE/quota-deferred.jsonl"
@@ -622,6 +710,183 @@ rc=$?
   && assert_ok 16p "HERDR_ENV unset: no notification, defer seam rc unchanged (0)" \
   || assert_bad 16p "notif='$(cat "$NOTIF")' rc=$rc"
 export HERDR_ENV=1   # restore for any trailing assertions in this pane
+
+# ── 17: non-AGY reviewer failover on quota exhaustion (REV-FAILOVER-1) ────
+# ADR 0018: with a failover seat configured (CONFIG_REVIEW_FAILOVER_SEAT
+# naming a bound non-AGY seat), an exhausted agy account routes reviewer
+# dispatch to the failover seat instead of deferring — one reviewer per
+# verdict, no dual-active; the failover seat's verdict drives the same
+# REV-1..5 state machine and is attributed in reviews.json + telemetry; the
+# account clearing returns dispatch to the primary; deferred markers fail
+# over (never both); an agy-kind or unset failover keeps QUOTA-2's defer.
+export CONFIG_REVIEW_LOOP=1 CONFIG_REVIEW_MAX_ROUNDS=2 SEAT_NAME_reviewer=seat-r
+export QUOTA_OUT='⚠ Individual quota reached. Please upgrade your subscription. Resets in 10m.'
+CONFIG_REVIEW_FAILOVER_SEAT=arch_1 SEAT_NAME_arch_1=seat-f1 SEAT_KINDS_arch_1="opencode claude"
+export CONFIG_REVIEW_FAILOVER_SEAT SEAT_NAME_arch_1 SEAT_KINDS_arch_1
+VERDICT_A=""; VERDICT_B=""; VERDICT_R=""; VERDICT_F=""
+EXPECTED_SEATS+=(seat-f1)
+herdr() {
+  if [[ "${1:-}" == "notification" ]]; then
+    [[ "${2:-}" == "--help" ]] && return "${NOTIF_PROBE_RC:-0}"
+    if [[ "${2:-}" == "show" ]]; then printf '%s || %s\n' "$3" "$5" >> "$NOTIF" 2>/dev/null; return 0; fi
+    return 0
+  fi
+  if [[ "${1:-}" == "agent" && "${2:-}" == "read" ]]; then
+    printf 'read %s\n' "$3" >> "$READS"
+    [[ "${3:-}" == "seat-a" && -n "$VERDICT_A" ]] && printf '%s\n' "$VERDICT_A"
+    [[ "${3:-}" == "seat-b" && -n "$VERDICT_B" ]] && printf '%s\n' "$VERDICT_B"
+    [[ "${3:-}" == "seat-r" && -n "$VERDICT_R" ]] && printf '%s\n' "$VERDICT_R"
+    [[ "${3:-}" == "seat-r" && -n "${QUOTA_OUT:-}" ]] && printf '%s\n' "$QUOTA_OUT"
+    [[ "${3:-}" == "seat-f1" && -n "${VERDICT_F:-}" ]] && printf '%s\n' "$VERDICT_F"
+  fi
+  if [[ "${1:-}" == "agent" && "${2:-}" == "prompt" ]]; then
+    printf '%s :: %s\n' "$3" "$4" >> "$PROMPTS"
+  fi
+  return 0
+}
+
+# [17a] fresh green during exhaustion + failover → dispatched to the
+# failover seat (contract pointer in message), primary untouched, no marker
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m rf1
+SHA_RF1=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #RF-1 $SHA_RF1"
+: > "$PROMPTS"; rm -f "$DEFER"
+harvest_verdicts >/dev/null 2>&1; sleep 0.6; gate_reap >/dev/null 2>&1; sleep 0.5
+grep -q "seat-f1 :: REVIEW FAILOVER: Review #RF-1 @ ${SHA_RF1} (round 1/2)" "$PROMPTS" \
+  && grep -q "briefs/reviewer.md" "$PROMPTS" \
+  && assert_ok 17a "exhausted + failover configured: dispatch routes to failover seat with brief pointer" \
+  || assert_bad 17a "failover dispatch missing: $(cat "$PROMPTS")"
+! grep -q "seat-r :: " "$PROMPTS" \
+  && assert_ok 17a2 "primary reviewer NOT prompted during failover" || assert_bad 17a2 "primary prompted too"
+[[ ! -f "$DEFER" ]] \
+  && assert_ok 17a3 "no defer marker when failover serves the dispatch" || assert_bad 17a3 "marker written despite failover"
+[[ "$(grep -cE '(seat-r|seat-f1) :: (DISPATCH: Review|REVIEW FAILOVER)' "$PROMPTS")" -eq 1 ]] \
+  && assert_ok 17b "no dual-active: exactly one reviewer dispatch for the verdict" \
+  || assert_bad 17b "reviewer dispatch count: $(grep -cE '(seat-r|seat-f1) :: (DISPATCH: Review|REVIEW FAILOVER)' "$PROMPTS")"
+
+# [17c] the failover seat's verdict drives the same REV-1..5 machine and is
+# attributed (reviews.json .reviewer + telemetry agent)
+VERDICT_F="REVIEW VERDICT #RF-1 $SHA_RF1 PASS"
+harvest_verdicts >/dev/null 2>&1
+[[ "$(rstate RF-1)" == "review_passed" ]] \
+  && assert_ok 17c "failover verdict transitions review_passed" || assert_bad 17c "state $(rstate RF-1)"
+[[ "$(qcount RF-1 "$SHA_RF1")" -eq 1 ]] \
+  && assert_ok 17c2 "failover PASS enqueues to arbiter (same machine)" || assert_bad 17c2 "enqueue n=$(qcount RF-1 "$SHA_RF1")"
+[[ "$(jq -r --arg t RF-1 '.reviews[$t].reviewer // "none"' "$STATE/reviews.json" 2>/dev/null)" == "seat-f1" ]] \
+  && assert_ok 17c3 "reviews.json attributes the verdict to the failover seat" \
+  || assert_bad 17c3 "reviewer attribution missing"
+grep -q '"agent": "seat-f1"' "$STATE"/traces/*.jsonl 2>/dev/null \
+  && grep -q '"failover": true' "$STATE"/traces/*.jsonl 2>/dev/null \
+  && assert_ok 17c4 "telemetry names the failover seat and failover flag" \
+  || assert_bad 17c4 "failover telemetry missing"
+
+# [17d] account clears → dispatch returns to the primary
+unset QUOTA_OUT
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m rf2
+SHA_RF2=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #RF-2 $SHA_RF2"; VERDICT_F=""
+: > "$PROMPTS"
+harvest_verdicts >/dev/null 2>&1; sleep 0.6; gate_reap >/dev/null 2>&1; sleep 0.5
+grep -q "seat-r :: DISPATCH: Review #RF-2 @ ${SHA_RF2} (round 1/2)" "$PROMPTS" \
+  && assert_ok 17d "quota cleared: dispatch returns to the primary reviewer" \
+  || assert_bad 17d "primary dispatch missing: $(cat "$PROMPTS")"
+! grep -q "seat-f1 :: " "$PROMPTS" \
+  && assert_ok 17d2 "failover seat idle after account clears" || assert_bad 17d2 "failover still serving"
+
+# [17e] markers created WITHOUT failover fail over when one appears —
+# exactly one resolution per deferred verdict (ADR 0018: never both)
+unset CONFIG_REVIEW_FAILOVER_SEAT
+export QUOTA_OUT='⚠ Individual quota reached. Please upgrade your subscription. Resets in 10m.'
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m rf3
+SHA_RF3=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #RF-3 $SHA_RF3"
+: > "$PROMPTS"; rm -f "$DEFER"
+harvest_verdicts >/dev/null 2>&1; sleep 0.6; gate_reap >/dev/null 2>&1; sleep 0.5
+[[ -f "$DEFER" ]] && ! grep -q "seat-f1 :: " "$PROMPTS" \
+  && assert_ok 17e "no failover configured: QUOTA-2 defer stands (marker written)" \
+  || assert_bad 17e "defer-without-failover broken: $(cat "$DEFER" 2>/dev/null)"
+export CONFIG_REVIEW_FAILOVER_SEAT=arch_1
+: > "$PROMPTS"
+_quota_retry_deferred >/dev/null 2>&1
+grep -q "seat-f1 :: REVIEW FAILOVER: Review #RF-3 @ ${SHA_RF3}" "$PROMPTS" \
+  && [[ ! -f "$DEFER" ]] && ! grep -q "seat-r :: " "$PROMPTS" \
+  && assert_ok 17e2 "retry pass fails deferred markers over and drains them (primary untouched)" \
+  || assert_bad 17e2 "marker failover: $(cat "$PROMPTS") / marker=$(cat "$DEFER" 2>/dev/null)"
+
+# [17f] an agy-kind failover target is refused at resolution time (config
+# has a parse-time guard; this is the runtime backstop) → defer stands
+SEAT_KINDS_arch_1="agy"; export SEAT_KINDS_arch_1
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m rf4
+SHA_RF4=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #RF-4 $SHA_RF4"
+: > "$PROMPTS"; rm -f "$DEFER"
+harvest_verdicts >/dev/null 2>&1; sleep 0.6; gate_reap >/dev/null 2>&1; sleep 0.5
+[[ -f "$DEFER" ]] && ! grep -q "seat-f1 :: " "$PROMPTS" && ! grep -q "seat-r :: " "$PROMPTS" \
+  && assert_ok 17f "agy-kind failover target refused — defer stands" \
+  || assert_bad 17f "agy failover not refused: $(cat "$PROMPTS")"
+
+# §17 cleanup: restore the failover-free default for anything trailing.
+# VERDICT_F is emptied, never unset — the stub above reads it with ${:-}
+# but keep the set-"" convention of VERDICT_A/VERDICT_B/VERDICT_R so a
+# later stub revision can never abort a $( ) subshell on an unbound var.
+SEAT_KINDS_arch_1="opencode claude"; export SEAT_KINDS_arch_1
+VERDICT_F=""
+unset CONFIG_REVIEW_FAILOVER_SEAT QUOTA_OUT
+rm -f "$DEFER"
+
+# ── 18: seeded-regression pair — verdict dedupe drops the sha (SEEDED-1) ───
+# The pair discipline (tests/helpers/seed.sh): the harvest lane's
+# (ticket, sha) dedupe must go RED when seeded into a ticket-only match —
+# a RED verdict would then silently swallow every re-verdict at a new sha,
+# exactly the false-skip the exact-sha protocol (ADR 0002) exists to
+# prevent. Healthy half: RED@S1 then re-verdict@S2 IS re-gated (green row
+# recorded). Seeded half: the same shape fails — no row for the new sha.
+# Inline gating (gc=0) keeps verdict rows synchronous for determinism.
+# shellcheck disable=SC1091  # shared seeded-pair helper (SEEDED-1)
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers/seed.sh"
+GATE_CONCURRENCY=0
+export CONFIG_REVIEW_LOOP=0   # dedupe pair exercises the harvest lane only
+
+# healthy half (ticket SD-A): RED@S1 → re-verdict@S2 gates green
+printf '#!/bin/sh\nexit 1\n' > "$WTB/gate.sh"
+git -C "$WTB" add -A; git -C "$WTB" -c user.email=t@t -c user.name=t commit -q -m sd-red
+SHA_S1=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #SD-A $SHA_S1"; VERDICT_R=""
+harvest_verdicts >/dev/null 2>&1
+[[ "$(last_suite_of SD-A)" == "RED" ]] \
+  && assert_ok 18a "healthy half: RED recorded at S1" || assert_bad 18a "RED@S1 (got $(last_suite_of SD-A))"
+printf '#!/bin/sh\nexit 0\n' > "$WTB/gate.sh"
+git -C "$WTB" add -A; git -C "$WTB" -c user.email=t@t -c user.name=t commit -q -m sd-green
+SHA_S2=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #SD-A $SHA_S2"
+harvest_verdicts >/dev/null 2>&1
+jq -e -s --arg t SD-A --arg s "$SHA_S2" 'any(.[]; (.ticket|tostring) == $t and .sha == $s and .suite == "green")' "$LOG" >/dev/null 2>&1 \
+  && assert_ok 18b "healthy half: re-verdict at NEW sha is re-gated (green row)" \
+  || assert_bad 18b "no green row for SD-A @ S2"
+
+# seeded half (ticket SD-B): dedupe matches any sha for the ticket → the
+# re-verdict after a conclusive RED is silently skipped, no row lands
+sd_body='
+  printf "#!/bin/sh\nexit 1\n" > "$WTB/gate.sh"
+  git -C "$WTB" add -A; git -C "$WTB" -c user.email=t@t -c user.name=t commit -q -m sd-seed-red
+  S3=$(git -C "$WTB" rev-parse HEAD)
+  VERDICT_B="ARCH DONE #SD-B $S3"
+  harvest_verdicts >/dev/null 2>&1
+  printf "#!/bin/sh\nexit 0\n" > "$WTB/gate.sh"
+  git -C "$WTB" add -A; git -C "$WTB" -c user.email=t@t -c user.name=t commit -q -m sd-seed-green
+  S4=$(git -C "$WTB" rev-parse HEAD)
+  VERDICT_B="ARCH DONE #SD-B $S4"
+  harvest_verdicts >/dev/null 2>&1
+  jq -e -s --arg t SD-B --arg s "$S4" "any(.[]; (.ticket|tostring) == \$t and .sha == \$s)" "$LOG"
+'
+if with_seeded_defect harvest_verdicts 's/and \.sha == \$s and (\.suite/and (.suite/' "$sd_body"; then
+  assert_ok 18c "seeded half: re-verdict row FAILS to land when dedupe drops the sha (teeth proven)"
+else
+  assert_bad 18c "seeded half: row landed despite sha-less dedupe — no teeth"
+fi
+VERDICT_B=""
+GATE_CONCURRENCY=2
+unset CONFIG_REVIEW_LOOP
 
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"

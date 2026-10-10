@@ -116,3 +116,22 @@ resolve_timeout() {
   printf 'timeout: remedy: brew install coreutils, or export TIMEOUT_BIN=/path/to/timeout\n' >&2
   return 1
 }
+
+# ── verdict evidence (HASH-1) ───────────────────────────────────────────────
+# Tamper-evident verdict rows: every new session-verdicts.jsonl record carries
+# the supervising host and pid; rows produced by an actual gate run also carry
+# a sha256 over that run's gate-log bytes, binding the claim to its evidence
+# (OpenRig judgment-ledger format; mechanically re-executed evidence only).
+evidence_host() { # short hostname, $HOSTNAME fallback
+  local h=""
+  h=$(hostname -s 2>/dev/null) || h=""
+  [[ -n "$h" ]] || h="${HOSTNAME:-unknown}"
+  printf '%s\n' "$h"
+}
+
+evidence_sha256() { # FILE → sha256 hex; rc 1 + empty when unreadable
+  [[ -f "$1" && -r "$1" ]] || return 1
+  shasum -a 256 "$1" 2>/dev/null | awk '{print $1}' && return 0
+  sha256sum "$1" 2>/dev/null | awk '{print $1}' && return 0
+  return 1
+}

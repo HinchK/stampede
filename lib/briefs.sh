@@ -24,21 +24,18 @@ substitute_template() {
 
   mkdir -p "$(dirname "$output_out")"
 
-  "$PYTHON_BIN" -c "
+  "$PYTHON_BIN" - "$template_in" "$output_out" "$vars_json" <<'PYCODE'
 import json, sys
 
-with open('$template_in', 'r', encoding='utf-8') as f:
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
     content = f.read()
 
-vars_dict = json.loads('''$vars_json''')
+for k, v in json.loads(sys.argv[3]).items():
+    content = content.replace('{{' + k + '}}', str(v))
 
-for k, v in vars_dict.items():
-    placeholder = '{{' + k + '}}'
-    content = content.replace(placeholder, str(v))
-
-with open('$output_out', 'w', encoding='utf-8') as f:
+with open(sys.argv[2], 'w', encoding='utf-8') as f:
     f.write(content)
-"
+PYCODE
 }
 
 # Render all brief templates for a target repository and slug
@@ -76,7 +73,7 @@ vars_map = {
     'SLUG': '$slug',
     'SCRIPT_DIR': os.environ.get('SCRIPT_DIR', ''),
     'ARBITER_BIN': os.environ.get('ARBITER_BIN', ''),
-    'ARCH_NAME': os.environ.get('SEAT_NAME_arch', 'arch-$slug'),
+    'ARCH_NAME': os.environ.get('SEAT_NAME_arch_1') or os.environ.get('SEAT_NAME_arch', 'arch-$slug'),
     'LOOPER_NAME': os.environ.get('SEAT_NAME_looper', 'looper-$slug'),
     'PM_NAME': os.environ.get('SEAT_NAME_pm', 'pm-$slug'),
     'DOCS_NAME': os.environ.get('SEAT_NAME_docs', 'agy-docs-$slug'),

@@ -74,8 +74,29 @@ PROBE_BIN="$TEST_DIR/stub-bin"; mkdir -p "$PROBE_BIN"
 printf '#!/bin/sh\nexit 0\n' > "$PROBE_BIN/uv"; chmod +x "$PROBE_BIN/uv"
 check "4b" "python TEST_CMD with uv present -> uv run pytest -q" \
   '[[ $(PATH="$PROBE_BIN:$PATH" detect_test_cmd "$R4") == "uv run pytest -q" ]]'
-check "4c" "python TEST_CMD with no uv and no poetry.lock -> pytest -q" \
-  '[[ $(PATH=/usr/bin:/bin detect_test_cmd "$R4") == "pytest -q" ]]'
+
+# TEST-PATH-1: 4c simulates "no uv, no poetry installed" via a HERMETIC bin —
+# never by allowlisting host system directories. PATH=/usr/bin:/bin assumed uv
+# absent from /usr/bin, which a future runner image (or container, or local
+# package manager) can invalidate overnight: same defect class as CI-FIX-1/2/3.
+# The hermetic bin carries symlinks only to utilities detect_test_cmd may
+# exec (its python branch itself needs none — command -v/[[ ]]/echo are
+# builtins); uv and poetry are absent by construction, so no ambient or
+# system-installed runner can leak into the lookup.
+HERMETIC_BIN="$TEST_DIR/hermetic-bin"; mkdir -p "$HERMETIC_BIN"
+for tool in cat grep sed awk head cut find; do
+  tool_path=$(command -v "$tool" 2>/dev/null || true)
+  if [[ -n "$tool_path" ]]; then ln -sf "$tool_path" "$HERMETIC_BIN/$tool"; fi
+done
+# Hazard receipt, both directions: a runner-style uv planted in a system-ish
+# bin dir IS visible when that dir is on PATH (the hazard is real), yet the
+# hermetic PATH cannot see it (the isolation holds).
+AMBIENT_BIN="$TEST_DIR/ambient-bin"; mkdir -p "$AMBIENT_BIN"
+printf '#!/bin/sh\nexit 0\n' > "$AMBIENT_BIN/uv"; chmod +x "$AMBIENT_BIN/uv"
+check "4c-hazard" "hazard is real: a uv on PATH flips detection to the uv branch" \
+  '[[ $(PATH="$AMBIENT_BIN:$HERMETIC_BIN" detect_test_cmd "$R4") == "uv run pytest -q" ]]'
+check "4c" "python TEST_CMD with no uv and no poetry.lock -> pytest -q (hermetic PATH; ambient uv cannot leak)" \
+  '[[ $(PATH="$HERMETIC_BIN" detect_test_cmd "$R4") == "pytest -q" ]]'
 
 # ── 5. empty repo stays fail-closed ─────────────────────────────────────────
 R5="$TEST_DIR/empty-repo"; mkdir -p "$R5"

@@ -16,7 +16,10 @@
 # and — ROUTE-4 — seat activity: dispatch counts from window-filtered
 # `lease.acquired` trace events and commit share from git log attributed
 # via integrate-records/seat trailers (unattributed → other; missing
-# sources render n/a, never fabricated zeros).
+# sources render n/a, never fabricated zeros). Seat PRESENCE (STATUS-
+# INDET-1) is derived at read time from seats.json × `herdr pane list`:
+# anything short of positive confirmation renders INDETERMINATE with its
+# basis, never a confident claim from a recorded label.
 #
 # Output: one ANSI table for humans; --json names its sources for
 # scripting. The human table is rendered FROM the same JSON object the
@@ -51,6 +54,93 @@ _status_iso() {
   date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
     || date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
     || printf '?'
+}
+
+# _status_presence_json STATE_DIR REPO → seat presence derived at READ time
+# (STATUS-INDET-1). seats.json is the ledger (pane id + expected dir: the
+# worktree for isolated seats, the repo root otherwise); `herdr pane list`
+# is the live pane table. Only a POSITIVE confirmation renders "present" —
+# an unreadable ledger, a failed pane query, a dead pane, or cwd drift each
+# renders INDETERMINATE with its basis; an unreachable source is never
+# collapsed into a confident presence claim (OpenRig execution-view rule,
+# adopted via BORROW-1).
+_status_presence_json() { # STATE_DIR REPO
+  local state="$1" repo="$2"
+  local seats_file="$state/seats.json"
+
+  if [[ ! -f "$seats_file" ]]; then
+    jq -cn '{status: "indeterminate", basis: "seats.json unreadable: missing", source: null, seats: []}'
+    return 0
+  fi
+
+  local ledger=""
+  if ! ledger=$(cat "$seats_file" 2>/dev/null); then
+    jq -cn '{status: "indeterminate", basis: "seats.json unreadable: read error", source: null, seats: []}'
+    return 0
+  fi
+  if ! jq -e 'type == "object"' >/dev/null 2>&1 <<<"$ledger"; then
+    jq -cn --arg src "$seats_file" \
+      '{status: "indeterminate", basis: "seats.json unreadable: invalid json", source: $src, seats: []}'
+    return 0
+  fi
+  if ! jq -e '(.seats | type) == "array"' >/dev/null 2>&1 <<<"$ledger"; then
+    jq -cn --arg src "$seats_file" \
+      '{status: "indeterminate", basis: "seats.json unreadable: no seats array", source: $src, seats: []}'
+    return 0
+  fi
+
+  # Physical paths: pane cwds are physical, so expectations must be too
+  # (same strict-cwd discipline as lib/lifecycle.sh).
+  local phys_root=""
+  phys_root=$(cd "$repo" 2>/dev/null && pwd -P) || phys_root="$repo"
+
+  # Ledger rows → TSV with each worktree resolved to its physical path.
+  local tsv name pane wtd wtphys rows_tsv=""
+  tsv=$(jq -r '.seats[]? | [((.name // "?") | tostring), ((.pane // "") | tostring), ((.worktree_dir // "") | tostring)] | @tsv' <<<"$ledger" 2>/dev/null) || tsv=""
+  while IFS=$'\t' read -r name pane wtd; do
+    [[ -n "$name" ]] || continue
+    wtphys=""
+    if [[ -n "$wtd" && -d "$wtd" ]]; then
+      wtphys=$(cd "$wtd" 2>/dev/null && pwd -P) || wtphys="$wtd"
+    elif [[ -n "$wtd" ]]; then
+      wtphys="$wtd"
+    fi
+    rows_tsv+="${name}"$'\t'"${pane}"$'\t'"${wtphys}"$'\n'
+  done <<<"$tsv"
+
+  # One pane query for the whole panel (consistent snapshot, one subprocess).
+  local panes="[]" qerr="" pout="" prc=0
+  if ! command -v herdr >/dev/null 2>&1; then
+    qerr="herdr not on PATH"
+  else
+    pout=$(herdr pane list 2>/dev/null) || prc=$?
+    if (( prc != 0 )); then
+      qerr="herdr pane list exited rc=$prc"
+    elif ! jq -e '(.result.panes | type) == "array"' >/dev/null 2>&1 <<<"$pout"; then
+      qerr="pane list output not JSON"
+    else
+      panes=$(jq -c '[.result.panes[]? | {pane_id, cwd}]' <<<"$pout")
+    fi
+  fi
+
+  jq -R -s --arg root "$phys_root" --arg qerr "$qerr" \
+    --argjson panes "$panes" --arg src "$seats_file" '
+    split("\n") | map(select(length > 0)) | map(split("\t"))
+    | map({name: .[0], pane: (if .[1] == "" then null else .[1] end),
+            expected: (if .[2] == "" then $root else .[2] end)})
+    | map(. as $s
+        | (if $qerr != "" then null
+           else ([$panes[] | select(.pane_id == $s.pane)] | first) end) as $pn
+        | (if $qerr != "" then "pane query failed: " + $qerr
+           elif $s.pane == null then "no pane recorded"
+           elif $pn == null then "dead pane: " + $s.pane + " not in pane list"
+           elif ($pn.cwd // "") != $s.expected
+             then "cwd mismatch: pane in " + ($pn.cwd // "?") + ", seat expects " + $s.expected
+           else null end) as $b
+        | {seat: $s.name, pane: $s.pane, expected_dir: $s.expected,
+           presence: (if $b == null then "present" else "INDETERMINATE" end),
+           basis: $b})
+    | {status: "ok", basis: null, source: $src, seats: .}' <<<"$rows_tsv"
 }
 
 # _status_activity_json REPO STATE_DIR TJSON DAYS → ROUTE-4 Seat Activity
@@ -354,6 +444,12 @@ EOF
   activity_json=$(_status_activity_json "$repo" "$state" "$tjson" "$window_days") \
     || activity_json='{"window_days":7,"since_iso":"?","sources":{},"gaps":[],"seats":[],"other_commits":null,"total_commits":null}'
 
+  # Seat presence (STATUS-INDET-1): derived at read time, INDETERMINATE
+  # floor — the aggregator itself failing degrades to indeterminate, too.
+  local presence_json
+  presence_json=$(_status_presence_json "$state" "$repo") \
+    || presence_json='{"status":"indeterminate","basis":"presence aggregation failed","source":null,"seats":[]}'
+
   # ── the single source of truth: one JSON object, both renderers read it ───
   local final
   final=$(jq -n \
@@ -372,6 +468,7 @@ EOF
     --argjson reverdicts "$reverdicts_json" \
     --argjson reviews "$reviews_json" \
     --argjson activity "$activity_json" \
+    --argjson presence "$presence_json" \
     '{
       command: "stampede status --rich",
       read_only: true,
@@ -391,7 +488,8 @@ EOF
       providers: $providers,
       reverdicts: $reverdicts,
       reviews: $reviews,
-      activity: $activity
+      activity: $activity,
+      presence: $presence
     }')
 
   if (( json )); then
@@ -479,6 +577,29 @@ EOF
     while IFS=$'\t' read -r pk ps pg; do
       printf '  %-10s %5s %5s\n' "$pk" "$ps" "$pg"
     done < <(jq -r '.providers[] | [.kind, (.seats|tostring), (.gates|tostring)] | @tsv' <<<"$final")
+  fi
+
+  # ── Seat presence panel (STATUS-INDET-1) — read-time derivation with an
+  # INDETERMINATE floor: an unreadable ledger, failed pane query, dead pane,
+  # or cwd drift never renders as a confident presence claim.
+  printf '\n  %bseat presence%s  derived at read time (seats.json + herdr pane list)\n' "$BOLD" "$RESET"
+  if [[ "$(jq -r '.presence.status' <<<"$final")" != "ok" ]]; then
+    printf '  seats: %sINDETERMINATE%s (basis: %s)\n' \
+      "$YELLOW" "$RESET" "$(jq -r '.presence.basis // "unknown"' <<<"$final")"
+  elif [[ "$(jq '.presence.seats | length' <<<"$final")" -gt 0 ]]; then
+    printf '  %-14s %-9s %s\n' "SEAT" "PANE" "PRESENCE"
+    local pr_seat pr_pane pr_state pr_basis
+    while IFS=$'\t' read -r pr_seat pr_pane pr_state; do
+      if [[ "$pr_state" == "present" ]]; then
+        printf '  %-14s %-9s %s\n' "$pr_seat" "$pr_pane" "$pr_state"
+      else
+        pr_basis=$(jq -r --arg s "$pr_seat" '.presence.seats[] | select(.seat == $s) | .basis // "?"' <<<"$final")
+        printf '  %-14s %-9s %sINDETERMINATE%s (basis: %s)\n' \
+          "$pr_seat" "$pr_pane" "$YELLOW" "$RESET" "$pr_basis"
+      fi
+    done < <(jq -r '.presence.seats[] | [.seat, (.pane // "-"), .presence] | @tsv' <<<"$final")
+  else
+    printf '  no seats in ledger\n'
   fi
 
   # ── Seat Activity panel (ROUTE-4) — rendered FROM $final like the rest ───

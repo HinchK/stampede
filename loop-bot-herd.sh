@@ -42,6 +42,22 @@ SUITE_TIMEOUT_S="${SUITE_TIMEOUT_S:-300}"
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck disable=SC1091  # dynamically resolved sibling libs
 source "$SCRIPT_DIR/lib/common.sh"
+
+# HASH-1: tamper-evident verdict rows. Every record appended to
+# $SESSION_LOG embeds the supervising host + pid; rows backed by an actual
+# gate run also embed a sha256 over that run's gate-log bytes, binding the
+# claim to its evidence. Legacy rows (no fields) keep parsing — readers use
+# `.gate_log_sha256 // empty`-style access.
+_verdict_evidence() { # [GATE_LOG] → JSON fragment for the row tail
+  local frag="" d
+  frag="\"host\": \"$(evidence_host)\", \"pid\": $$"
+  if [[ -n "${1:-}" ]]; then
+    d=$(evidence_sha256 "$1") || d=""
+    [[ -n "$d" ]] && frag+=", \"gate_log_sha256\": \"$d\""
+  fi
+  printf '%s' "$frag"
+}
+
 # shellcheck disable=SC1091  # tomllib-capable interpreter (DOG-1)
 source "$SCRIPT_DIR/lib/pyenv.sh"
 resolve_python
@@ -387,7 +403,7 @@ gate_reap() {
       fi
     fi
 
-    echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"exit_code\": $rc_val, \"log\": \"$gate_log\"}" >> "$SESSION_LOG"
+    echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"exit_code\": $rc_val, \"log\": \"$gate_log\", $(_verdict_evidence "$gate_log")}" >> "$SESSION_LOG"
     "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" suite.verdict "$seat" "$ticket" \
       "$(jq -cn --arg s "$suite_ok" --arg sha "$sha" --arg seat "$seat" --arg t "$ticket" \
         '{suite:$s, sha:$sha, summary:("suite " + $s + " @ " + $sha), details:("seat=" + $seat + " ticket=#" + $t)}')" \
@@ -430,15 +446,50 @@ _agy_quota_exhausted() { # REVIEWER_SEAT → rc 0 = account exhausted
   [[ "$probe" =~ ^ok:[0-9]+s$ ]]
 }
 
+# REV-FAILOVER-1 (ADR 0018): resolve the configured non-AGY failover
+# reviewer. Prints the runtime seat name and returns 0 only when the
+# config names a bound seat whose provider chain contains no "agy" (an
+# agy target shares the exhausted account and would be walled too — the
+# kind check here is the runtime backstop behind config.sh's parse-time
+# validation, because tests and operators can inject seat bindings via
+# the environment). Unset, unbound, or agy-kind → rc 1: the caller keeps
+# QUOTA-2's defer behavior exactly. No hardcoded seat names.
+_review_failover_seat() {
+  local key="${CONFIG_REVIEW_FAILOVER_SEAT:-}" namevar kindsvar name kinds
+  [[ -n "$key" ]] || return 1
+  namevar="SEAT_NAME_${key}"
+  kindsvar="SEAT_KINDS_${key}"
+  name="${!namevar:-}"
+  kinds="${!kindsvar:-}"
+  [[ -n "$name" ]] || return 1
+  if [[ " $kinds " == *" agy "* ]]; then
+    warn "review failover: seat '${key}' is agy-kind — ignoring failover config (ADR 0018)"
+    return 1
+  fi
+  printf '%s\n' "$name"
+}
+
 # The actual reviewer dispatch, shared by the direct path, the defer path,
-# and the retry pass — one voice, one telemetry shape.
-_dispatch_reviewer() { # RSEAT TICKET SHA ROUND MAX
-  local rseat="$1" t="$2" sha="$3" r="$4" m="$5"
-  note "review loop: dispatching reviewer for #$t @ ${sha} (round ${r}/${m})"
-  worker_feedback "$rseat" "$t" "$sha" "review-r${r}" "DISPATCH: Review #${t} @ ${sha} (round ${r}/${m}). Follow your seat brief."
+# and the retry pass — one voice, one telemetry shape. MODE "failover"
+# (REV-FAILOVER-1 / ADR 0018) targets a non-reviewer seat, so the message
+# must carry the reviewer contract as a pointer: the rendered reviewer
+# brief defines the verdict anchor, evidence file, findings format, and
+# round budget; the target's own seat brief does NOT.
+_dispatch_reviewer() { # RSEAT TICKET SHA ROUND MAX [MODE]
+  local rseat="$1" t="$2" sha="$3" r="$4" m="$5" mode="${6:-primary}"
+  local msg fo="false" fsuffix=""
+  if [[ "$mode" == "failover" ]]; then
+    fo="true"
+    fsuffix=" [failover: ${rseat}]"
+    msg="REVIEW FAILOVER: Review #${t} @ ${sha} (round ${r}/${m}) — primary reviewer quota-walled. Follow the reviewer brief at ${STATE_DIR}/briefs/reviewer.md and emit its REVIEW VERDICT anchor."
+  else
+    msg="DISPATCH: Review #${t} @ ${sha} (round ${r}/${m}). Follow your seat brief."
+  fi
+  note "review loop: dispatching reviewer for #$t @ ${sha} (round ${r}/${m})${fsuffix}"
+  worker_feedback "$rseat" "$t" "$sha" "review-r${r}" "$msg"
   "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" review.dispatched "$rseat" "$t" \
-    "$(jq -cn --arg t "$t" --arg h "$sha" --arg r "$r" \
-      '{ticket:$t, sha:$h, round:($r|tonumber), summary:("review round " + $r + " dispatched for #" + $t)}')" \
+    "$(jq -cn --arg t "$t" --arg h "$sha" --arg r "$r" --arg fo "$fo" \
+      '{ticket:$t, sha:$h, round:($r|tonumber? // 0), failover:($fo == "true"), summary:((if $fo == "true" then "FAILOVER " else "" end) + "review round " + $r + " dispatched for #" + $t)}')" \
     --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
 }
 
@@ -452,17 +503,11 @@ _quota_defer_reviewer() { # TICKET SHA ROUND MAX — record the durable marker
     --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
 }
 
-# Each poll cycle, before anything else dispatches to an agy seat: still
-# exhausted → report and hold; cleared → retry ALL pending dispatches.
-_quota_retry_deferred() {
-  [[ -f "$QUOTA_DEFER_FILE" ]] || return 0
-  local rseat="${SEAT_NAME_reviewer:-reviewer}"
-  if _agy_quota_exhausted "$rseat"; then
-    note "quota: agy account still exhausted — $(wc -l < "$QUOTA_DEFER_FILE" | tr -d ' ') reviewer dispatch(es) deferred"
-    return 0
-  fi
-  local rec t sha r m
-  ok "quota: agy quota cleared — retrying deferred reviewer dispatch(es)"
+# Replay every durable marker record through _dispatch_reviewer, then
+# remove the marker. One resolution per deferred dispatch (REV-FAILOVER-1:
+# retry-to-primary on clear, or failover while walled — never both).
+_quota_drain_markers() { # SEAT MODE
+  local seat="$1" mode="$2" rec t sha r m
   while IFS= read -r rec; do
     [[ -n "$rec" ]] || continue
     t=$(jq -r '.ticket // empty' <<<"$rec" 2>/dev/null) || continue
@@ -470,9 +515,29 @@ _quota_retry_deferred() {
     r=$(jq -r '.round // empty' <<<"$rec" 2>/dev/null)
     m=$(jq -r '.max // empty' <<<"$rec" 2>/dev/null)
     [[ -n "$t" && -n "$sha" && -n "$r" && -n "$m" ]] || continue
-    _dispatch_reviewer "$rseat" "$t" "$sha" "$r" "$m"
+    _dispatch_reviewer "$seat" "$t" "$sha" "$r" "$m" "$mode"
   done < "$QUOTA_DEFER_FILE"
   rm -f "$QUOTA_DEFER_FILE"
+}
+
+# Each poll cycle, before anything else dispatches to an agy seat: still
+# exhausted → fail the backlog over to a configured non-AGY reviewer
+# (REV-FAILOVER-1 / ADR 0018) or, with none resolvable, hold; cleared →
+# retry ALL pending dispatches to the primary.
+_quota_retry_deferred() {
+  [[ -f "$QUOTA_DEFER_FILE" ]] || return 0
+  local rseat="${SEAT_NAME_reviewer:-reviewer}" fseat
+  if _agy_quota_exhausted "$rseat"; then
+    if fseat=$(_review_failover_seat); then
+      ok "quota: agy account still exhausted — failing over $(wc -l < "$QUOTA_DEFER_FILE" | tr -d ' ') deferred reviewer dispatch(es) to ${fseat}"
+      _quota_drain_markers "$fseat" failover
+    else
+      note "quota: agy account still exhausted — $(wc -l < "$QUOTA_DEFER_FILE" | tr -d ' ') reviewer dispatch(es) deferred"
+    fi
+    return 0
+  fi
+  ok "quota: agy quota cleared — retrying deferred reviewer dispatch(es)"
+  _quota_drain_markers "$rseat" primary
 }
 
 _review_directives() { # DIRECTIVES-LINES TICKET SHA
@@ -488,13 +553,19 @@ _review_directives() { # DIRECTIVES-LINES TICKET SHA
         ;;
       DISPATCH_REVIEWER)
         # d1=reviewer-seat d2=ticket d3=sha d4=round d5=max
-        local rseat="${SEAT_NAME_reviewer:-reviewer}"
-        # QUOTA-2: positive exhaustion signal on the shared agy account →
-        # defer with a durable marker; the retry pass re-fires on clear.
-        # Applies to every dispatch during the pause window, not just the
-        # first — the gate is the probe, not the marker.
+        local rseat="${SEAT_NAME_reviewer:-reviewer}" fseat
+        # QUOTA-2: a positive exhaustion signal on the shared agy account
+        # fails over to the configured non-AGY reviewer (REV-FAILOVER-1 /
+        # ADR 0018) — one reviewer per verdict, no dual-active; only when
+        # no failover resolves does the durable-marker defer remain. The
+        # gate is the probe, not the marker — it applies to every dispatch
+        # during the pause window, not just the first.
         if _agy_quota_exhausted "$rseat"; then
-          _quota_defer_reviewer "$d2" "$d3" "$d4" "$d5"
+          if fseat=$(_review_failover_seat); then
+            _dispatch_reviewer "$fseat" "$d2" "$d3" "$d4" "$d5" failover
+          else
+            _quota_defer_reviewer "$d2" "$d3" "$d4" "$d5"
+          fi
         else
           _dispatch_reviewer "$rseat" "$d2" "$d3" "$d4" "$d5"
         fi
@@ -553,19 +624,45 @@ _review_scan_verdicts() { # SEAT PANE-OUTPUT
     printf '%s\n' "$seen_key" >> "$seen_file"
 
     # Round at verdict time (pre-transition) + findings count from the
-    # durable evidence file — measured values, never guesses.
+    # durable evidence file — measured values, never guesses. Both are
+    # defensively normalized to bare non-negative integers (REV-JQ-1): a
+    # zero-match `grep -c` prints 0 but exits 1, so `|| printf '0'`
+    # concatenates a SECOND 0 onto the count ("0\n0"); a corrupt
+    # reviews.json can hand back a non-numeric round. Either fed jq
+    # --argjson a parse error and silently dropped the whole telemetry
+    # payload — now the payload degrades to 0 instead of dying.
     round=$(jq -r --arg t "$ticket" '.reviews[$t].round // 0' "${STATE_DIR}/reviews.json" 2>/dev/null || printf '0')
+    round=$(printf '%s' "$round" | tr -cd '0-9')
+    round=${round:-0}
     fp="${STATE_DIR}/reviews/${ticket}-${sha}.md"
     fc=0
     if [[ -f "$fp" ]]; then
-      fc=$(grep -cE '^\[(BLOCK|CONCERNS)\]' "$fp" 2>/dev/null || printf '0')
+      fc=$(grep -cE '^\[(BLOCK|CONCERNS)\]' "$fp" 2>/dev/null || true)
     fi
+    fc=$(printf '%s' "$fc" | tr -cd '0-9')
+    fc=${fc:-0}
 
     local dirs rc=0
     dirs=$(review_loop_on_review_verdict "$ticket" "$sha" "$verdict" "$STATE_DIR" 2>/dev/null) || rc=$?
+    # REV-FAILOVER-1 / ADR 0018: durably attribute which reviewer seat —
+    # primary or failover — delivered this verdict. The telemetry event
+    # below already names the seat; this writes it into reviews.json too,
+    # guarded on a successful transition so a failed state machine never
+    # gains a bare record, and never creating an entry that does not
+    # already exist.
+    if (( rc == 0 )) && [[ -f "${STATE_DIR}/reviews.json" ]] \
+      && jq --arg t "$ticket" --arg s "$seat" \
+           'if .reviews[$t] then .reviews[$t].reviewer = $s else . end' \
+           "${STATE_DIR}/reviews.json" > "${STATE_DIR}/reviews.json.tmp" 2>/dev/null; then
+      mv "${STATE_DIR}/reviews.json.tmp" "${STATE_DIR}/reviews.json"
+    else
+      rm -f "${STATE_DIR}/reviews.json.tmp"
+    fi
     "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" review.verdict "$seat" "$ticket" \
-      "$(jq -cn --arg t "$ticket" --arg h "$sha" --arg v "$verdict" --arg r "$round" --argjson f "$fc" \
-        '{ticket:$t, sha:$h, verdict:$v, round:($r|tonumber), findings_count:$f, summary:("review " + $v + " for #" + $t + " (round " + $r + ", " + ($f|tostring) + " findings)")}')" \
+      "$(jq -cn --arg t "$ticket" --arg h "$sha" --arg v "$verdict" --arg r "$round" --arg f "$fc" \
+        '($r|tonumber? // 0) as $rn | ($f|tonumber? // 0) as $fn |
+         {ticket:$t, sha:$h, verdict:$v, round:$rn, findings_count:$fn,
+          summary:("review " + $v + " for #" + $t + " (round " + ($rn|tostring) + ", " + ($fn|tostring) + " findings)")}')" \
       --trace-dir "${STATE_DIR}/traces" >/dev/null 2>&1 || true
     _review_directives "$dirs" "$ticket" "$sha"
   done < <(grep -E '^[[:space:]]*REVIEW VERDICT #[A-Za-z0-9_.-]+[[:space:]]+[0-9a-fA-F]{7,40}[[:space:]]+(PASS|BLOCK)[[:space:]]*$' <<<"$out" | tail -n 5)
@@ -608,7 +705,7 @@ looper_notice() { # MESSAGE — pane: herdr prompt · headless: durable log
     _headless_notice "$1"
     return 0
   fi
-  herdr agent prompt looper "$1" >/dev/null 2>&1 || true
+  herdr agent prompt "${SEAT_NAME_looper:-looper}" "$1" >/dev/null 2>&1 || true
 }
 
 # Ledger (seats.json v2) field for a seat: worktree_dir / kind.
@@ -660,7 +757,7 @@ worker_feedback() { # SEAT TICKET SHA TAG MESSAGE
 _headless_deadletter() { # TICKET SHA REASON
   local ticket="$1" sha="$2" reason="$3"
   bad "headless: #$ticket @ ${sha} → DEAD_LETTER — ${reason}"
-  echo "{\"ts\": $(date +%s), \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"headless\", \"suite\": \"dead_letter\", \"reason\": \"$reason\"}" >> "$SESSION_LOG"
+  echo "{\"ts\": $(date +%s), \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"headless\", \"suite\": \"dead_letter\", \"reason\": \"$reason\", $(_verdict_evidence)}" >> "$SESSION_LOG"
   dead_letter_record "$ticket" "$sha" "$reason" "$SESSION_ID"
   lease_release "$ticket" >/dev/null 2>&1 || true
   looper_notice "LOOP-BOT: #$ticket @ ${sha} moved to DEAD_LETTER (${reason}) — lease released; human evaluation required."
@@ -678,6 +775,16 @@ _headless_ceiling_breached() { # TICKET [PENDING=0]
   [[ "$pending" =~ ^[0-9]+$ ]] || pending=0
   n=$(headless_attempt_count "$1" "$SESSION_LOG")
   (( n + pending >= max ))
+}
+
+# Green is not final while a critique round is pending or the arbiter handed
+# the ticket back: the fix arrives as a NEW sha and must still be gated.
+_ticket_reopened() { # TICKET → rc 0 = a re-verdict is expected
+  jq -e --arg t "$1" '.reviews[$t].state == "critique_dispatched"' \
+    "${STATE_DIR}/reviews.json" >/dev/null 2>&1 && return 0
+  jq -e -s --arg t "$1" '[.[] | select((.ticket | tostring) == $t)] | last
+    | .status == "conflict" or .status == "integration_red"' \
+    "${STATE_DIR}/integration.jsonl" >/dev/null 2>&1
 }
 
 harvest_verdicts() {
@@ -722,7 +829,8 @@ harvest_verdicts() {
       if [[ -f "$SESSION_LOG" ]]; then
         # Permanent retire: this ticket already gated GREEN (only green retires).
         # tostring both sides (ARB-STR / REV-5): records mix numeric and string ids.
-        if jq -e -s --arg t "$ticket" 'any(.[]; (.ticket | tostring) == $t and .suite == "green")' "$SESSION_LOG" >/dev/null 2>&1; then
+        if jq -e -s --arg t "$ticket" 'any(.[]; (.ticket | tostring) == $t and .suite == "green")' "$SESSION_LOG" >/dev/null 2>&1 \
+           && ! _ticket_reopened "$ticket"; then
           continue
         fi
         # (ticket, sha) dedup: this exact code state was already CONCLUSIVELY
@@ -738,7 +846,7 @@ harvest_verdicts() {
       # object store. Fabricated/stale shas are never suite-gated.
       if ! git -C "$REPO_DIR" cat-file -e "${sha}^{commit}" 2>/dev/null; then
         warn "verdict for #$ticket @ ${sha}: commit not found in repo — skipped, human evaluation required"
-        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"skipped\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"skipped\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence)}" >> "$SESSION_LOG"
         looper_notice "LOOP-BOT: verdict for #$ticket @ ${sha} names a commit absent from the repo — do NOT retire the ticket; human evaluation required."
         continue
       fi
@@ -746,7 +854,7 @@ harvest_verdicts() {
       # worktree; a missing/mismatched one is unresolvable, never root-gated.
       if ! resolve_seat_gate "$seat"; then
         warn "verdict for #$ticket @ ${sha}: seat '$seat' gate unresolvable (isolated worktree missing or wrong branch) — NOT gated"
-        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"unresolvable\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"unresolvable\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence)}" >> "$SESSION_LOG"
         looper_notice "LOOP-BOT: verdict for #$ticket @ ${sha} from $seat could not be resolved to a gate directory (worktree missing or on the wrong branch). Do NOT retire the ticket — human evaluation required."
         continue
       fi
@@ -756,7 +864,7 @@ harvest_verdicts() {
       # Pre-condition drift: the tree must be exactly the verdict's commit.
       if ! gate_tree_matches "$GATE_DIR" "$sha"; then
         warn "verdict for #$ticket @ ${sha}: gate tree is STALE (HEAD moved or dirty/untracked files) — not gating"
-        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"stale\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"stale\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence)}" >> "$SESSION_LOG"
         if _headless_ceiling_breached "$ticket"; then
           _headless_deadletter "$ticket" "$sha" "gate tree stale (ceiling reached)"
         else
@@ -795,7 +903,7 @@ harvest_verdicts() {
         # the run regardless of exit code.
         if ! gate_tree_matches "$GATE_DIR" "$sha"; then
           suite_ok="invalidated"; bad "suite run for #$ticket @ ${sha} INVALIDATED — tree changed during the gate"
-          echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+          echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence "$gate_log")}" >> "$SESSION_LOG"
           if _headless_ceiling_breached "$ticket"; then
             _headless_deadletter "$ticket" "$sha" "tree drifted during the gate (ceiling reached)"
           else
@@ -803,10 +911,10 @@ harvest_verdicts() {
           fi
         elif [[ "$gate_rc" -eq 0 ]]; then
           suite_ok="green"; ok "suite gate GREEN for #$ticket @ ${sha} (log: $gate_log)"
-          echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+          echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence "$gate_log")}" >> "$SESSION_LOG"
         else
           suite_ok="RED"; bad "suite gate RED for #$ticket @ ${sha} — NOT filed; arch must fix before done (log: $gate_log)"
-          echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+          echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence "$gate_log")}" >> "$SESSION_LOG"
           if _headless_ceiling_breached "$ticket"; then
             _headless_deadletter "$ticket" "$sha" "suite RED — re-verdict ceiling reached"
           else
@@ -817,9 +925,9 @@ harvest_verdicts() {
       elif [[ "$(ctl_get suite_gate)" == "true" ]]; then
         # No runnable suite for this project — never fake-green, record as skipped
         warn "TEST_CMD not runnable (${TEST_CMD:-<empty>}) — recording verdict for #$ticket without suite gate"
-        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence "$gate_log")}" >> "$SESSION_LOG"
       else
-        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' )}" >> "$SESSION_LOG"
+        echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence)}" >> "$SESSION_LOG"
       fi
 
       # Telemetry: suite verdict event (streams live into the Ops pane)

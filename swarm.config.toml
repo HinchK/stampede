@@ -28,6 +28,13 @@ max_workers = 2           # back-pressure comparison point
 # rounds per (ticket, sha).
 loop = true
 max_rounds = 2
+# REV-FAILOVER-1 / ADR 0018: when the agy account is quota-walled, reviewer
+# dispatch fails over to this seat — a [seats.<key>] table whose provider
+# chain contains no "agy" (an agy target would share the exhausted account;
+# lib/config.sh rejects it at parse time). One reviewer active at a time;
+# dispatch returns to the primary when the account clears. Unset keeps
+# QUOTA-2's defer-and-retry behavior.
+failover_seat = "arch_1"
 
 [headless]
 # Unattended-run safety ceilings (HEADLESS-5, design doc §5 hazards):

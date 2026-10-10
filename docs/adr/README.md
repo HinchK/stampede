@@ -25,6 +25,7 @@ ADRs capture significant architectural and design choices, along with the contex
 | [0015](0015-headless-batch-drain-mode.md) | Headless Batch Drain Mode and Unattended Safety Invariants | Accepted | 2026-09-24 | `lib/headless.sh`, `lib/cli/stampede-headless.sh`, [HEADLESS-2](../findings/headless-mode-design.md), [HEADLESS-7](../../maps/tickets/headless-7-adr.md) |
 | [0016](0016-headless-batch-review-boundary.md) | The Headless Batch Review Boundary — an Accepted Limit | Accepted | 2026-10-05 | `lib/cli/stampede-headless.sh`, [HORIZON-2 live proof](../findings/headless-live-proof.md), [HORIZON-3](../../maps/tickets-staged/horizon-3-headless-review-rounds.md) |
 | [0017](0017-herdr-native-coordination-primitives.md) | Herdr-Native Coordination Primitives — Wait, Explain, Notify | Accepted | 2026-10-07 | `lib/briefs.sh`, `lib/quota.sh`, `lib/cli/stampede-doctor.sh`, [Epic: Herdr-Native & Seat Utilization](../../maps/herdr-native-and-seat-utilization.md), [HERDR-1](../../maps/tickets/herdr-1-herdr-surface-audit.md) |
+| [0018](0018-single-reviewer-accepted-limit-with-quota-failover.md) | Single-Reviewer Accepted Limit with Non-AGY Quota Failover | Accepted | 2026-10-08 | `loop-bot-herd.sh`, `swarm.config.toml`, [REV-07](../../maps/tickets/rev-07-multi-reviewer-quorum-decision.md), [REV-FAILOVER-1](../../maps/tickets/rev-failover-1-non-agy-reviewer-failover.md), [FALLBACK-1](../../maps/tickets/fallback-1-standby-orchestrator-seat.md) |
 
 ## Related Documentation
 

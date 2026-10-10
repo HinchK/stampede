@@ -84,6 +84,7 @@ esac
 CLI_MODE=""
 CLI_MAP=""
 CLI_TOPIC=""
+CLI_DIR=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

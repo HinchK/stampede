@@ -94,7 +94,7 @@ _standby_render_brief() { # TARGET_DIR → renders the standby brief by path
     --arg TEST_CMD "${TEST_CMD_ENV:-make test}" \
     --arg ARBITER_BIN "$STANDBY_ROOT/lib/arbiter.sh" \
     --arg LOOPER_NAME "$LOOPER_NAME" \
-    --arg ARCH_NAME "${SEAT_NAME_arch:-arch-$SLUG}" \
+    --arg ARCH_NAME "${SEAT_NAME_arch_1:-${SEAT_NAME_arch:-arch-$SLUG}}" \
     '{SLUG:$SLUG, REPO:$REPO, TEST_CMD:$TEST_CMD, ARBITER_BIN:$ARBITER_BIN,
       LOOPER_NAME:$LOOPER_NAME, ARCH_NAME:$ARCH_NAME}')
   substitute_template "$tmpl" "$out" "$vars"

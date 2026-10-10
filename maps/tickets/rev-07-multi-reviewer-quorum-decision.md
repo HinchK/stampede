@@ -2,10 +2,10 @@
 id: REV-07
 title: "Multi-reviewer quorum: decide policy, or write the accepted-limit ADR"
 type: wayfinder:decision
-status: backlog
+status: resolved
 assignee: human
 owns: docs/adr
-parent: maps/dispatch-safety-and-review-policy.md
+parent: maps/pick-up-where-we-left-off.md
 ---
 
 # REV-07 -- does single-reviewer PASS need a second opinion?
@@ -35,3 +35,27 @@ as a fog note indefinitely.
 ## Input from PM audit 2026-10-08
 
 The quota-outage experiment showed review is the single point of failure: the stand-in orchestrator (see `fallback-1-standby-orchestrator-seat.md`) could dispatch and harvest but nothing could pass review while the agy reviewer was walled. Decide a non-agy fallback reviewer (or accept the limit in an ADR) in this session; recommend deciding it before FALLBACK-1 is dispatched.
+
+## Resolution (2026-10-08)
+
+Settled by the driver; recorded by `arch-1` as
+[ADR 0018: Single-Reviewer Accepted Limit with Non-AGY Quota Failover](../../docs/adr/0018-single-reviewer-accepted-limit-with-quota-failover.md).
+
+Option (b) — accepted limit, with the SPOF closed by failover:
+
+1. **Single-reviewer PASS remains the gate; quorum is not built.** The load-bearing verification is
+   mechanical re-execution (supervisor gate at the exact SHA, arbiter gate on the combined tree —
+   ADR 0002/0008/0009); review is defense-in-depth, and no observed reviewer false-green exists to
+   justify doubling per-verdict reviewer cost (ADR 0018 §3.2).
+2. **The PM audit's SPOF finding is answered by REV-FAILOVER-1** (staged in this milestone): when the
+   agy reviewer is quota-walled, reviewer dispatch fails over to a configured non-AGY reviewer seat —
+   one active reviewer at a time, return to primary on clear. The OpenRig §7 #6 cross-vendor critique
+   idea is realized as this failover path, not as standing quorum. (The audit's "decide before
+   FALLBACK-1 is dispatched" recommendation was overtaken by events — FALLBACK-1 shipped first —
+   which made the availability half of this decision more urgent, not less.)
+3. **Revisit triggers named** (ADR 0018 §5): a real reviewer false-green incident that a different
+   vendor would have blocked, or sustained primary/failover divergence once failover readings exist.
+
+Receipts: ADR 0018 committed and indexed in `docs/adr/README.md`;
+`maps/tickets/rev-failover-1-non-agy-reviewer-failover.md` staged; Decisions updated in
+`maps/pick-up-where-we-left-off.md`.

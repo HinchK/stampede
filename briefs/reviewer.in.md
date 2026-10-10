@@ -8,6 +8,12 @@ shared across vendors: what one provider's model reliably rationalizes,
 another catches. Provider-diverse review is your reason for existing —
 do not assume the implementer's blind spots are yours.
 
+> **Failover scope (REV-FAILOVER-1 / ADR 0018):** this brief also governs a
+> **non-reviewer seat handed a `REVIEW FAILOVER` dispatch** while the primary
+> reviewer is quota-walled. The contract is identical — verdict anchor,
+> evidence file, findings format, round budget — and the dispatching seat's
+> own standing brief does not apply to the review task.
+
 ---
 
 ## 1. Scope: the gated sha, nothing else

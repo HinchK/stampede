@@ -14,7 +14,7 @@ TESTS   := $(sort $(wildcard tests/test_*.sh))
 # SC2016 single-quoted eval bodies, SC2329 stubs invoked indirectly). That
 # baseline is documented here so the split is a decision, not an accident.
 LINT_SH      := bin/stampede herdr-loop-swarm.sh loop-bot-herd.sh $(wildcard lib/*.sh) $(wildcard lib/*/*.sh) $(wildcard scripts/*.sh)
-LINT_TESTS_SH := $(wildcard tests/*.sh)
+LINT_TESTS_SH := $(wildcard tests/*.sh) $(wildcard tests/helpers/*.sh)
 
 .PHONY: test lint check version-check
 

@@ -79,8 +79,37 @@ _arb_set_status() { # TICKET SHA STATUS [EXTRA_JQ]
 
 _arb_telemetry() { # EVENT_TYPE TICKET SEAT SHA PAYLOAD_JSON
   "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log \
-    "$(telemetry_session_id "$ARB_STATE")" "$1" "$2" - "$3" "$4" \
+    "$(telemetry_session_id "$ARB_STATE")" "$1" "$3" "$2" "$5" \
     --trace-dir "${ARB_STATE}/traces" >/dev/null 2>&1 || true
+}
+
+# INTEG-REC-1: durable green verdict for the integrated (ticket, sha). The
+# supervisor files session-verdicts records only when it harvests an ARCH
+# DONE anchor itself; operator-driven drains and fast-forwards left no
+# record, stalling ROUTE-5 docs sweeps on their green-verdict precondition.
+# The sha is canonicalised to its full 40-char form (the same boundary rule
+# as REVIEW-SHA-1) so the record matches the supervisor's harvest-time form.
+# HASH-1: the row carries the arbiter's host + pid, and — when the combined
+# tree was actually suite-gated — a sha256 over the gate-log bytes, binding
+# the green claim to its evidence.
+_arb_verdict_record() { # TICKET SEAT SHA [GATE_LOG]
+  local t="$1" seat="$2" sha="$3" gate_log="${4:-}"
+  local full
+  full=$(git -C "$ARB_REPO" rev-parse "${sha}^{commit}") || return 1
+  mkdir -p "$ARB_STATE"
+  local extra="{}" d=""
+  d=$(evidence_sha256 "$gate_log") || d=""
+  if [[ -n "$d" ]]; then
+    extra=$(jq -cn --arg host "$(evidence_host)" --argjson pid "$$" --arg d "$d" \
+      '{host: $host, pid: $pid, gate_log_sha256: $d}')
+  else
+    extra=$(jq -cn --arg host "$(evidence_host)" --argjson pid "$$" '{host: $host, pid: $pid}')
+  fi
+  jq -cn --argjson ts "$(date +%s)" --arg t "$t" --arg seat "$seat" --arg sha "$full" \
+    --argjson extra "$extra" \
+    '{ts: $ts, ticket: $t, sha: $sha, seat: $seat, suite: "green", exit_code: 0,
+      verdict: ("INTEGRATED #" + $t + " " + $sha)} + $extra' \
+    >> "${ARB_STATE}/session-verdicts.jsonl"
 }
 
 # ── lock: atomic mkdir, pid-stamped, stale after process death ────────────
@@ -161,15 +190,30 @@ arbiter_queued_count() {
 }
 
 # ── detached worktree management ───────────────────────────────────────────
-_arb_worktree() { # START_COMMIT — ensure detached worktree at START_COMMIT
+_arb_worktree() { # START_COMMIT — ensure detached worktree at START_COMMIT; rc 1 = not there
+  local want rc=0
+  want=$(git -C "$ARB_REPO" rev-parse --verify --quiet "${1}^{commit}") || rc=1
   if [[ ! -d "$ARB_WT" ]]; then
     mkdir -p "$(dirname "$ARB_WT")"
-    git -C "$ARB_REPO" worktree add --detach "$ARB_WT" "$1" >/dev/null 2>&1
+    git -C "$ARB_REPO" worktree add --detach "$ARB_WT" "$1" >/dev/null 2>&1 || rc=1
+  elif [[ "$(git -C "$ARB_WT" rev-parse --show-toplevel 2>/dev/null)" != "$(cd "$ARB_WT" && pwd -P)" ]]; then
+    rc=1   # no .git link here: git would resolve to the ROOT checkout and move it
   else
-    git -C "$ARB_WT" checkout --detach -q "$1" >/dev/null 2>&1
-    git -C "$ARB_WT" reset --hard -q "$1" >/dev/null 2>&1
+    git -C "$ARB_WT" checkout --detach -q "$1" >/dev/null 2>&1 || rc=1
+    git -C "$ARB_WT" reset --hard -q "$1" >/dev/null 2>&1 || rc=1
+    git -C "$ARB_WT" clean -qfd >/dev/null 2>&1 || true
   fi
-  git -C "$ARB_WT" clean -qfd >/dev/null 2>&1 || true
+  # A stale tree gated as this commit would be a verdict on code never measured.
+  if (( rc == 0 )) && [[ "$(git -C "$ARB_WT" rev-parse HEAD 2>/dev/null)" == "$want" ]]; then
+    return 0
+  fi
+  printf 'arbiter: worktree %s could not be put at %s — nothing gated, record left queued\n' "$ARB_WT" "${1:0:7}" >&2
+  return 1
+}
+
+_arb_wt_unusable() { # TICKET SEAT SHA — the stall must show in the Ops stream, not only the drain log
+  _arb_telemetry arbiter.gate_unavailable "$1" "$2" "$3" \
+    "$(jq -cn '{summary:"gate harness unavailable: arbiter worktree unusable — left queued"}')"
 }
 
 # ── drain ──────────────────────────────────────────────────────────────────
@@ -227,9 +271,9 @@ _arb_integrate() { # TICKET SEAT SHA I0
   local candidate
   if git -C "$ARB_REPO" merge-base --is-ancestor "$i0" "$sha" 2>/dev/null; then
     candidate="$sha"
-    _arb_worktree "$candidate"
+    _arb_worktree "$candidate" || { _arb_wt_unusable "$ticket" "$seat" "$sha"; return 1; }
   else
-    _arb_worktree "$i0"
+    _arb_worktree "$i0" || { _arb_wt_unusable "$ticket" "$seat" "$sha"; return 1; }
     if ! git -C "$ARB_WT" merge --no-ff --no-edit \
          -m "integrate #${ticket} (${seat} @ ${sha:0:7})" "$sha" >/dev/null 2>&1; then
       local files
@@ -247,6 +291,7 @@ _arb_integrate() { # TICKET SEAT SHA I0
   fi
 
   # 2. pre-gate the combined tree (arbiter TMPDIR; log kept for diagnosis)
+  local gate_log=""   # HASH-1: bound to the verdict record when a gate ran
   if _arb_cmd_runnable; then
     # The bound resolves BEFORE the gate runs. Without a timeout(1) the gate
     # exits 127, which this function used to record as integration_red —
@@ -260,7 +305,7 @@ _arb_integrate() { # TICKET SEAT SHA I0
       return 1
     fi
     local gate_dir="${ARB_STATE}/gate-logs"
-    local gate_log="${gate_dir}/arbiter-${ticket}-${sha:0:7}.log"
+    gate_log="${gate_dir}/arbiter-${ticket}-${sha:0:7}.log"
     mkdir -p "$gate_dir" "${ARB_STATE}/arbiter-tmp"
     if ! (cd "$ARB_WT" && TMPDIR="${ARB_STATE}/arbiter-tmp" \
           "$TIMEOUT_BIN" "${SUITE_TIMEOUT_S:-300}" sh -c "$TEST_CMD") >"$gate_log" 2>&1; then
@@ -290,6 +335,9 @@ _arb_integrate() { # TICKET SEAT SHA I0
   # 4. success
   _arb_set_status "$ticket" "$sha" "integrated" \
     "{integration_before: \"${i0}\", merge_sha: \"${candidate}\"}"
+  # INTEG-REC-1: the passing gate must be visible to the ROUTE-5 docs sweep
+  # even when no supervisor harvest ever ran for this (ticket, sha).
+  _arb_verdict_record "$ticket" "$seat" "$sha" "$gate_log"
   _arb_telemetry arbiter.integrated "$ticket" "$seat" "$sha" \
     "$(jq -cn --arg m "$candidate" --arg b "$i0" \
        '{summary:("integrated @ " + $m[0:7]), merge_sha: $m, integration_before: $b}')"

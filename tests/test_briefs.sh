@@ -137,6 +137,14 @@ out=$(deliver_brief_nonce seat-x "$BRIEF" 2>"$SCRATCH/e") && rc=0 || rc=$?
 [[ "$rc" == 1 ]] && grep -q "FAILED for seat-x: agent_not_found" "$SCRATCH/e" \
   && ok "hard failure surfaced with the herdr error code" || bad "hard-fail rc=$rc err=$(cat "$SCRATCH/e")"
 
+# [9] template values are data: a quote in a value or a path must not break the render
+mkdir -p "$SCRATCH/o'dir"
+printf 'run: {{TEST_CMD}}\n' > "$SCRATCH/o'dir/t.in.md"
+substitute_template "$SCRATCH/o'dir/t.in.md" "$SCRATCH/o'dir/t.md" \
+  "$(jq -cn --arg c 'pytest -k "not slow"' '{TEST_CMD: $c}')" 2>/dev/null || true
+[[ "$(cat "$SCRATCH/o'dir/t.md" 2>/dev/null)" == 'run: pytest -k "not slow"' ]] \
+  && ok "quoted test command + apostrophe path render verbatim" || bad "render: $(cat "$SCRATCH/o'dir/t.md" 2>&1)"
+
 unset -f herdr
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

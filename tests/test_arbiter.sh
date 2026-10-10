@@ -18,6 +18,7 @@ TEST_DIR=$(mktemp -d /tmp/test-arb-$$-XXXX)
 TEST_DIR=$(cd "$TEST_DIR" && pwd -P)
 REPO="$TEST_DIR/repo"
 Q="$REPO/.herdr-swarm/integration.jsonl"
+SV="$REPO/.herdr-swarm/session-verdicts.jsonl"
 IREF="refs/heads/swarm/ptest/integration"
 PASS=0
 FAIL=0
@@ -121,12 +122,59 @@ check "integration tree contains both seats' files (merge or ff chain)" '
 check "main untouched by drain" \
   '[[ $(git -C "$REPO" rev-parse main) == "$sha_base" ]]'
 
+# ── 2b. INTEG-REC-1: integration files a durable green verdict ─────────────
+# #201 exercised the fast-forward path, #202 the off-branch --no-ff merge —
+# both must land a supervisor-schema green record in session-verdicts.jsonl
+# so ROUTE-5 docs sweeps find their precondition without a supervisor harvest.
+check "drain created the session verdict log" \
+  '[[ -f "$SV" ]]'
+check "#201 (ff path) filed green verdict: full sha, exit 0, INTEGRATED line" \
+  'jq -e -s --arg t 201 --arg s "$SHA_A" "any(.[]; (.ticket|tostring) == \$t and .sha == \$s and .seat == \"seat-a\" and .suite == \"green\" and .exit_code == 0 and .verdict == (\"INTEGRATED #\" + \$t + \" \" + \$s))" "$SV" >/dev/null'
+check "#202 (merge path) filed green verdict: full sha, exit 0, INTEGRATED line" \
+  'jq -e -s --arg t 202 --arg s "$SHA_B" "any(.[]; (.ticket|tostring) == \$t and .sha == \$s and .seat == \"seat-b\" and .suite == \"green\" and .exit_code == 0 and .verdict == (\"INTEGRATED #\" + \$t + \" \" + \$s))" "$SV" >/dev/null'
+
+# 2c. canonicalisation: a short-sha enqueue still records the FULL 40-char sha
+git -C "$REPO" branch "swarm/ptest/seat-n" main
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wn" "swarm/ptest/seat-n"
+printf 'november\n' > "$TEST_DIR/wn/november.txt"
+SHA_N=$(commit_at "$TEST_DIR/wn" "seat-n work")
+arbiter_enqueue 214 seat-n "${SHA_N:0:7}"
+arbiter_drain 2>/dev/null
+ck 214 integrated "short-sha record still integrates"
+check "verdict record carries the canonical full 40-char sha" \
+  '[[ $(jq -r -s --arg t 214 "[.[] | select((.ticket|tostring) == \$t and .suite == \"green\")] | .[0].sha | length" "$SV") == 40 ]]'
+check "canonical sha equals the committed full sha" \
+  '[[ $(jq -r -s --arg t 214 "[.[] | select((.ticket|tostring) == \$t and .suite == \"green\")] | .[0].sha" "$SV") == "$SHA_N" ]]'
+
+# ── 2d. HASH-1: evidence hash + host/pid on integration verdict rows ──────
+check "#201 verdict row carries host (non-empty) and numeric pid" \
+  'jq -e -s --arg t 201 "[.[] | select((.ticket|tostring) == \$t and .suite == \"green\")] | .[0] | (.host | type == \"string\" and length > 0) and (.pid | type == \"number\")" "$SV" >/dev/null'
+EXPECT_A_SHA=$(shasum -a 256 "$REPO/.herdr-swarm/gate-logs/arbiter-201-${SHA_A:0:7}.log" | awk '{print $1}')
+check "#201 gate_log_sha256 matches an independent shasum -a 256 of the gate log" \
+  '[[ $(jq -r -s --arg t 201 "[.[] | select((.ticket|tostring) == \$t and .suite == \"green\")] | .[0].gate_log_sha256 // \"none\"" "$SV") == "'"$EXPECT_A_SHA"'" ]]'
+# ungated integration (no TEST_CMD): host/pid still recorded, no hash fabricated
+git -C "$REPO" branch "swarm/ptest/seat-p" main
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wp" "swarm/ptest/seat-p"
+printf 'papa\n' > "$TEST_DIR/wp/papa.txt"
+SHA_P=$(commit_at "$TEST_DIR/wp" "seat-p work")
+TEST_CMD="" arbiter_enqueue 215 seat-p "$SHA_P" >/dev/null 2>&1
+TEST_CMD="" arbiter_drain 2>/dev/null
+ck 215 integrated "ungated integration completes (no TEST_CMD)"
+check "#215 ungated row: host/pid present, gate_log_sha256 absent (never fabricated)" \
+  'jq -e -s --arg t 215 "[.[] | select((.ticket|tostring) == \$t and .suite == \"green\")] | .[0] | (.host | type == \"string\" and length > 0) and (.pid | type == \"number\") and (.gate_log_sha256 == null)" "$SV" >/dev/null'
+# legacy rows without the fields keep parsing (HASH-1 backward compat)
+printf '{"ts": 1, "ticket": "LEG-1", "sha": "deadbeef", "seat": "s-old", "suite": "green", "exit_code": 0}\n' >> "$SV"
+check "legacy row without evidence fields reads clean via // empty" \
+  '[[ -z $(jq -r -s --arg t LEG-1 "[.[] | select(.ticket == \$t)] | .[0].gate_log_sha256 // empty" "$SV") ]] && jq -e -s --arg t LEG-1 "any(.[]; .ticket == \$t and .suite == \"green\")" "$SV" >/dev/null'
+
 # ── 3. conflict handling ───────────────────────────────────────────────────
 printf 'ALPHA-CONFLICT\n' > "$TEST_DIR/wc/alpha.txt"
 SHA_C=$(commit_at "$TEST_DIR/wc" "seat-c conflicting work")
 arbiter_enqueue 203 seat-c "$SHA_C"
 arbiter_drain 2>/dev/null
 ck 203 conflict "conflicting branch recorded as conflict"
+check "conflict files NO green verdict record (#203)" \
+  '[[ $(jq -s --arg t 203 "[.[] | select((.ticket|tostring) == \$t and .suite == \"green\")] | length" "$SV") == 0 ]]'
 check "conflict record lists the file" \
   '[[ $(jq -r -s --arg t2 203 "[.[] | select((.ticket|tostring) == \$t2)] | .[-1].files[0]" "$Q") == "alpha.txt" ]]'
 check "integration ref unmoved after conflict" \
@@ -143,6 +191,8 @@ REF_BEFORE=$(git -C "$REPO" rev-parse "$IREF")
 arbiter_enqueue 204 seat-c "$SHA_R"
 arbiter_drain 2>/dev/null
 ck 204 integration_red "RED combined tree recorded as integration_red"
+check "RED integration files NO green verdict record (#204)" \
+  '[[ $(jq -s --arg t 204 "[.[] | select((.ticket|tostring) == \$t and .suite == \"green\")] | length" "$SV") == 0 ]]'
 check "integration ref NOT advanced on RED" \
   '[[ $(git -C "$REPO" rev-parse '"$IREF"') == "$REF_BEFORE" ]]'
 
@@ -541,6 +591,65 @@ slug_of() { ( eval "$1 _arb_cfg" >/dev/null 2>&1; printf '%s' "${ARB_SLUG:-}" );
   && ok "10j config [swarm] name is the canonical default" || bad "10j config name not honored"
 [[ "$(slug_of 'unset PROJECT_SLUG; unset SWARM_CONFIG_NAME;')" == "repo" ]] \
   && ok "10k basename is the last-resort fallback" || bad "10k fallback: $(slug_of 'unset PROJECT_SLUG; unset SWARM_CONFIG_NAME;')"
+
+# ── 12. a stuck arbiter worktree is never gated as the candidate ───────────
+# A failed checkout used to leave the old tree in place, gated green.
+git -C "$REPO" branch "swarm/ptest/seat-w" "$IREF"
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/ww" "swarm/ptest/seat-w"
+printf '#!/bin/sh\nexit 1\n' > "$TEST_DIR/ww/check.sh"
+SHA_W=$(commit_at "$TEST_DIR/ww" "seat-w breaks the suite")
+IREF_S0=$(git -C "$REPO" rev-parse "$IREF")
+ARB_WT_LOCK="$(git -C "$REPO/.herdr-swarm/worktrees/arbiter-ptest" rev-parse --absolute-git-dir)/index.lock"
+: > "$ARB_WT_LOCK"
+arbiter_enqueue 216 seat-w "$SHA_W"
+arbiter_drain 2>/dev/null
+ck 216 queued "stuck arbiter worktree: record left queued, never gated"
+check "stuck arbiter worktree: stall is visible in telemetry" 'grep -q "arbiter worktree unusable" "$REPO"/.herdr-swarm/traces/*.jsonl'
+check "stuck arbiter worktree: integration ref unmoved" \
+  '[[ "$(git -C "$REPO" rev-parse '"$IREF"')" == "$IREF_S0" ]]'
+rm -f "$ARB_WT_LOCK"
+arbiter_drain 2>/dev/null
+ck 216 integration_red "worktree freed: the candidate's own suite is gated (RED)"
+
+# A worktree dir without its .git link resolves to the ROOT repo.
+ROOT_HEAD_S0=$(git -C "$REPO" rev-parse --abbrev-ref HEAD)
+mv "$REPO/.herdr-swarm/worktrees/arbiter-ptest/.git" "$TEST_DIR/arb-wt-gitlink"
+jq -s -c 'map(if .ticket == "216" then .status = "queued" else . end) | .[]' "$Q" > "$Q.tmp" && mv "$Q.tmp" "$Q"
+arbiter_drain 2>/dev/null
+ck 216 queued "unlinked arbiter worktree: record left queued"
+check "unlinked arbiter worktree: root checkout stays on its branch" \
+  '[[ "$(git -C "$REPO" rev-parse --abbrev-ref HEAD)" == "$ROOT_HEAD_S0" ]]'
+mv "$TEST_DIR/arb-wt-gitlink" "$REPO/.herdr-swarm/worktrees/arbiter-ptest/.git"
+arbiter_drain 2>/dev/null
+ck 216 integration_red "worktree relinked: drain resumes"
+
+# ── 11: seeded-regression pair — CAS drops expected-old (SEEDED-1) ─────────
+# The pair discipline (tests/helpers/seed.sh): the §5 race scenario must go
+# RED when the compare-and-swap is seeded into a plain update-ref — the
+# exact silent concurrency-loser ADR 0009 exists to reject. The healthy
+# half replays the race (gate advances the ref mid-run → CAS rejects,
+# record retry); the seeded half plants the defect in _arb_integrate and
+# asserts the SAME retry assertion fails (the racer's tip is overwritten).
+# shellcheck disable=SC1091  # shared seeded-pair helper (SEEDED-1)
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers/seed.sh"
+
+printf '#!/bin/sh\nc=$(git commit-tree HEAD^{tree} -p HEAD -m racer-sd1)\ngit update-ref '"$IREF"' "$c"; exit 0\n' > "$TEST_DIR/wc/check.sh"
+SHA_SD1=$(commit_at "$TEST_DIR/wc" "sd racer 1")
+arbiter_enqueue sd1 seat-sd "$SHA_SD1"
+arbiter_drain 2>/dev/null
+ck sd1 retry "healthy half: concurrent ref move during gate → CAS retry"
+
+SHA_SD2=$(commit_at "$TEST_DIR/wc" "sd racer 2")
+arbiter_enqueue sd2 seat-sd "$SHA_SD2"
+sd2_last() { jq -r -s --arg t sd2 '[.[] | select((.ticket|tostring) == $t)] | .[-1].status // "none"' "$Q" 2>/dev/null; }
+if with_seeded_defect _arb_integrate \
+  's/update-ref "\$ARB_REF" "\$candidate" "\$i0"/update-ref "$ARB_REF" "$candidate"/' \
+  'arbiter_drain >/dev/null 2>&1; [[ "$(sd2_last)" == "retry" ]]'; then
+  ok "seeded half: retry assertion FAILS when expected-old is dropped (teeth proven)"
+else
+  bad "seeded half: assertion passed despite dropped expected-old — no teeth"
+fi
+# the seed's drain overwrote the racer's tip; nothing follows that reads it
 
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
