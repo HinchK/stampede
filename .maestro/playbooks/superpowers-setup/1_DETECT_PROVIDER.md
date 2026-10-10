@@ -3,10 +3,10 @@
 ## Context
 
 - **Playbook**: Superpowers Setup
-- **Agent**: {{AGENT_NAME}}
-- **Project**: {{AGENT_PATH}}
-- **Date**: {{DATE}}
-- **Working Folder**: {{AUTORUN_FOLDER}}
+- **Agent**: stampede
+- **Project**: /Users/hinchk/Fun/stampede
+- **Date**: 2026-10-10
+- **Working Folder**: /Users/hinchk/Fun/stampede/.maestro/playbooks
 
 ## Purpose
 
@@ -18,7 +18,9 @@ The agent running this playbook **is** the harness we are setting up. Detection 
 
 ### Task 1: Self-identify
 
-- [ ] **State your harness**: You are running inside an AI coding harness right now. Without checking files, name the harness you are running inside (Claude Code, Codex, OpenCode, Factory Droid, GitHub Copilot CLI, Gemini CLI, Qwen3 Coder, or other). If you are uncertain, say so explicitly — do not guess. Also map your answer to the canonical Maestro `toolType` value (`claude-code`, `codex`, `opencode`, `factory-droid`, `copilot-cli`, `gemini-cli`, or `qwen3-coder`).
+- [x] **State your harness**: You are running inside an AI coding harness right now. Without checking files, name the harness you are running inside (Claude Code, Codex, OpenCode, Factory Droid, GitHub Copilot CLI, Gemini CLI, Qwen3 Coder, or other). If you are uncertain, say so explicitly — do not guess. Also map your answer to the canonical Maestro `toolType` value (`claude-code`, `codex`, `opencode`, `factory-droid`, `copilot-cli`, `gemini-cli`, or `qwen3-coder`).
+
+  > Completed 2026-10-10: harness is **OpenCode** (certain — introspective, no files checked). Canonical Maestro toolType: `opencode`.
 
 ### Task 2: Cross-check via binary on PATH
 
@@ -42,14 +44,14 @@ The agent running this playbook **is** the harness we are setting up. Detection 
 
 - [ ] **Pick one provider with confidence**: Reconcile self-identification against the PATH probe. The self-identification is authoritative — you know what you are. The PATH probe is a sanity check that should not contradict it; if it does (e.g. you self-identified as Claude Code but found `codex` on `PATH` and not `claude`), state the discrepancy in the notes and degrade confidence to `medium`.
 
-- [ ] **Write `{{AUTORUN_FOLDER}}/PROVIDER.md`** with this exact structure:
+- [ ] **Write `/Users/hinchk/Fun/stampede/.maestro/playbooks/PROVIDER.md`** with this exact structure:
 
   ```markdown
   # Detected Provider
 
   - **Provider (Maestro toolType)**: <claude-code | codex | opencode | factory-droid | copilot-cli | gemini-cli | qwen3-coder | unknown>
   - **Confidence**: <high | medium | low>
-  - **Detected on**: {{DATE}}
+  - **Detected on**: 2026-10-10
 
   ## Signals
 
@@ -101,14 +103,14 @@ If the detected provider has no upstream Superpowers install path (currently: `q
 
   Otherwise — provider is one of `claude-code`, `codex`, `opencode`, `factory-droid`, `copilot-cli`, `gemini-cli` — **do not halt**. Skip the rest of this task and let document 2 read the recipe.
 
-- [ ] **Write `{{AUTORUN_FOLDER}}/SUPERPOWERS_SETUP.md` now** (since documents 2-5 will not run):
+- [ ] **Write `/Users/hinchk/Fun/stampede/.maestro/playbooks/SUPERPOWERS_SETUP.md` now** (since documents 2-5 will not run):
 
   ```markdown
   # Superpowers Setup — Summary
 
-  - **Agent**: {{AGENT_NAME}}
+  - **Agent**: stampede
   - **Provider**: <qwen3-coder | unknown>
-  - **Date**: {{DATE}}
+  - **Date**: 2026-10-10
   - **Status**: Skipped
 
   ---
@@ -128,7 +130,7 @@ If the detected provider has no upstream Superpowers install path (currently: `q
 
   ## Re-running this playbook
 
-  This document (`1_DETECT_PROVIDER.md`) carries a `<!-- maestro:halt: ... -->` marker at the bottom. Maestro will refuse to launch the playbook again until the marker is removed (the safety belt prevents silent replays of halted work). Edit `{{AUTORUN_FOLDER}}/1_DETECT_PROVIDER.md`, delete the trailing `<!-- maestro:halt: ... -->` line, and launch again.
+  This document (`1_DETECT_PROVIDER.md`) carries a `<!-- maestro:halt: ... -->` marker at the bottom. Maestro will refuse to launch the playbook again until the marker is removed (the safety belt prevents silent replays of halted work). Edit `/Users/hinchk/Fun/stampede/.maestro/playbooks/1_DETECT_PROVIDER.md`, delete the trailing `<!-- maestro:halt: ... -->` line, and launch again.
 
   ## Reference
 
