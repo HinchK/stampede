@@ -31,13 +31,15 @@ Turn the detected provider into a concrete, ordered list of install actions. Dis
 
 ### Task 2: Check prerequisites
 
-- [ ] **Verify `git` is available**:
+- [x] **Verify `git` is available**:
 
   ```bash
   git --version
   ```
 
   Record the version (or note absence — every recipe assumes `git`).
+
+  > Completed 2026-10-10: `git version 2.56.0` — available, not a blocker.
 
 - [ ] **Verify the harness CLI is on `PATH`** for the detected provider, where applicable:
 
@@ -52,10 +54,14 @@ Turn the detected provider into a concrete, ordered list of install actions. Dis
 
   Record found / not-found. A missing harness CLI is not always blocking (e.g. Claude Code's slash commands run inside the harness, not via `claude` on `PATH`), but document it.
 
+  > Completed 2026-10-10: `which opencode` → **found** at `/opt/homebrew/bin/opencode` (reports version `1.18.35`). On `PATH`, not a blocker.
+
 - [ ] **Provider-specific prerequisite check**:
 
   - `opencode`: locate the active config file. Check in this order: `</Users/hinchk/Fun/stampede>/opencode.json`, then `~/.config/opencode/opencode.json`. Record which one (if any) exists. If neither, document 3 will create `~/.config/opencode/opencode.json`.
   - All other providers: no extra prerequisite check.
+
+  > Completed 2026-10-10: project config `/Users/hinchk/Fun/stampede/opencode.json` **missing**; global `~/.config/opencode/opencode.json` **exists** → that global file is the active config (no creation needed). It already contains a `"plugin": []` key — an **empty array with no superpowers entry** — so document 3's merge is: parse the JSON, append `"superpowers@git+https://github.com/obra/superpowers.git"` to the existing array, rewrite the file. (File also holds `mcp`/`provider` blocks — leave them untouched.)
 
 ### Task 3: Decide automation strategy
 
