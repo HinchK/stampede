@@ -22,7 +22,7 @@ NOTE: *(Update the URL above before running this playbook)*
 
 ### Task 1: Fetch PR Context
 
-<!-- MAESTRO:HITL reason="Update the PR URL in 1_ANALYZE_CHANGES.md with the pull request to review before re-running" -->
+<!-- MAESTRO:HITL reason="Update the PR URL at line 17 in 1_ANALYZE_CHANGES.md (currently placeholder https://github.com/USER/PROJECT/pull/XXXX) before continuing" -->
 - [ ] **Validate PR URL**: If the PR URL above is still the placeholder `https://github.com/USER/PROJECT/pull/XXXX`, stop and instruct the user to update the URL before re-running. Do not proceed with any subsequent tasks.
 
 - [ ] **Read the PR description**: If a PR URL is provided above, understand what the PR claims to do. Note the stated goals and any linked issues.
