@@ -65,13 +65,27 @@ Turn the detected provider into a concrete, ordered list of install actions. Dis
 
 ### Task 3: Decide automation strategy
 
-- [ ] **Classify each step from the recipe** as `automatable` (the playbook agent can execute it via Bash, Edit, or Write) or `user-required` (the harness only accepts the command from interactive input). Use the recipe's own automatable / user-required labels as the default; deviate only with a written reason.
+- [x] **Classify each step from the recipe** as `automatable` (the playbook agent can execute it via Bash, Edit, or Write) or `user-required` (the harness only accepts the command from interactive input). Use the recipe's own automatable / user-required labels as the default; deviate only with a written reason.
 
-- [ ] **Decide on a marketplace choice for `claude-code`**: pick exactly one of:
+  > Completed 2026-10-10: every step of the `opencode` recipe classified, using the recipe's own labels with no deviations:
+  >
+  > | Recipe step | Classification | Note |
+  > |---|---|---|
+  > | 1. Locate config | `automatable` (no-op) | Already resolved in Task 2: global `~/.config/opencode/opencode.json` is the active config; no creation needed. |
+  > | 2. Add/merge plugin entry | `automatable` | Edit `~/.config/opencode/opencode.json`: parse the JSON, append `"superpowers@git+https://github.com/obra/superpowers.git"` to the existing empty `plugin` array, rewrite the file. Leave `mcp`/`provider` blocks untouched. |
+  > | 3. Optional version pin `#<ref>` | `automatable` (decision: skip) | User has not requested a pin → plan installs floating `HEAD` of the default branch so future restarts can pick up updates. |
+  > | 4. Optional cleanup of prior symlink install | drops out | Probed 2026-10-10: `~/.config/opencode/plugins/superpowers.js`, `~/.config/opencode/skills/superpowers`, `~/.config/opencode/superpowers` — none exist (no `plugins/` dir at all), and the config has no `skills.paths` key. No prior install to clean. |
+  > | 5. Restart OpenCode | `user-required` | Recipe labels it user-required; a running OpenCode session will not pick up the config change mid-flight. The user must restart this Maestro agent's OpenCode session (or the app). |
+  > | Verify (`opencode run --print-logs "hello" 2>&1 \| grep -i superpowers`) | `automatable` (sequenced after restart) | Plain Bash, but only meaningful once the user has restarted; document 4 runs it. |
+  > | Windows npm fallback | N/A | Host is darwin; the `git+https` URL path applies. |
+
+- [x] **Decide on a marketplace choice for `claude-code`**: pick exactly one of:
   - `claude-plugins-official` (single-step, requires the official marketplace already registered)
   - `superpowers-marketplace` (two-step: marketplace add, then install)
 
   Default to `superpowers-marketplace` for portability — it works on a fresh install without depending on an Anthropic-registered marketplace.
+
+  > Completed 2026-10-10: **N/A — detected provider is `opencode`, not `claude-code`.** The `opencode` recipe has no marketplace step at all (it installs via the `git+https` plugin URL in `opencode.json`), so there is no marketplace choice to make. Recorded for completeness: had the provider been `claude-code`, the documented default (`superpowers-marketplace`, for portability on fresh installs) would have been taken.
 
 ### Task 4: Write `INSTALL_PLAN.md`
 
