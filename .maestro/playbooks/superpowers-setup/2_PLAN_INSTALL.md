@@ -128,7 +128,9 @@ Turn the detected provider into a concrete, ordered list of install actions. Dis
 
 ### Task 5: Sanity-check the plan
 
-- [ ] **Re-read `INSTALL_PLAN.md`** and confirm: every step is either fully under the agent's control (Bash / Edit / Write) or fully under the user's control (paste into harness). No half-steps. If a step requires a restart of the harness (OpenCode does), it belongs in **User-Required Steps**, even if the file edit before it was automatable.
+- [x] **Re-read `INSTALL_PLAN.md`** and confirm: every step is either fully under the agent's control (Bash / Edit / Write) or fully under the user's control (paste into harness). No half-steps. If a step requires a restart of the harness (OpenCode does), it belongs in **User-Required Steps**, even if the file edit before it was automatable.
+
+  > Completed 2026-10-10: plan re-read in full and **passes with no edits needed**. Control boundaries verified: Automatable Step 1 is a pure file edit (parse-and-rewrite of `~/.config/opencode/opencode.json`) whose success signal is agent-checkable (file re-parses; `plugin` equals exactly `["superpowers@git+https://github.com/obra/superpowers.git"]`) — live premise re-probed today: file exists, parses, `plugin` is still `[]`, `mcp`/`provider` blocks intact. Automatable Step 2 is a single non-interactive Bash command (`opencode run --print-logs "hello" 2>&1 | grep -i superpowers`) with a machine-checkable exit status, correctly sequenced after the restart and explicitly owned by document 4; its fallback smoke prompt is clearly labeled fallback and the step's success signal does not depend on it, so it is not a half-step. The harness restart sits in **User-Required Steps** as required (a running OpenCode session cannot pick up the config change mid-flight, and the plan says so). Ordering is unambiguous: edit (doc 3) → restart (user) → verify (doc 4). Skip/Block correctly states none — provider supported, all prerequisites met. Document 2 is complete; document 3 may execute the Automatable Steps as written.
 
 ## Success Criteria
 
