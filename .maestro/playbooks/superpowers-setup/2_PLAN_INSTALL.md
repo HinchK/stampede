@@ -56,7 +56,7 @@ Turn the detected provider into a concrete, ordered list of install actions. Dis
 
   > Completed 2026-10-10: `which opencode` → **found** at `/opt/homebrew/bin/opencode` (reports version `1.18.35`). On `PATH`, not a blocker.
 
-- [ ] **Provider-specific prerequisite check**:
+- [x] **Provider-specific prerequisite check**:
 
   - `opencode`: locate the active config file. Check in this order: `</Users/hinchk/Fun/stampede>/opencode.json`, then `~/.config/opencode/opencode.json`. Record which one (if any) exists. If neither, document 3 will create `~/.config/opencode/opencode.json`.
   - All other providers: no extra prerequisite check.
