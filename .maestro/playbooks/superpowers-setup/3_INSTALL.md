@@ -51,7 +51,7 @@ Execute the **Automatable Steps** from `INSTALL_PLAN.md`, capture results, and s
 
 ### Task 3: Stage user-required steps
 
-- [ ] **Compose `/Users/hinchk/Fun/stampede/.maestro/playbooks/USER_ACTIONS.md`** containing only the user-required steps from the plan, in the exact order the user should perform them. Use this structure (the outer fence here uses four backticks so the inner three-backtick fences render correctly — replicate that when you write the file):
+- [x] **Compose `/Users/hinchk/Fun/stampede/.maestro/playbooks/USER_ACTIONS.md`** containing only the user-required steps from the plan, in the exact order the user should perform them. Use this structure (the outer fence here uses four backticks so the inner three-backtick fences render correctly — replicate that when you write the file):
 
   ````markdown
   # User Actions Required
@@ -82,6 +82,8 @@ Execute the **Automatable Steps** from `INSTALL_PLAN.md`, capture results, and s
   ````
 
   If the provider has zero user-required steps, write `USER_ACTIONS.md` with a single line: `No user actions required — installation is complete.`
+
+  > Completed 2026-10-10: `USER_ACTIONS.md` written to the playbooks root with exactly the plan's one user-required step for `opencode`, in plan order — **Restart OpenCode** (quit the `stampede` session / restart Maestro; the plan states there is no command to paste, so the step's code fence says so explicitly rather than inventing a command), followed by the standard **Verification** section (`Tell me about your superpowers`). Template replicated as it renders — inner three-backtick fences kept as fences, no outer four-backtick wrapper in the file. The single-step "no user actions" fallback line was not applicable (provider has one user-required step). File re-read after write: 23 lines, structure matches the task template exactly. `INSTALL_LOG.md` is deliberately not written here — that is Task 4, left for the next run.
 
 ### Task 4: Write the install log
 
