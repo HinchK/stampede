@@ -89,7 +89,7 @@ Turn the detected provider into a concrete, ordered list of install actions. Dis
 
 ### Task 4: Write `INSTALL_PLAN.md`
 
-- [ ] **Write `/Users/hinchk/Fun/stampede/.maestro/playbooks/INSTALL_PLAN.md`** using this structure:
+- [x] **Write `/Users/hinchk/Fun/stampede/.maestro/playbooks/INSTALL_PLAN.md`** using this structure:
 
   ```markdown
   # Install Plan
@@ -123,6 +123,8 @@ Turn the detected provider into a concrete, ordered list of install actions. Dis
   ## Skip / Block
   <Use this section only if Supported is "no" or a prerequisite is missing. State the blocker plainly. Document 3 will see this and exit without changes.>
   ```
+
+  > Completed 2026-10-10: `INSTALL_PLAN.md` written to `/Users/hinchk/Fun/stampede/.maestro/playbooks/INSTALL_PLAN.md` using the required structure verbatim (all six sections filled). One automatable edit step (merge `superpowers@git+https://github.com/obra/superpowers.git` into the existing empty `plugin` array in the global `~/.config/opencode/opencode.json`, parse-and-rewrite, `mcp`/`provider` blocks untouched), one automatable verify step (log grep — sequenced after restart, owned by document 4), one user-required step (restart the OpenCode session), Skip/Block = none. Inputs re-confirmed against `PROVIDER.md`, the live `~/.config/opencode/opencode.json`, and `assets/INSTALL_RECIPES.md` before writing.
 
 ### Task 5: Sanity-check the plan
 
