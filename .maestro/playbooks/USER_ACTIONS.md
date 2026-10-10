@@ -1,5 +1,9 @@
 # User Actions Required
 
+> **RESOLVED (2026-10-10)** — verification in `VERIFY.md` found Superpowers INSTALLED-AND-ACTIVE. The restart
+> step below is already satisfied (sessions started after the config edit load the plugin). Nothing left to do;
+> this file is kept for the record.
+
 Superpowers cannot finish installing without these interactive steps. Run them in your **opencode** session in this order.
 
 ## Steps
