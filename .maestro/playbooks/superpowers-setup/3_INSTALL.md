@@ -87,7 +87,7 @@ Execute the **Automatable Steps** from `INSTALL_PLAN.md`, capture results, and s
 
 ### Task 4: Write the install log
 
-- [ ] **Write `/Users/hinchk/Fun/stampede/.maestro/playbooks/INSTALL_LOG.md`** summarizing what happened:
+- [x] **Write `/Users/hinchk/Fun/stampede/.maestro/playbooks/INSTALL_LOG.md`** summarizing what happened:
 
   ```markdown
   # Install Log
@@ -107,6 +107,8 @@ Execute the **Automatable Steps** from `INSTALL_PLAN.md`, capture results, and s
   ## Outcome
   <one of: "AUTOMATED_COMPLETE" (all steps automatable and succeeded) | "AWAITING_USER" (automatable steps done, user-required steps staged) | "FAILED" (an automatable step failed) | "SKIPPED" (provider unsupported or prerequisite missing)>
   ```
+
+  > Completed 2026-10-10: `INSTALL_LOG.md` written to the playbooks root per the template — Provider `opencode`; Automatable Step 1 recorded **OK** with receipts (re-verified live before writing: config re-parses as valid JSON, `plugin` is exactly `["superpowers@git+https://github.com/obra/superpowers.git"]`, all other top-level keys intact); Automatable Step 2 recorded **NOT RUN: deferred to document 4** exactly as the plan assigns it; User-Required Steps → "See USER_ACTIONS.md"; four files listed under Files Modified. Outcome: **AWAITING_USER** (automatable edit done, restart + smoke test staged for the user). Success criteria all hold: log exists with explicit Outcome, `USER_ACTIONS.md` is paste-ready, `opencode.json` still parses.
 
 ## Success Criteria
 
