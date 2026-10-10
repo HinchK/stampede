@@ -3,10 +3,10 @@
 ## Context
 
 - **Playbook**: Superpowers Setup
-- **Agent**: stampede
-- **Project**: /Users/hinchk/Fun/stampede
-- **Date**: 2026-10-10
-- **Working Folder**: /Users/hinchk/Fun/stampede/.maestro/playbooks
+- **Agent**: {{AGENT_NAME}}
+- **Project**: {{AGENT_PATH}}
+- **Date**: {{DATE}}
+- **Working Folder**: {{AUTORUN_FOLDER}}
 
 ## Purpose
 
@@ -18,13 +18,11 @@ The agent running this playbook **is** the harness we are setting up. Detection 
 
 ### Task 1: Self-identify
 
-- [x] **State your harness**: You are running inside an AI coding harness right now. Without checking files, name the harness you are running inside (Claude Code, Codex, OpenCode, Factory Droid, GitHub Copilot CLI, Gemini CLI, Qwen3 Coder, or other). If you are uncertain, say so explicitly — do not guess. Also map your answer to the canonical Maestro `toolType` value (`claude-code`, `codex`, `opencode`, `factory-droid`, `copilot-cli`, `gemini-cli`, or `qwen3-coder`).
-
-  > Completed 2026-10-10: harness is **OpenCode** (certain — introspective, no files checked). Canonical Maestro toolType: `opencode`.
+- [ ] **State your harness**: You are running inside an AI coding harness right now. Without checking files, name the harness you are running inside (Claude Code, Codex, OpenCode, Factory Droid, GitHub Copilot CLI, Gemini CLI, Qwen3 Coder, or other). If you are uncertain, say so explicitly — do not guess. Also map your answer to the canonical Maestro `toolType` value (`claude-code`, `codex`, `opencode`, `factory-droid`, `copilot-cli`, `gemini-cli`, or `qwen3-coder`).
 
 ### Task 2: Cross-check via binary on PATH
 
-- [ ] **Probe for harness CLIs**: Run each of these and record which succeed (exit 0 with a real path):
+- [x] **Probe for harness CLIs**: Run each of these and record which succeed (exit 0 with a real path):
 
   ```bash
   which claude    || true
@@ -38,18 +36,20 @@ The agent running this playbook **is** the harness we are setting up. Detection 
 
   A binary on `PATH` is corroborating evidence but not proof of which harness is currently driving this session — multiple harnesses may be installed on the same machine. Some harnesses (notably some Claude Code distributions) do not require their CLI on `PATH` at all, so a not-found result for the self-identified harness is not necessarily wrong.
 
+  > Completed 2026-10-10: **found** — `claude` (`/Users/hinchk/.local/bin/claude`), `codex` (`/opt/homebrew/bin/codex`), `opencode` (`/opt/homebrew/bin/opencode`), `gemini` (`/opt/homebrew/bin/gemini`). **not-found** — `droid`, `copilot`, `qwen`. The self-identified harness `opencode` is on `PATH`, so the probe corroborates the self-identification (multiple harnesses installed, as anticipated; no discrepancy). Results ready for Task 3 to fold into `PROVIDER.md`.
+
 ### Task 3: Reconcile and write `PROVIDER.md`
 
 - [ ] **Pick one provider with confidence**: Reconcile self-identification against the PATH probe. The self-identification is authoritative — you know what you are. The PATH probe is a sanity check that should not contradict it; if it does (e.g. you self-identified as Claude Code but found `codex` on `PATH` and not `claude`), state the discrepancy in the notes and degrade confidence to `medium`.
 
-- [ ] **Write `/Users/hinchk/Fun/stampede/.maestro/playbooks/PROVIDER.md`** with this exact structure:
+- [ ] **Write `{{AUTORUN_FOLDER}}/PROVIDER.md`** with this exact structure:
 
   ```markdown
   # Detected Provider
 
   - **Provider (Maestro toolType)**: <claude-code | codex | opencode | factory-droid | copilot-cli | gemini-cli | qwen3-coder | unknown>
   - **Confidence**: <high | medium | low>
-  - **Detected on**: 2026-10-10
+  - **Detected on**: {{DATE}}
 
   ## Signals
 
@@ -101,14 +101,14 @@ If the detected provider has no upstream Superpowers install path (currently: `q
 
   Otherwise — provider is one of `claude-code`, `codex`, `opencode`, `factory-droid`, `copilot-cli`, `gemini-cli` — **do not halt**. Skip the rest of this task and let document 2 read the recipe.
 
-- [ ] **Write `/Users/hinchk/Fun/stampede/.maestro/playbooks/SUPERPOWERS_SETUP.md` now** (since documents 2-5 will not run):
+- [ ] **Write `{{AUTORUN_FOLDER}}/SUPERPOWERS_SETUP.md` now** (since documents 2-5 will not run):
 
   ```markdown
   # Superpowers Setup — Summary
 
-  - **Agent**: stampede
+  - **Agent**: {{AGENT_NAME}}
   - **Provider**: <qwen3-coder | unknown>
-  - **Date**: 2026-10-10
+  - **Date**: {{DATE}}
   - **Status**: Skipped
 
   ---
@@ -128,7 +128,7 @@ If the detected provider has no upstream Superpowers install path (currently: `q
 
   ## Re-running this playbook
 
-  This document (`1_DETECT_PROVIDER.md`) carries a `<!-- maestro:halt: ... -->` marker at the bottom. Maestro will refuse to launch the playbook again until the marker is removed (the safety belt prevents silent replays of halted work). Edit `/Users/hinchk/Fun/stampede/.maestro/playbooks/1_DETECT_PROVIDER.md`, delete the trailing `<!-- maestro:halt: ... -->` line, and launch again.
+  This document (`1_DETECT_PROVIDER.md`) carries a `<!-- maestro:halt: ... -->` marker at the bottom. Maestro will refuse to launch the playbook again until the marker is removed (the safety belt prevents silent replays of halted work). Edit `{{AUTORUN_FOLDER}}/1_DETECT_PROVIDER.md`, delete the trailing `<!-- maestro:halt: ... -->` line, and launch again.
 
   ## Reference
 
