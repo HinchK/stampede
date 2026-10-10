@@ -41,7 +41,7 @@ Turn the detected provider into a concrete, ordered list of install actions. Dis
 
   > Completed 2026-10-10: `git version 2.56.0` — available, not a blocker.
 
-- [ ] **Verify the harness CLI is on `PATH`** for the detected provider, where applicable:
+- [x] **Verify the harness CLI is on `PATH`** for the detected provider, where applicable:
 
   | Provider | Command to probe |
   |---|---|
