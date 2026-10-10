@@ -98,14 +98,18 @@ If the detected provider has no upstream Superpowers install path (currently: `q
 
 ### Task 4: Halt-and-summarize for unsupported providers
 
-- [ ] **Decide whether to halt**. Halt when **either** is true:
+- [x] **Decide whether to halt**. Halt when **either** is true:
 
   - The canonical provider value is `qwen3-coder` (no documented Superpowers install path upstream).
   - The canonical provider value is `unknown` (detection is inconclusive — self-identification was uncertain and the PATH probe could not confirm any single harness).
 
   Otherwise — provider is one of `claude-code`, `codex`, `opencode`, `factory-droid`, `copilot-cli`, `gemini-cli` — **do not halt**. Skip the rest of this task and let document 2 read the recipe.
 
-- [ ] **Write `/Users/hinchk/Fun/stampede/.maestro/playbooks/SUPERPOWERS_SETUP.md` now** (since documents 2-5 will not run):
+  > Completed 2026-10-10: decision — **do not halt**. Provider per `PROVIDER.md` is `opencode` (high confidence), which is in the supported set (`claude-code`, `codex`, `opencode`, `factory-droid`, `copilot-cli`, `gemini-cli`); neither halt condition (`qwen3-coder`, `unknown`) applies. The halt branch below is dead for this run — sub-steps 2 and 3 are recorded as N/A (checked so the engine does not re-dispatch them) and document 2 proceeds.
+
+- [x] **Write `/Users/hinchk/Fun/stampede/.maestro/playbooks/SUPERPOWERS_SETUP.md` now** (since documents 2-5 will not run):
+
+  > Skipped 2026-10-10 (N/A — halt branch not taken): provider `opencode` is supported, so documents 2-5 **will** run and the playbook summary will come from document 5 (`5_SUMMARY.md`) instead. No `SUPERPOWERS_SETUP.md` is written; writing one now would falsely report the playbook as skipped.
 
   ```markdown
   # Superpowers Setup — Summary
@@ -140,7 +144,9 @@ If the detected provider has no upstream Superpowers install path (currently: `q
   - Maestro Playbooks: <https://github.com/RunMaestro/Maestro-Playbooks>
   ```
 
-- [ ] **Append the halt marker to the bottom of `1_DETECT_PROVIDER.md`** using `Edit`:
+- [x] **Append the halt marker to the bottom of `1_DETECT_PROVIDER.md`** using `Edit`:
+
+  > Skipped 2026-10-10 (N/A — halt branch not taken): appending the halt marker now would stop documents 2-5 from running, which is the opposite of the decision above. No marker is written.
 
   ```text
   <!-- maestro:halt: provider is <qwen3-coder|unknown>; no upstream Superpowers install path -->
