@@ -42,9 +42,9 @@ The agent running this playbook **is** the harness we are setting up. Detection 
 
 ### Task 3: Reconcile and write `PROVIDER.md`
 
-- [ ] **Pick one provider with confidence**: Reconcile self-identification against the PATH probe. The self-identification is authoritative — you know what you are. The PATH probe is a sanity check that should not contradict it; if it does (e.g. you self-identified as Claude Code but found `codex` on `PATH` and not `claude`), state the discrepancy in the notes and degrade confidence to `medium`.
+- [x] **Pick one provider with confidence**: Reconcile self-identification against the PATH probe. The self-identification is authoritative — you know what you are. The PATH probe is a sanity check that should not contradict it; if it does (e.g. you self-identified as Claude Code but found `codex` on `PATH` and not `claude`), state the discrepancy in the notes and degrade confidence to `medium`.
 
-- [ ] **Write `/Users/hinchk/Fun/stampede/.maestro/playbooks/PROVIDER.md`** with this exact structure:
+- [x] **Write `/Users/hinchk/Fun/stampede/.maestro/playbooks/PROVIDER.md`** with this exact structure:
 
   ```markdown
   # Detected Provider
@@ -77,6 +77,8 @@ The agent running this playbook **is** the harness we are setting up. Detection 
   - `qwen3-coder` → no (no upstream install path documented)
   - `unknown` → no (cannot proceed; document 2 will exit cleanly)
   ```
+
+  > Completed 2026-10-10: provider reconciled as **`opencode`** with **high** confidence — self-identification is authoritative and the PATH probe corroborates it (`opencode` at `/opt/homebrew/bin/opencode`; the co-installed `claude`/`codex`/`gemini` are multi-harness noise, not contradictions). `PROVIDER.md` written at `/Users/hinchk/Fun/stampede/.maestro/playbooks/PROVIDER.md` with all four sections: provider+confidence header, Signals (self-identification + 7-entry PATH probe), Reconciliation Notes, Supported by Superpowers? (`yes`). Provider is supported → Task 4's halt path does not apply; document 2 proceeds.
 
 ## Success Criteria
 
