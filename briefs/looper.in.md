@@ -93,6 +93,16 @@ The AGY quota gate (§5) binds every dispatch to an AGY seat — research and sw
 - For anchor waits — worker `ARCH DONE #…`, reviewer `REVIEW VERDICT #<ticket> <sha> <PASS|BLOCK>`, `RESEARCH DONE`, `DOCS DONE` — prefer **one** `herdr pane wait-output <pane> --regex <anchor> --timeout <ms>` over `herdr agent wait`/`get` timeout-and-recheck loops: it blocks, searches existing output first, and returns the matched line.
 - On a confusing pane state (unexpected `focused`, stale scrollback, `unknown` lifecycle), run `herdr agent explain <seat> --verbose` — it prints which detection rule fired — before your third re-read of the pane.
 
+### Idle discipline (SPIKE — measure before keeping)
+
+The supervisor (`loop-bot-herd.sh watch`) already polls the herd, harvests verdicts, runs the gate and sends you a `LOOP-BOT:` prompt on every change. Each model turn you spend watching is a turn it already spent for you. So:
+
+1. **After a dispatch, you are idle.** Issue exactly one `herdr pane wait-output … --timeout 600000` (or just end your turn) and do nothing else until it returns or a `LOOP-BOT:` notice arrives.
+2. **Banned while waiting:** `sleep N &&` loops, repeated `herdr agent read|get|list` / `herdr pane read`, and `git status` / `git log` "just to check". A notice or a returned wait is the only reason to look.
+3. **Timeout is not a signal.** If a wait times out, read the pane **once**, then wait again with a longer timeout. Do not shorten the interval.
+4. **Budget:** at most 3 inspection commands (`agent read|get|list`, `pane read`, `git status|log`) between two dispatches or notices. If you hit the cap, end your turn and wait for the next notice.
+5. Verification in §3.4 and the §5 gates are exempt — they are the point of a wake-up, not polling.
+
 ---
 
 ## 5. Resilience & Circuit Breakers
