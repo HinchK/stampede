@@ -482,13 +482,13 @@ herdr() {
   return "${T16_AGENT_RC:-0}"
 }
 jq -cn '{version: 2, workspace_id: "wT16", seats: [
-  {name: "seat-a", kind: "opencode", pane: "wT16:p2"},
+  {name: "seat-a", kind: "claude", pane: "wT16:p2"},
   {name: "seat-b", kind: "agy", pane: "wT16:p3"}]}' > "$T16/.herdr-swarm/seats.json"
 
 # capability yes + wait success → brief-ready, exact argv, probe cached once
 : > "$T16_LOG"; export T16_CAP_RC=0 T16_WAIT_RC=0 T16_AGENT_RC=0
 rc=0; out=$(swarm_verify_seats "$T16" 2500 2>"$T16/err") || rc=$?
-[[ "$rc" == 0 && "$out" == *"seat-a (opencode in wT16:p2): brief-ready"* ]] \
+[[ "$rc" == 0 && "$out" == *"seat-a (claude in wT16:p2): brief-ready"* ]] \
   && ok "verify: wait-output path labels brief-ready" || bad "brief-ready: rc=$rc out=$out"
 [[ "$(grep -c '^pane wait-output --help$' "$T16_LOG")" == 1 ]] \
   && ok "verify: one capability probe across both seats" || bad "probe per seat: $(grep -c '^pane wait-output --help$' "$T16_LOG")"
@@ -503,7 +503,7 @@ fi
 # capability no → byte-identical pre-HERDR-2 behavior + one degradation line
 : > "$T16_LOG"; : > "$T16/err"; export T16_CAP_RC=1
 rc=0; out=$(swarm_verify_seats "$T16" 2500 2>>"$T16/err") || rc=$?
-[[ "$rc" == 0 && "$out" == *"seat-a (opencode in wT16:p2): interactive-ready"* ]] \
+[[ "$rc" == 0 && "$out" == *"seat-a (claude in wT16:p2): interactive-ready"* ]] \
   && ok "verify: fallback labels interactive-ready (byte-identical)" || bad "fallback: rc=$rc out=$out"
 grep -q '^agent wait seat-a --until idle --until done --until working --timeout 2500$' "$T16_LOG" \
   && ok "verify: fallback issues the exact pre-HERDR-2 agent-wait argv" || bad "fallback argv: $(grep '^agent wait' "$T16_LOG")"
@@ -520,6 +520,16 @@ if grep -q '^agent wait ' "$T16_LOG"; then
 else
   ok "verify: wait-output timeout is authoritative (no agent-wait fallthrough)"
 fi
+
+# opencode seats bypass wait-output to avoid alternate-screen scroll-off (F-B)
+jq -cn '{version: 2, workspace_id: "wT16", seats: [
+  {name: "seat-oc", kind: "opencode", pane: "wT16:p4"}]}' > "$T16/.herdr-swarm/seats.json"
+: > "$T16_LOG"; export T16_CAP_RC=0 T16_WAIT_RC=0 T16_AGENT_RC=0
+rc=0; out=$(swarm_verify_seats "$T16" 2500 2>"$T16/err") || rc=$?
+[[ "$rc" == 0 && "$out" == *"seat-oc (opencode in wT16:p4): interactive-ready"* ]] \
+  && ok "verify: opencode routes through interactive-ready (F-B)" || bad "opencode interactive-ready: rc=$rc out=$out"
+grep -q '^agent wait seat-oc --until idle --until done --until working --timeout 2500$' "$T16_LOG" \
+  && ok "verify: opencode issues agent-wait" || bad "opencode did not agent wait: $(cat "$T16_LOG")"
 unset T16_CAP_RC T16_WAIT_RC T16_AGENT_RC
 unset -f herdr find_workspace_by_cwd
 

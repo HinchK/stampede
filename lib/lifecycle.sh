@@ -678,9 +678,11 @@ swarm_down() { # TARGET_DIR ASSUME_YES KEEP_WS
 # signal the audit's S18/S23 rows asked for); without it, the pre-HERDR-2
 # agent-lifecycle wait, unchanged. On success SEAT_WAIT_MODE names the signal
 # that passed ("brief-ready" | "interactive-ready") for the caller's label.
-seat_wait_ready() { # NAME PANE TIMEOUT_MS
-  local name="$1" pane="${2:-}" timeout_ms="${3:-30000}"
-  if [[ -n "$pane" ]] && herdr_has_wait_output; then
+seat_wait_ready() { # NAME PANE TIMEOUT_MS [KIND]
+  local name="$1" pane="${2:-}" timeout_ms="${3:-30000}" kind="${4:-}"
+  # Opencode TUIs redraw onto an alternate screen and scroll off the brief
+  # anchor (F-B), so pane wait-output times out. Use agent lifecycle wait.
+  if [[ -n "$pane" ]] && [[ "$kind" != "opencode" ]] && herdr_has_wait_output; then
     SEAT_WAIT_MODE=brief-ready
     herdr pane wait-output "$pane" --regex "$BRIEF_ACK_REGEX" --timeout "$timeout_ms" >/dev/null 2>&1
     return
@@ -737,6 +739,16 @@ swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
   SWARM_MISSING_SEATS=""
   SWARM_MISSING_CRITICAL=""
   local config_file="${abs_target}/swarm.config.toml" roster_key roster_name roster_slug
+  if [[ ! -f "$config_file" && -f "${abs_target}/.herdr-swarm/config.path" ]]; then
+    local bound_cfg
+    bound_cfg=$(head -n1 "${abs_target}/.herdr-swarm/config.path" 2>/dev/null || true)
+    if [[ -n "$bound_cfg" && -f "$bound_cfg" ]]; then
+      config_file="$bound_cfg"
+    fi
+  fi
+  if [[ ! -f "$config_file" && -n "${STAMPEDE_CONFIG_FILE:-}" && -f "${STAMPEDE_CONFIG_FILE}" ]]; then
+    config_file="${STAMPEDE_CONFIG_FILE}"
+  fi
   if [[ -f "$config_file" ]]; then
     # Roster names must be namespaced exactly as config binding does it
     # (lib/config.sh: "{name}-{slug}"); the ledger records full names. The
@@ -813,7 +825,7 @@ PYROSTER
       failures=1
       continue
     fi
-    if seat_wait_ready "$name" "$pane" "$timeout_ms"; then
+    if seat_wait_ready "$name" "$pane" "$timeout_ms" "$kind"; then
       printf '  %s✓ %s (%s in %s): %s%s\n' "$GREEN" "$name" "$kind" "$pane" "$SEAT_WAIT_MODE" "$RESET"
     else
       printf '  %s✖ %s: not ready within %sms%s\n' "$RED" "$name" "$timeout_ms" "$RESET"

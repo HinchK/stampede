@@ -243,4 +243,7 @@
       1. Fresh-pane shell race (`not an available shell` on instant `agent start`).
       2. Claude fresh-dir interactive trust dialog blocking automated readiness.
       3. OpenCode background service caches project configuration per directory.
-    - **Total Test Suite Health**: All 27 suites green (`make check`), 0 ShellCheck warnings (58 shell files), resolved and converged at `11e4ad4a83fa98036d86fbee9365c41a53ca3074`.
+    - **Live Findings Follow-up (F-A & F-B Resolved)**:
+      - **F-A (Universal Target Roster Check Bypass)**: Persisted active config path to `.herdr-swarm/config.path` at launch time in `herdr-loop-swarm.sh`. Updated `swarm_verify_seats` in `lib/lifecycle.sh` to resolve config via `.herdr-swarm/config.path` and `STAMPEDE_CONFIG_FILE` fallback, ensuring config-less universal targets enforce missing-seat roster checks and fail closed on missing critical seats (`tests/test_seat_missing.sh` Scenarios C and D).
+      - **F-B (OpenCode Verify Anchor Invisibility)**: Updated `seat_wait_ready` in `lib/lifecycle.sh` to accept seat kind. For `opencode`, bypasses `pane wait-output` (whose `STANDING BRIEF:` anchor is scrolled off by alternate-screen TUI redraws) and routes to `herdr agent wait --until idle|done|working`, eliminating false-negative verify timeouts (`tests/test_cli.sh`).
+    - **Total Test Suite Health**: All 27 suites green (`make check`), 0 ShellCheck warnings (58 shell files).

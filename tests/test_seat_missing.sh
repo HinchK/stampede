@@ -134,4 +134,29 @@ traces_of "$ENV_DIR/fresh project" | grep '"swarm_ready"' | grep -q '"missing_se
 traces_of "$ENV_DIR/fresh project" | grep '"swarm_ready"' | grep -q 'docs-' \
   || { echo "B: swarm_ready does not name the docs seat" >&2; exit 1; }
 
+echo "==> C: config-less universal target fails closed on broken arch seat (F-A)"
+make_env
+rm -f "$ENV_DIR/fresh project/swarm.config.toml"
+export FAKE_HERDR_REFUSE='arch-'
+set +e
+"$ENV_DIR/yeehaw.sh" start --brainstorm --topic "launch check" > "$ENV_DIR/up.log" 2>&1
+rc=$?
+set -e
+[[ "$rc" -ne 0 ]] || { echo "C: up -m b on config-less target exited 0 with a broken arch seat" >&2; tail -20 "$ENV_DIR/up.log" >&2; exit 1; }
+grep -q "arch-1" "$ENV_DIR/up.log" || { echo "C: failed-seat summary does not name arch seat on config-less target" >&2; tail -20 "$ENV_DIR/up.log" >&2; exit 1; }
+if traces_of "$ENV_DIR/fresh project" | grep -q '"swarm_ready"'; then
+  echo "C: swarm_ready emitted despite broken critical seat on config-less target" >&2
+  exit 1
+fi
+[[ -f "$ENV_DIR/fresh project/.herdr-swarm/config.path" ]] \
+  || { echo "C: active config.path was not persisted in target .herdr-swarm" >&2; exit 1; }
+
+echo "==> D: standalone verify fails closed on config-less target with missing arch seat"
+set +e
+"$ROOT/bin/stampede" verify "$ENV_DIR/fresh project" > "$ENV_DIR/verify.log" 2>&1
+v_rc=$?
+set -e
+[[ "$v_rc" -ne 0 ]] || { echo "D: standalone verify exited 0 on config-less target with missing arch seat" >&2; exit 1; }
+grep -q "arch-1" "$ENV_DIR/verify.log" || { echo "D: standalone verify does not name missing arch seat" >&2; tail -20 "$ENV_DIR/verify.log" >&2; exit 1; }
+
 printf 'test_seat_missing: PASS\n'

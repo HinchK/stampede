@@ -146,6 +146,8 @@ if [[ -f "${PWD}/swarm.config.toml" ]]; then
   CONFIG_FILE="${PWD}/swarm.config.toml"
 fi
 export STAMPEDE_CONFIG_FILE="$CONFIG_FILE"
+mkdir -p "${PWD}/.herdr-swarm"
+printf '%s\n' "$CONFIG_FILE" > "${PWD}/.herdr-swarm/config.path"
 ENV_FILE="${PWD}/.env"
 
 # Terminal Formatting
@@ -721,7 +723,9 @@ else
     for critical_seat in "$ARCH_AGENT" "${SEAT_NAME_pm:-pm}"; do
       cpane=$(jq -r --arg n "$critical_seat" '.seats[]? | select(.name == $n) | .pane // empty' \
         "${PWD}/.herdr-swarm/seats.json" 2>/dev/null) || cpane=""
-      if ! seat_wait_ready "$critical_seat" "$cpane" 2000; then
+      ckind=$(jq -r --arg n "$critical_seat" '.seats[]? | select(.name == $n) | .kind // empty' \
+        "${PWD}/.herdr-swarm/seats.json" 2>/dev/null) || ckind=""
+      if ! seat_wait_ready "$critical_seat" "$cpane" 2000 "$ckind"; then
         bad "Critical seat not ready: ${critical_seat}"
         critical_fail=1
       fi
