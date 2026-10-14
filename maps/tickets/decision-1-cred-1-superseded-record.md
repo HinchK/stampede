@@ -10,7 +10,7 @@ resolution:
   audit_file: docs/audits/2026-09-30-cred-1-superseded-by-grant-1.md
 github_issue: 126
 github_url: "https://github.com/HinchK/stampede/issues/126"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # DECISION-1 -- close the incident class with an accurate record

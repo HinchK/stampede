@@ -8,7 +8,7 @@ owns: lib/config.sh,tests/test_config.sh
 parent: maps/harden-headless-mode.md
 github_issue: 129
 github_url: "https://github.com/HinchK/stampede/issues/129"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # HL-CFG-1 — swarm.config.toml headless knobs clobber environment variable overrides

@@ -14,7 +14,7 @@ resolution:
   integrated_at: dad86685af5df479509c59eb15bdb3c0a87c3c8e
 github_issue: 143
 github_url: "https://github.com/HinchK/stampede/issues/143"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # QUOTA-3 -- a scriptable yes/no gate for agy exhaustion

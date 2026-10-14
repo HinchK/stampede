@@ -8,7 +8,7 @@ owns: lib/gh_sync.sh
 parent: maps/close-the-gaps.md
 github_issue: 154
 github_url: "https://github.com/HinchK/stampede/issues/154"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # SYNC-2 -- gh_sync.sh status vocabulary gap

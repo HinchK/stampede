@@ -8,7 +8,7 @@ owns: lib/cli/stampede-status.sh, tests/test_cli_status.sh
 parent: maps/herdr-native-and-seat-utilization.md
 github_issue: 118
 github_url: "https://github.com/HinchK/stampede/issues/118"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # ROUTE-4 -- make seat utilization a number, not a retrospective surprise

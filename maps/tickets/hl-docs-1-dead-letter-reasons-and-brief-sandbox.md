@@ -8,7 +8,7 @@ owns: docs/findings/headless-mode-design.md,lib/cli/stampede-headless.sh,tests/t
 parent: maps/harden-headless-mode.md
 github_issue: 132
 github_url: "https://github.com/HinchK/stampede/issues/132"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # HL-DOCS-1 — Honest dead-letter reasons, log pointers, and sandbox configuration documentation

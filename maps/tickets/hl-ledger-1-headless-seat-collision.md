@@ -8,7 +8,7 @@ owns: lib/cli/stampede-headless.sh,tests/test_cli.sh
 parent: maps/next-horizon.md
 github_issue: 133
 github_url: "https://github.com/HinchK/stampede/issues/133"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # HL-LEDGER-1 — prevent headless worker ledger collision with live interactive seats

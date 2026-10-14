@@ -8,7 +8,7 @@ owns: docs/findings/herdr-surface-audit.md
 parent: maps/herdr-native-and-seat-utilization.md
 github_issue: 110
 github_url: "https://github.com/HinchK/stampede/issues/110"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # HERDR-1 -- audit every herdr invocation against the installed CLI

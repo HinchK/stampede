@@ -13,7 +13,7 @@ resolution:
   changelog: CHANGELOG.md#050--in-development-multi-provider-ux-review-loop-and-headless-batch-drain
 github_issue: 138
 github_url: "https://github.com/HinchK/stampede/issues/138"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # HORIZON-4 — teach the world stampede headless

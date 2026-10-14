@@ -8,7 +8,7 @@ owns: tests/test_standby.sh
 parent: maps/dispatch-safety-and-review-policy.md
 github_issue: 124
 github_url: "https://github.com/HinchK/stampede/issues/124"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # CI-FIX-3 -- make test_standby portable (third CI bug of this class)

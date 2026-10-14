@@ -8,7 +8,7 @@ owns: lib/headless.sh,tests/test_async_gate.sh
 parent: maps/harden-headless-mode.md
 github_issue: 136
 github_url: "https://github.com/HinchK/stampede/issues/136"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # HL-TMO-1 — Worker wall-clock timeout SIGKILL escalation

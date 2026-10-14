@@ -14,7 +14,7 @@ resolution:
   integrated_at: 2ee247ef98b761540bce9946f98461241a5f6bae
 github_issue: 144
 github_url: "https://github.com/HinchK/stampede/issues/144"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # QUOTA-4 -- teach looper's brief to check before it dispatches

@@ -8,7 +8,7 @@ owns: tests/test_profile.sh
 parent: maps/dispatch-safety-and-review-policy.md
 github_issue: 155
 github_url: "https://github.com/HinchK/stampede/issues/155"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # TEST-PATH-1 -- hermeticize test_profile [4c] against runner PATH tool shadowing

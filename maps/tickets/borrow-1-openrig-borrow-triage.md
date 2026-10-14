@@ -8,7 +8,7 @@ owns: maps/pick-up-where-we-left-off.md
 parent: maps/pick-up-where-we-left-off.md
 github_issue: 122
 github_url: "https://github.com/HinchK/stampede/issues/122"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # BORROW-1 — decide which OpenRig borrows become tickets

@@ -8,7 +8,7 @@ owns: swarm.config.toml, briefs/, loop-bot-herd.sh
 parent: maps/pick-up-where-we-left-off.md
 github_issue: 148
 github_url: "https://github.com/HinchK/stampede/issues/148"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # REV-FAILOVER-1 — reviewer dispatch fails over to a non-AGY seat when the agy account is walled

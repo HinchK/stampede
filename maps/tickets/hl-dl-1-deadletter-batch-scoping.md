@@ -9,7 +9,7 @@ parent: maps/headless-live.md
 blocked_by: [HORIZON-3]
 github_issue: 131
 github_url: "https://github.com/HinchK/stampede/issues/131"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # HL-DL-1 — per-batch scoping for headless dead-letter count

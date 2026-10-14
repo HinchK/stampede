@@ -8,7 +8,7 @@ owns: lib/lifecycle.sh
 parent: maps/pick-up-where-we-left-off.md
 github_issue: 152
 github_url: "https://github.com/HinchK/stampede/issues/152"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # SNAP-1 — `swarm down` writes a timestamped snapshot before closing panes

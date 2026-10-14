@@ -9,7 +9,7 @@ parent: maps/herdr-native-and-seat-utilization.md
 blocked_by: [HERDR-1]
 github_issue: 113
 github_url: "https://github.com/HinchK/stampede/issues/113"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # HERDR-4 -- one submission path for brief delivery

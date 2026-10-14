@@ -5,7 +5,7 @@ status: done
 owns: docs/dogfood/public-readiness.md
 github_issue: 135
 github_url: "https://github.com/HinchK/stampede/issues/135"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # HL-TGT-1 — drain-claim freshness fix

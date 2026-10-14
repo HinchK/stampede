@@ -9,7 +9,7 @@ parent: maps/herdr-native-and-seat-utilization.md
 blocked_by: [HERDR-1]
 github_issue: 112
 github_url: "https://github.com/HinchK/stampede/issues/112"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # HERDR-3 -- explain, don't guess, in doctor

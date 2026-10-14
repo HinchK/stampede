@@ -8,7 +8,7 @@ owns: briefs/arch.in.md
 parent: maps/herdr-native-and-seat-utilization.md
 github_issue: 117
 github_url: "https://github.com/HinchK/stampede/issues/117"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # ROUTE-3 -- arch seats take research and diagnosis dispatches, not just implementation

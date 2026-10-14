@@ -8,7 +8,7 @@ owns: tests/test_repo_state.sh
 parent: maps/universal-herdr-swarm.md
 github_issue: 123
 github_url: "https://github.com/HinchK/stampede/issues/123"
-synced_at: "2026-10-13T01:40:45Z"
+synced_at: "2026-10-14T04:22:55Z"
 ---
 
 # CI-FIX-2 -- make the "gh absent" fixture hermetic (same class as CI-FIX-1)
