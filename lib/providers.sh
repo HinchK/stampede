@@ -141,6 +141,18 @@ PYCODE
   return "$bad_count"
 }
 
+# providers_healthy_chain "kind1 kind2 ..." — EVERY healthy kind, one per
+# line, in chain order (D3): launch retries walk this list, re-asking the
+# health question resolve_chain answers with a single winner.
+providers_healthy_chain() {
+  local k probe
+  for k in $1; do
+    probe=$(providers_kind_probe "$k")
+    [[ "${probe%% *}" == "ok" ]] && printf '%s\n' "$k"
+  done
+  return 0
+}
+
 # Herdr forwards arguments after `--` to each harness — but only flags the
 # harness actually supports. opencode v2's TUI has no --model flag (it exists
 # only on `opencode run`): a forwarded flag prints usage and kills the seat

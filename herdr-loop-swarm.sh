@@ -538,30 +538,54 @@ for tab_name in herd ops; do
         printf -v looper_cmd 'tail -n 30 -F %q' "${PWD}/.herdr-swarm/worklog.log"
         herdr pane run "$seat_pane" "$looper_cmd" >/dev/null 2>&1 || warn "Looper pane log view failed"
       else
-      # Provider chain resolution (PUB-6): first healthy kind in the ordered
-      # chain seats. An unhealthy primary is a fallback (telemetry-noted); a
-      # chain with no healthy kind skips the seat — and mode `a` later fails
-      # closed in swarm_verify_seats, preserving the fail-closed contract.
+      # Provider chain resolution + launch retries (PUB-6, D3): binary
+      # health orders the chain, then each candidate must actually START —
+      # herdr agent start blocks until interactive readiness, so a failed
+      # launch (rc ≠ 0) or an agent that never registers falls through to
+      # the next kind. The configured model travels only with the primary
+      # kind: a fallback provider cannot honor another provider's model id.
+      # A chain with no healthy kind skips the seat — every mode then fails
+      # closed on the missing-seat roster check (swarm_verify_seats, D4).
       resolve_timeout >/dev/null 2>&1 || true
-      if ! resolved_kind=$(providers_resolve_chain "$seat_kinds"); then
+      chain_kinds=$(providers_healthy_chain "$seat_kinds")
+      if [[ -z "$chain_kinds" ]]; then
         warn "No healthy provider in chain for '${seat_name}' [${seat_kinds}] — seat skipped (stampede doctor lists remedies)"
         [[ -n "$prev_pane" ]] || prev_pane="$tab_anchor"
         seat_idx=$((seat_idx + 1))
         continue
       fi
-      if [[ "$resolved_kind" != "${seat_kinds%% *}" ]]; then
-        note "Seat '${seat_name}': primary '${seat_kinds%% *}' unavailable — seating '${resolved_kind}'"
-        _fb_payload=$(jq -cn --arg seat "$seat_name" --arg wanted "${seat_kinds%% *}" --arg used "$resolved_kind" \
-          '{action:"seat_fallback", seat:$seat, wanted:$wanted, used:$used,
-            summary:("primary " + $wanted + " unavailable; seated " + $used)}')
-        "$PYTHON_BIN" "$LIB_DIR/telemetry.py" log "$SESSION_ID" seat.fallback "$seat_name" - "$_fb_payload" \
-          --trace-dir "$TRACE_DIR_PATH" >/dev/null 2>&1 || true
-      fi
-
-      step "Starting agent '${seat_name}' (${resolved_kind})..."
-      providers_start_agent "$seat_name" "$resolved_kind" "$seat_pane" "$seat_model" "$seat_cwd" >/dev/null 2>&1 \
-        || { warn "Failed to seat agent '${seat_name}' in pane ${seat_pane}"; seat_pane=""; }
-      if [[ -n "$seat_pane" ]]; then
+      primary_kind="${seat_kinds%% *}"
+      launched_kind=""
+      fallback_reason=""
+      for try_kind in $chain_kinds; do
+        try_model="$seat_model"
+        [[ "$try_kind" != "$primary_kind" ]] && try_model=""
+        step "Starting agent '${seat_name}' (${try_kind})..."
+        if providers_start_agent "$seat_name" "$try_kind" "$seat_pane" "$try_model" "$seat_cwd" >/dev/null 2>&1 \
+           && herdr agent get "$seat_name" >/dev/null 2>&1; then
+          launched_kind="$try_kind"
+          break
+        fi
+        warn "Agent start failed for '${seat_name}' (${try_kind})"
+        if [[ "$try_kind" == "$primary_kind" ]]; then
+          fallback_reason="launch_failed"
+        fi
+      done
+      if [[ -z "$launched_kind" ]]; then
+        warn "No provider in chain could seat '${seat_name}' [${seat_kinds}] — seat skipped"
+        seat_pane=""
+      else
+        resolved_kind="$launched_kind"
+        if [[ "$resolved_kind" != "$primary_kind" ]]; then
+          [[ -n "$fallback_reason" ]] || fallback_reason="primary_unhealthy"
+          note "Seat '${seat_name}': primary '${primary_kind}' ${fallback_reason//_/ } — seating '${resolved_kind}'"
+          _fb_payload=$(jq -cn --arg seat "$seat_name" --arg wanted "$primary_kind" --arg used "$resolved_kind" \
+            --arg reason "$fallback_reason" \
+            '{action:"seat_fallback", seat:$seat, wanted:$wanted, used:$used, reason:$reason,
+              summary:("primary " + $wanted + " " + $reason + "; seated " + $used)}')
+          "$PYTHON_BIN" "$LIB_DIR/telemetry.py" log "$SESSION_ID" seat.fallback "$seat_name" - "$_fb_payload" \
+            --trace-dir "$TRACE_DIR_PATH" >/dev/null 2>&1 || true
+        fi
         # Nonce file-path protocol (lib/briefs.sh): never inline brief text
         deliver_brief_nonce "$seat_name" "$rendered_brief" \
           || warn "Brief delivery failed for '${seat_name}'"

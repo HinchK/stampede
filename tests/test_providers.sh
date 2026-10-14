@@ -216,5 +216,18 @@ grep -q 'agent start arch --kind opencode --pane p4$' "$HERDR_STUB_CALLS" \
 [[ ! -e "$AUTO_CWD/.opencode" ]] \
   && ok "auto model writes no project config" || bad "auto model wrote a config"
 
+# [11] healthy-chain enumeration (D3): launch retries need every healthy
+# kind in chain order, not just the winner.
+out=$(providers_healthy_chain "opencode claude" | tr '\n' ' ')
+[[ "$out" == "claude " ]] && ok "healthy chain skips missing kinds" || bad "healthy chain: '$out'"
+printf '#!/usr/bin/env bash\nif [ "$1" = --version ]; then echo opencode-stub; exit 0; fi\nexit 0\n' > "$SCRATCH/bin/opencode"
+chmod +x "$SCRATCH/bin/opencode"
+out=$(providers_healthy_chain "opencode claude agy" | tr '\n' ' ')
+[[ "$out" == "opencode claude agy " ]] && ok "healthy chain keeps declaration order" || bad "order: '$out'"
+out=$(providers_healthy_chain "brand-new-llm claude" | tr '\n' ' ')
+[[ "$out" == "claude " ]] && ok "healthy chain skips unknown kinds" || bad "unknown skip: '$out'"
+out=$(providers_healthy_chain "pi brand-new-llm" | tr '\n' ' ')
+[[ -z "$out" ]] && ok "empty chain when nothing is healthy" || bad "empty: '$out'"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
