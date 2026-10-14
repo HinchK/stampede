@@ -250,6 +250,14 @@ fi
 eval "$config_env"
 good "Config bound: ${SWARM_CONFIG_NAME} — seats: ${SEAT_KEYS}"
 
+# Model preflight (D2): opencode silently serves a different model when the
+# configured id is not in its catalog — the mismatch never surfaces at
+# launch. Fail closed here, before any workspace, pane, or worktree exists.
+if ! providers_check_opencode_models "$CONFIG_FILE"; then
+  printf '  %s✖ FATAL: opencode model preflight failed — fix the model ids in %s.%s\n' "$RED" "$CONFIG_FILE" "$RESET" >&2
+  exit 1
+fi
+
 # Review loop session override (REV-3): --no-review-loop writes a durable
 # runtime marker that outranks the config binding, so the supervisor daemon
 # (which reads config on its own) sees the same override. An up WITHOUT the

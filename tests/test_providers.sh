@@ -114,5 +114,62 @@ fi
 out=$(providers_resolve_chain "brand-new-llm claude")
 [[ "$out" == "claude" ]] && ok "unknown kinds are skipped, not fatal" || bad "resolve3: '$out'"
 
+# [9] opencode model preflight (D2): a configured model id opencode does not
+# list is silently replaced at run time — the preflight fails closed, naming
+# the seat and the offending id. The stub catalog mirrors the live ids.
+printf '#!/usr/bin/env bash\nif [ "$1" = models ]; then\nprintf "%%s\\n" zai-coding-plan/glm-5.3 zai-coding-plan/glm-5.3-flash zai/glm-5.3\nexit 0\nfi\n[ "$1" = --version ] && echo opencode-stub\nexit 0\n' > "$SCRATCH/bin/opencode"
+chmod +x "$SCRATCH/bin/opencode"
+cat > "$SCRATCH/models.toml" <<'EOF'
+[seats.good]
+name = "good-seat"
+kinds = ["opencode", "claude"]
+model = "zai-coding-plan/glm-5.3"
+[seats.bad]
+name = "bad-seat"
+default_kind = "opencode"
+model = "zai/not-listed"
+[seats.off]
+name = "off-seat"
+default_kind = "opencode"
+model = "zai/not-listed"
+enabled = false
+[seats.other]
+name = "other-seat"
+default_kind = "claude"
+model = "zai/not-listed"
+EOF
+if providers_check_opencode_models "$SCRATCH/models.toml" >/dev/null 2>&1; then
+  bad "unlisted opencode model must fail the preflight"
+else
+  ok "unlisted opencode model fails the preflight"
+fi
+out=$(providers_check_opencode_models "$SCRATCH/models.toml" 2>&1) || true
+[[ "$out" == *"bad-seat"* && "$out" == *"zai/not-listed"* ]] \
+  && ok "failure names the seat and the offending model id" || bad "message: $out"
+[[ "$out" != *"off-seat"* ]] && ok "disabled seats are not preflighted" || bad "disabled seat flagged: $out"
+[[ "$out" != *"other-seat"* ]] && ok "non-opencode seats are not preflighted" || bad "claude seat flagged: $out"
+sed 's/zai\/not-listed/zai-coding-plan\/glm-5.3/' "$SCRATCH/models.toml" > "$SCRATCH/models-fixed.toml"
+if providers_check_opencode_models "$SCRATCH/models-fixed.toml" >/dev/null 2>&1; then
+  ok "listed models pass the preflight"
+else
+  bad "listed model must pass"
+fi
+# Shipped config: the repo's own seats must be preflight-clean (D2 regression
+# pin — the shipped config once carried zai/glm-5.3, an id the plan provider
+# does not serve).
+if providers_check_opencode_models "$REPO_ROOT/swarm.config.toml" >/dev/null 2>&1; then
+  ok "shipped swarm.config.toml passes the model preflight"
+else
+  bad "shipped config fails the model preflight (run: $(providers_check_opencode_models "$REPO_ROOT/swarm.config.toml" 2>&1 | head -1))"
+fi
+# opencode absent: advisory skip — the fallback chain handles a missing
+# binary; the preflight must not break machines without opencode.
+rm "$SCRATCH/bin/opencode"
+if providers_check_opencode_models "$SCRATCH/models-fixed.toml" >/dev/null 2>&1; then
+  ok "absent opencode binary is advisory, not fatal"
+else
+  bad "absent opencode binary must not fail the preflight"
+fi
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

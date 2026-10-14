@@ -88,6 +88,59 @@ providers_resolve_chain() {
   return 1
 }
 
+# ── Model preflight (D2) ────────────────────────────────────────────────────
+# providers_check_opencode_models <toml-path>
+#   Every ENABLED seat whose chain includes opencode pins a model id that
+#   `opencode models` must list. An unlisted id is not a launch error —
+#   opencode silently serves a different model — so the only honest gate is
+#   a preflight comparison, fail-closed before any workspace or pane exists.
+#   rc 0: no opencode seats, opencode absent (advisory; the fallback chain
+#         owns a missing binary), or every configured model is listed
+#   rc 1: at least one enabled opencode seat pins an unlisted model (one
+#         error line per offending seat, naming the seat and the id)
+providers_check_opencode_models() {
+  local toml_path="$1" bin catalog name model bad_count=0
+  local seats_models
+  seats_models=$("$PYTHON_BIN" - "$toml_path" 2>/dev/null <<'PYCODE'
+import sys, tomllib
+with open(sys.argv[1], 'rb') as f:
+    cfg = tomllib.load(f)
+for k, v in cfg.get('seats', {}).items():
+    if not v.get('enabled', True):
+        continue
+    kinds = v.get('kinds') or ([v['default_kind']] if v.get('default_kind') else [])
+    if 'opencode' not in kinds:
+        continue
+    model = v.get('model', 'auto')
+    if model and model != 'auto':
+        print(f"{v.get('name', k)}|{model}")
+PYCODE
+) || { printf '  cannot read seat models from %s\n' "$toml_path" >&2; return 1; }
+  [[ -n "$seats_models" ]] || return 0
+  if ! command -v opencode >/dev/null 2>&1; then
+    printf '  opencode not installed — model preflight skipped (fallback chain applies)\n'
+    return 0
+  fi
+  bin=$(command -v opencode)
+  if [[ -n "${TIMEOUT_BIN:-}" ]] && command -v "$TIMEOUT_BIN" >/dev/null 2>&1; then
+    catalog=$("$TIMEOUT_BIN" 10 "$bin" models 2>/dev/null) || catalog=""
+  else
+    catalog=$("$bin" models 2>/dev/null) || catalog=""
+  fi
+  if [[ -z "$catalog" ]]; then
+    printf '  opencode models unavailable — model preflight skipped\n'
+    return 0
+  fi
+  while IFS='|' read -r name model; do
+    [[ -n "$name" ]] || continue
+    if ! grep -qxF "$model" <<<"$catalog"; then
+      printf '  seat %s pins opencode model %s — not listed by "opencode models"\n' "$name" "$model" >&2
+      bad_count=$((bad_count + 1))
+    fi
+  done <<<"$seats_models"
+  return "$bad_count"
+}
+
 # Herdr forwards arguments after `--` to each harness. A configured model
 # must reach the actual process for cost and role fit to be meaningful.
 providers_start_agent() { # NAME KIND PANE MODEL

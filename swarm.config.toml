@@ -86,7 +86,7 @@ role = "Implementation Engine (GLM-5.3)"
 # absent/unhealthy. kinds[0] is the primary; default_kind is the
 # single-element sugar.
 kinds = ["opencode", "claude"]
-model = "zai/glm-5.3"
+model = "zai-coding-plan/glm-5.3"
 brief = "briefs/arch.md"
 tab = "herd"
 position = "top-right"
@@ -96,7 +96,7 @@ worktree = true
 name = "arch-2"
 role = "Implementation Engine (GLM-5.3)"
 kinds = ["opencode", "claude"]
-model = "zai/glm-5.3"
+model = "zai-coding-plan/glm-5.3"
 brief = "briefs/arch.md"
 tab = "herd"
 position = "bottom-right"
