@@ -296,5 +296,17 @@ TOML
 check "6h" "max_rounds as string fails closed" \
   'if config_dump_env x "$C6E" >/dev/null 2>&1; then false; else true; fi'
 
+# ── 8. slugify keeps seat names inside herdr's 32-char agent-name limit ─────
+check "8a" "short slug passes through unchanged" \
+  '[[ $(slugify t/scratch) == "t-scratch" ]]'
+check "8b" "long slug is capped at 16 chars" \
+  '[[ $(slugify Standard-Pentest/kultivait | wc -c) -le 17 ]]'
+check "8c" "capped slug is deterministic" \
+  '[[ $(slugify Standard-Pentest/kultivait) == $(slugify Standard-Pentest/kultivait) ]]'
+check "8d" "long slugs sharing a prefix stay distinct" \
+  '[[ $(slugify Standard-Pentest/kultivait) != $(slugify Standard-Pentest/kultivate) ]]'
+check "8e" "longest seat prefix + capped slug fits 32 chars" \
+  '[[ $(printf "%s" "looper_standby-$(slugify Standard-Pentest/kultivait)" | wc -c) -le 32 ]]'
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))

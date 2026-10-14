@@ -1138,6 +1138,34 @@ cmd_dispatch() { # dispatch WORKER BRIEF_FILE [TICKET]
 # went stale while the supervisor lived, blocking every later drain. As a
 # separate `bash lib/arbiter.sh drain` process, the lock's pid IS the drain
 # job's, so dead holders are evictable below (and by arbiter_lock itself).
+# ---- 4c. arbiter hand-back feedback ----------------------------------------
+# The drain runs as its own background process, so nothing it prints ever
+# reaches a seat; without this the worker is never told why it was rejected.
+arbiter_handback_feedback() {
+  local q="${STATE_DIR}/integration.jsonl" seen="${STATE_DIR}/handback-notified"
+  [[ -f "$q" ]] || return 0
+  touch "$seen" 2>/dev/null || return 0
+  local ticket seat sha status detail key msg
+  while IFS=$'\t' read -r ticket seat sha status detail; do
+    [[ -n "$ticket" && -n "$sha" ]] || continue
+    key=$(printf '%s\t%s\t%s' "$ticket" "$sha" "$status")
+    grep -qxF "$key" "$seen" 2>/dev/null && continue
+    case "$status" in
+      conflict)
+        msg="LOOP-BOT: #${ticket} @ ${sha:0:7} was HANDED BACK — it conflicts with the integration branch. The arbiter aborted the merge and never resolves conflicts or rebases your branch. Conflicting file(s): ${detail:-unknown}. Merge the integration branch into your worktree, resolve them there, commit (no git stash), then re-verdict 'ARCH DONE #${ticket} <new sha>'." ;;
+      integration_red)
+        msg="LOOP-BOT: #${ticket} @ ${sha:0:7} was HANDED BACK — it merged cleanly but the suite is RED on the COMBINED tree, so the integration ref was NOT advanced. Your branch passes alone and breaks once combined with other integrated work. Gate log: ${detail:-none}. Fix it on your branch, commit, then re-verdict 'ARCH DONE #${ticket} <new sha>'." ;;
+      *) continue ;;
+    esac
+    worker_feedback "$seat" "$ticket" "$sha" "$status" "$msg"
+    printf '%s\n' "$key" >> "$seen"
+    warn "#${ticket} @ ${sha:0:7} handed back to ${seat:-unknown} (${status})"
+  done < <(jq -r 'select(.status == "conflict" or .status == "integration_red")
+    | [ (.ticket | tostring), (.seat // ""), .sha, .status,
+        (if .status == "conflict" then ((.files // []) | join(", "))
+         else (.gate.log // "") end) ] | @tsv' "$q" 2>/dev/null)
+}
+
 arbiter_auto_drain() {
   local queued lk="${STATE_DIR}/arbiter.lock" pid drain_pid
   queued=$(arbiter_queued_count 2>/dev/null || printf '0')
@@ -1187,6 +1215,7 @@ cmd_once() {
   harvest_verdicts
   gate_reap
   arbiter_auto_drain    # PROVE-4: green enqueues drain without an operator
+  arbiter_handback_feedback
   lease_release_integrated   # DOG-16: freed by integration evidence, never by green
   unpushed_watch
   credits_watch
