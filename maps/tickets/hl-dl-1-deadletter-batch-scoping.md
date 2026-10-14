@@ -7,6 +7,9 @@ assignee: arch-2-hinchk-stampede
 owns: lib/headless.sh,lib/cli/stampede-headless.sh,tests/test_headless.sh
 parent: maps/headless-live.md
 blocked_by: [HORIZON-3]
+github_issue: 131
+github_url: "https://github.com/HinchK/stampede/issues/131"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # HL-DL-1 — per-batch scoping for headless dead-letter count

@@ -6,6 +6,9 @@ status: resolved
 assignee: arch
 owns: lib/lifecycle.sh, loop-bot-herd.sh, tests/test_review_loop.sh
 parent: maps/universal-herdr-swarm.md
+github_issue: 150
+github_url: "https://github.com/HinchK/stampede/issues/150"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # REVIEW-SHA-1 -- one canonical sha form across gate, review and arbiter

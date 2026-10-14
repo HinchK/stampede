@@ -8,6 +8,9 @@ owns: docs/audits/,STATE.md,maps/tickets/incident-1-promote-gate-bypass-record.m
 parent: maps/next-horizon.md
 resolution:
   audit_file: docs/audits/2026-09-30-cred-1-superseded-by-grant-1.md
+github_issue: 126
+github_url: "https://github.com/HinchK/stampede/issues/126"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # DECISION-1 -- close the incident class with an accurate record

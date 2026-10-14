@@ -3,6 +3,9 @@ id: HL-TGT-1
 title: "Fix the stale operator-invoked drain claim in docs/dogfood/public-readiness.md"
 status: done
 owns: docs/dogfood/public-readiness.md
+github_issue: 135
+github_url: "https://github.com/HinchK/stampede/issues/135"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # HL-TGT-1 — drain-claim freshness fix

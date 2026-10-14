@@ -6,6 +6,9 @@ status: resolved
 assignee: arch-1-hinchk-stampede
 owns: loop-bot-herd.sh,lib/quota.sh,tests/test_async_gate.sh
 parent: maps/universal-herdr-swarm.md
+github_issue: 142
+github_url: "https://github.com/HinchK/stampede/issues/142"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # QUOTA-2 -- pause reviewer dispatch on agy quota exhaustion, retry through

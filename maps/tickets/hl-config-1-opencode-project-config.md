@@ -6,6 +6,9 @@ status: resolved
 assignee: arch
 owns: .opencode/
 parent: maps/next-horizon.md
+github_issue: 130
+github_url: "https://github.com/HinchK/stampede/issues/130"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # HL-CONFIG-1 -- unblock HORIZON-2's F1/F4 preconditions

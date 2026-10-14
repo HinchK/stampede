@@ -6,6 +6,9 @@ status: resolved
 assignee: arch
 owns: tests/test_arbiter.sh, tests/test_async_gate.sh
 parent: maps/pick-up-where-we-left-off.md
+github_issue: 151
+github_url: "https://github.com/HinchK/stampede/issues/151"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # SEEDED-1 — prove the suites' teeth on the two costliest silent-failure paths

@@ -6,6 +6,9 @@ status: resolved
 assignee: arch
 owns: lib/quota.sh,tests/test_quota.sh
 parent: maps/next-horizon.md
+github_issue: 141
+github_url: "https://github.com/HinchK/stampede/issues/141"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # QUOTA-1 -- agy quota probe, read-only

@@ -6,6 +6,9 @@ status: resolved
 assignee: arch
 owns: lib/partition.sh,tests/test_partition.sh
 parent: maps/close-the-gaps.md
+github_issue: 140
+github_url: "https://github.com/HinchK/stampede/issues/140"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # PART-2 -- lease acquire bypasses the check verdict

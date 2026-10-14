@@ -6,6 +6,9 @@ status: resolved
 assignee: arch
 owns: Makefile, scripts/ci-local.sh, tests/test_ci_local.sh
 parent: maps/dispatch-safety-and-review-policy.md
+github_issue: 125
+github_url: "https://github.com/HinchK/stampede/issues/125"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # CI-PARITY-1 -- stop promoting commits that only a different OS can reject

@@ -6,6 +6,9 @@ status: resolved
 assignee: human
 owns: docs/adr
 parent: maps/pick-up-where-we-left-off.md
+github_issue: 147
+github_url: "https://github.com/HinchK/stampede/issues/147"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # REV-07 -- does single-reviewer PASS need a second opinion?

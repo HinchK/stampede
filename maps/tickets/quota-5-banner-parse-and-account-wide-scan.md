@@ -6,6 +6,9 @@ status: resolved
 assignee: arch
 owns: lib/quota.sh, tests/test_quota.sh
 parent: maps/universal-herdr-swarm.md
+github_issue: 145
+github_url: "https://github.com/HinchK/stampede/issues/145"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # QUOTA-5 -- make the quota gate see the wall that is actually on screen

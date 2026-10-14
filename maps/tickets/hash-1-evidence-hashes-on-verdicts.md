@@ -6,6 +6,9 @@ status: resolved
 assignee: arch
 owns: loop-bot-herd.sh, lib/telemetry.py
 parent: maps/pick-up-where-we-left-off.md
+github_issue: 128
+github_url: "https://github.com/HinchK/stampede/issues/128"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # HASH-1 — tamper-evident verdict records: sha256 of the gate log, plus host/pid

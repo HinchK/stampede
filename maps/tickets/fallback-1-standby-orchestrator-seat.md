@@ -6,6 +6,9 @@ status: resolved
 assignee: arch
 owns: swarm.config.toml, briefs/looper-standby.in.md, lib/standby.sh, tests/test_standby.sh
 parent: maps/dispatch-safety-and-review-policy.md
+github_issue: 127
+github_url: "https://github.com/HinchK/stampede/issues/127"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # FALLBACK-1 -- turn the 2026-10-08 improvised stand-in into a supported seat

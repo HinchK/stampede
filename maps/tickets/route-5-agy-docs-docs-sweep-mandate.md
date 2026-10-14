@@ -6,6 +6,9 @@ status: resolved
 assignee: arch
 owns: briefs/worker-docs.in.md
 parent: maps/herdr-native-and-seat-utilization.md
+github_issue: 120
+github_url: "https://github.com/HinchK/stampede/issues/120"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # ROUTE-5 -- put agy-docs to work after every integration

@@ -7,6 +7,9 @@ assignee: arch
 owns: loop-bot-herd.sh, tests/test_async_gate.sh
 parent: maps/herdr-native-and-seat-utilization.md
 blocked_by: [HERDR-1]
+github_issue: 114
+github_url: "https://github.com/HinchK/stampede/issues/114"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # HERDR-5 -- notify, don't hope

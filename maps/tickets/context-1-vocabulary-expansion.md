@@ -8,7 +8,7 @@ owns: CONTEXT.md
 parent: maps/close-the-gaps.md
 github_issue: 69
 github_url: "https://github.com/HinchK/stampede/issues/69"
-synced_at: "2026-09-30T17:14:49Z"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # CONTEXT-1 — vocabulary expansion

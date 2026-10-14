@@ -12,6 +12,9 @@ resolution:
   verdict: PASS
   review_file: .herdr-swarm/reviews/QUOTA-4-35a6e4962b03d0ec618ffbae87eff8a37f2ccbdd.md
   integrated_at: 2ee247ef98b761540bce9946f98461241a5f6bae
+github_issue: 144
+github_url: "https://github.com/HinchK/stampede/issues/144"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # QUOTA-4 -- teach looper's brief to check before it dispatches

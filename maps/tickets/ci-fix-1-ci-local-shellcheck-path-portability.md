@@ -6,6 +6,9 @@ status: resolved
 assignee: arch
 owns: tests/test_ci_local.sh
 parent: maps/universal-herdr-swarm.md
+github_issue: 119
+github_url: "https://github.com/HinchK/stampede/issues/119"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # CI-FIX-1 -- make the "shellcheck absent" fixtures hermetic

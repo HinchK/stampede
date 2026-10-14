@@ -6,6 +6,9 @@ status: resolved
 assignee: arch
 owns: docs/findings/headless-mode-design.md,lib/cli/stampede-headless.sh,tests/test_cli.sh
 parent: maps/harden-headless-mode.md
+github_issue: 132
+github_url: "https://github.com/HinchK/stampede/issues/132"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # HL-DOCS-1 — Honest dead-letter reasons, log pointers, and sandbox configuration documentation

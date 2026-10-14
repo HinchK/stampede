@@ -6,6 +6,9 @@ status: resolved
 assignee: arch
 owns: lib/cli/stampede-status.sh
 parent: maps/pick-up-where-we-left-off.md
+github_issue: 153
+github_url: "https://github.com/HinchK/stampede/issues/153"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # STATUS-INDET-1 — derive status facts at read time; never collapse unknowns into labels

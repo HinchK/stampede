@@ -7,6 +7,9 @@ assignee: arch
 owns: herdr-loop-swarm.sh, lib/quota.sh, tests/test_quota.sh, tests/test_cli.sh
 parent: maps/herdr-native-and-seat-utilization.md
 blocked_by: [HERDR-1]
+github_issue: 111
+github_url: "https://github.com/HinchK/stampede/issues/111"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # HERDR-2 -- block, don't poll, on single-target output waits

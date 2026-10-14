@@ -6,6 +6,9 @@ status: resolved
 assignee: arch
 owns: lib/worktree.sh,tests/test_worktree.sh,lib/headless.sh
 parent: maps/harden-headless-mode.md
+github_issue: 137
+github_url: "https://github.com/HinchK/stampede/issues/137"
+synced_at: "2026-10-13T01:40:45Z"
 ---
 
 # HL-WT-1 — worktree_provision rc propagation and phantom worktree guard
