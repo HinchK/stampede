@@ -44,7 +44,13 @@ grep -q 'model = "zai-coding-plan/glm-5.3"' "$REPO/swarm.config.toml" || fail 'a
 grep -q 'ctrl+b q' <<<"$out" || fail 'detach guidance absent'
 grep -q 'arbiter .* drain' <<<"$out" || fail 'manual arbiter guidance absent'
 grep -q 'arbiter .* init-ref' <<<"$out" || fail 'arbiter initialization guidance absent'
-grep -q 'Herdr integration status' <<<"$out" || fail 'integration status not shown'
+py_bin=$(/bin/bash "$ROOT/lib/pyenv.sh")
+mkdir -p "$REPO/maps" "$REPO/.herdr-swarm"
+printf '# Map 17\n- [x] #16\n- [ ] #18\n- [ ] #19\n' > "$REPO/maps/17.md"
+printf '17\n' > "$REPO/.herdr-swarm/active-map"
+map_next=$("$py_bin" "$ROOT/lib/attention.py" next "$REPO")
+[[ "$map_next" == "18" ]] || fail "bounded map dispatcher failed to select unticked #18 (got: $map_next)"
+rm -rf "$REPO/maps" "$REPO/.herdr-swarm/active-map"
 grep -q '== start' "$TMP/yeehaw.sh" || fail 'launcher start command absent'
 grep -q 'exec .* up ' "$TMP/yeehaw.sh" || fail 'launcher does not use up'
 help_out=$("$TMP/yeehaw.sh" --help) || fail 'quick launcher help failed'
@@ -138,6 +144,34 @@ grep -q 'already configured' <<<"$repeat_out" || fail 'repeat setup did not expl
 after=$(shasum "$REPO/swarm.config.toml" | cut -d' ' -f1)
 [[ "$before" == "$after" ]] || fail 'repeat setup modified config'
 
+python3 - "$REPO/swarm.config.toml" <<'PY'
+from pathlib import Path
+import sys
+config = Path(sys.argv[1])
+config.write_text(config.read_text().replace('name = "my-project"', 'name = "custom-integration"', 1))
+PY
+
+cat >> "$REPO/swarm.config.toml" <<'EOF'
+
+[fanout]
+gate_concurrency = 1
+max_workers = 4
+
+[reviewer]
+loop = true
+max_rounds = 3
+failover_seat = "arch_1"
+
+[seats.reviewer]
+name = "reviewer"
+role = "reviewer"
+default_kind = "agy"
+model = "gemini-3.8-flash-low"
+brief = "briefs/reviewer.md"
+tab = "ops"
+enabled = true
+EOF
+
 "$ROOT/bin/stampede" setup "$REPO" --non-interactive --force --launcher "$TMP/yeehaw.sh" \
   --attention quiet --provider architect=claude --model architect=opus \
   --architect-count 3 --pm-count 2 >/dev/null || fail 'replacement failed'
@@ -149,6 +183,14 @@ grep -q '\[seats.pm\]' "$REPO/swarm.config.toml" || fail 'primary PM key lost'
 grep -A5 '\[seats.arch_3\]' "$REPO/swarm.config.toml" | grep -q 'default_kind = "claude"' || fail 'provider choice absent'
 grep -A6 '\[seats.arch_3\]' "$REPO/swarm.config.toml" | grep -q 'model = "opus"' || fail 'model choice absent'
 grep -A7 '\[seats.arch_3\]' "$REPO/swarm.config.toml" | grep -q 'cost_tier = "high"' || fail 'chosen Opus mispriced'
+grep -q 'loop = true' "$REPO/swarm.config.toml" || fail 'edit disabled the reviewer loop'
+grep -q '\[seats.reviewer\]' "$REPO/swarm.config.toml" || fail 'edit removed the reviewer seat'
+grep -q 'max_rounds = 3' "$REPO/swarm.config.toml" || fail 'edit reset reviewer limit'
+grep -q 'name = "custom-integration"' "$REPO/swarm.config.toml" || fail 'edit changed the integration ref name'
+grep -q 'gate_concurrency = 1' "$REPO/swarm.config.toml" || fail 'edit reset fanout concurrency'
+review_bound=$(STAMPEDE_CONFIG_FILE="$REPO/swarm.config.toml" bash -c 'source "$1"; config_dump_env sample' _ "$ROOT/lib/config.sh")
+grep -q 'export CONFIG_REVIEW_LOOP=1' <<<"$review_bound" || fail 'reviewer loop did not bind after edit'
+grep -q 'export SWARM_CONFIG_NAME=custom-integration' <<<"$review_bound" || fail 'integration ref name did not bind after edit'
 "$ROOT/bin/stampede" setup "$REPO" --non-interactive --force --launcher "$TMP/yeehaw.sh" \
   --attention medium >/dev/null || fail 'editing existing setup failed'
 grep -A6 '\[seats.arch_3\]' "$REPO/swarm.config.toml" | grep -q 'model = "opus"' \
