@@ -88,6 +88,16 @@ providers_resolve_chain() {
   return 1
 }
 
+# Herdr forwards arguments after `--` to each harness. A configured model
+# must reach the actual process for cost and role fit to be meaningful.
+providers_start_agent() { # NAME KIND PANE MODEL
+  if [[ -n "${4:-}" && "$4" != auto ]]; then
+    herdr agent start "$1" --kind "$2" --pane "$3" -- --model "$4"
+  else
+    herdr agent start "$1" --kind "$2" --pane "$3"
+  fi
+}
+
 # ── Config enumeration ─────────────────────────────────────────────────────
 # providers_seats_from_config <toml-path>
 #   → lines: "<seat-key>|<kinds-comma-joined>|<enabled:1|0>|<seat-name>"

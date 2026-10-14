@@ -142,6 +142,10 @@ if [[ -n "$CLI_DIR" ]]; then
     exit 1
   fi
 fi
+if [[ -f "${PWD}/swarm.config.toml" ]]; then
+  CONFIG_FILE="${PWD}/swarm.config.toml"
+fi
+export STAMPEDE_CONFIG_FILE="$CONFIG_FILE"
 ENV_FILE="${PWD}/.env"
 
 # Terminal Formatting
@@ -262,6 +266,11 @@ fi
 # carries the architect role; roster is config-driven, seats may be many)
 ARCH_AGENT="${SEAT_NAME_arch_1:-${SEAT_NAME_arch:-arch}}"
 LOOPER_AGENT="${SEAT_NAME_looper:-looper}"
+if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]] && herdr agent get "$LOOPER_AGENT" >/dev/null 2>&1; then
+  printf '  %s✖ FATAL: persistent looper %s is still live. Stop the old swarm with stampede down, then retry bounded setup.%s\n' \
+    "$RED" "$LOOPER_AGENT" "$RESET" >&2
+  exit 1
+fi
 
 # Stable telemetry session (shared with loop-bot so the Ops stream sees all)
 SESSION_ID=$(telemetry_session_id "${PWD}/.herdr-swarm")
@@ -304,17 +313,6 @@ good "Workspace active: ${WS_LABEL} (${WS_ID})"
 
 # Test validation command comes from the project profile (lib/profile.sh);
 # there is deliberately no ad-hoc ecosystem sniffing or "true" fake-green here.
-
-# Check Model Runtimes
-if curl -sf --max-time 2 http://localhost:11434/api/tags >/dev/null 2>&1; then
-  good "Ollama local model runtime: active (:11434)"
-else
-  warn "Ollama is down"
-  if confirm "Start Ollama now via 'brew services start ollama'?"; then
-    brew services start ollama
-    sleep 3
-  fi
-fi
 
 # Optional routing proxy ([proxy] in swarm.config.toml) — off by default so a
 # universal target repo never inherits this machine's local LLM setup. The
@@ -404,6 +402,14 @@ case "$MODE" in
     ;;
 esac
 
+if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; then
+  if [[ "$MODE" == s ]]; then
+    touch "${PWD}/.herdr-swarm/seat-only"
+  else
+    rm -f "${PWD}/.herdr-swarm/seat-only"
+  fi
+fi
+
 # ──────────────────────────────────────────────────────────────────────────
 # Layout Engine: 2-Tab Balanced Topology + Dynamic Seating
 # ──────────────────────────────────────────────────────────────────────────
@@ -418,6 +424,17 @@ read -r OpsTab OpsAnchor   <<< "$(tab_by_label "$WS_ID" "ops")"
 
 agent_alive() { herdr agent list 2>/dev/null | grep -q "\"$1\""; }
 pane_of_agent() { herdr agent get "$1" 2>/dev/null | jq -r '.result.agent.pane_id // empty'; }
+recorded_pane() { # NAME — reuse only this workspace's previously managed pane
+  local ledger="${PWD}/.herdr-swarm/seats.json"
+  [[ -f "$ledger" ]] || return 0
+  jq -r --arg ws "$WS_ID" --arg n "$1" \
+    'select(.workspace_id == $ws) | .seats[]? | select(.name == $n and .agentless == true) | .pane // empty' \
+    "$ledger" 2>/dev/null | head -n1
+}
+pane_present() { # PANE
+  [[ -n "$1" ]] && herdr pane list 2>/dev/null \
+    | jq -e --arg p "$1" '.result.panes[]? | select(.pane_id == $p)' >/dev/null 2>&1
+}
 
 # Render project briefs from briefs/*.in.md templates (profile- & slug-aware)
 printf '\n%s▸ Rendering Standing Briefs%s\n' "$BOLD" "$RESET"
@@ -455,6 +472,7 @@ for tab_name in herd ops; do
     seat_model="${!model_var}"
     seat_brief="${!brief_var}"
     seat_isolated="${!wt_var:-0}"
+    resolved_kind="$seat_kind"
 
     # Rendered brief: config "briefs/foo.md" -> .herdr-swarm/briefs/foo.md
     rendered_brief="${PWD}/.herdr-swarm/briefs/$(basename "$seat_brief")"
@@ -479,7 +497,12 @@ for tab_name in herd ops; do
     fi
 
     seat_pane=""
-    if agent_alive "$seat_name"; then
+    if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 && "$seat_key" == looper ]] \
+       && pane_present "$(recorded_pane "$seat_name")"; then
+      seat_pane=$(recorded_pane "$seat_name")
+      resolved_kind=shell
+      note "Looper status pane '${seat_name}' is already seated"
+    elif agent_alive "$seat_name"; then
       note "Agent '${seat_name}' is already seated"
       seat_pane=$(pane_of_agent "$seat_name")
       # Carry forward the recorded worktree for an already-live isolated seat
@@ -499,6 +522,14 @@ for tab_name in herd ops; do
         seat_pane="$tab_anchor"
       fi
 
+      if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 && "$seat_key" == looper ]]; then
+        resolved_kind=shell
+        mkdir -p "${PWD}/.herdr-swarm"
+        touch "${PWD}/.herdr-swarm/worklog.log"
+        herdr pane rename "$seat_pane" "looper" >/dev/null 2>&1 || true
+        printf -v looper_cmd 'tail -n 30 -F %q' "${PWD}/.herdr-swarm/worklog.log"
+        herdr pane run "$seat_pane" "$looper_cmd" >/dev/null 2>&1 || warn "Looper pane log view failed"
+      else
       # Provider chain resolution (PUB-6): first healthy kind in the ordered
       # chain seats. An unhealthy primary is a fallback (telemetry-noted); a
       # chain with no healthy kind skips the seat — and mode `a` later fails
@@ -520,17 +551,13 @@ for tab_name in herd ops; do
       fi
 
       step "Starting agent '${seat_name}' (${resolved_kind})..."
-      if [[ "$resolved_kind" == "opencode" && -n "$seat_model" && "$seat_model" != "auto" ]]; then
-        herdr agent start "$seat_name" --kind "$resolved_kind" --pane "$seat_pane" -- --model "$seat_model" >/dev/null 2>&1 \
-          || { warn "Failed to seat agent '${seat_name}' in pane ${seat_pane}"; seat_pane=""; }
-      else
-        herdr agent start "$seat_name" --kind "$resolved_kind" --pane "$seat_pane" >/dev/null 2>&1 \
-          || { warn "Failed to seat agent '${seat_name}' in pane ${seat_pane}"; seat_pane=""; }
-      fi
+      providers_start_agent "$seat_name" "$resolved_kind" "$seat_pane" "$seat_model" >/dev/null 2>&1 \
+        || { warn "Failed to seat agent '${seat_name}' in pane ${seat_pane}"; seat_pane=""; }
       if [[ -n "$seat_pane" ]]; then
         # Nonce file-path protocol (lib/briefs.sh): never inline brief text
         deliver_brief_nonce "$seat_name" "$rendered_brief" \
           || warn "Brief delivery failed for '${seat_name}'"
+      fi
       fi
     fi
 
@@ -542,11 +569,13 @@ for tab_name in herd ops; do
       root_branch=$(git -C "$PWD" rev-parse --abbrev-ref HEAD 2>/dev/null || printf '')
       seat_isolated_bool=false
       (( seat_isolated )) && seat_isolated_bool=true
+      seat_agentless_bool=false
+      [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 && "$seat_key" == looper ]] && seat_agentless_bool=true
       SEAT_LEDGER+=$(jq -cn \
         --arg name "$seat_name" --arg kind "${resolved_kind:-$seat_kind}" --arg pane "$seat_pane" \
         --arg wt_dir "${seat_cwd:-$PWD}" --arg branch "${wt_branch:-$root_branch}" \
-        --argjson isolated "$seat_isolated_bool" \
-        '{name: $name, kind: $kind, pane: $pane, worktree_dir: $wt_dir, branch: $branch, isolated: $isolated}')$'\n'
+        --argjson isolated "$seat_isolated_bool" --argjson agentless "$seat_agentless_bool" \
+        '{name: $name, kind: $kind, pane: $pane, worktree_dir: $wt_dir, branch: $branch, isolated: $isolated, agentless: $agentless}')$'\n'
       if [[ "$tab_name" == "ops" ]]; then
         SEATED_OPS_PANES+=" ${seat_pane}"
       else
@@ -560,8 +589,56 @@ for tab_name in herd ops; do
   done
 done
 
-# Ops services pane (proxy host) — split below the ops anchor
-SRV_PANE=$(split_pane "$OpsAnchor" down 0.5 "$PWD") || true
+# Durable, model-free views. Their pane IDs join the managed ledger so `down`
+# closes only Stampede-owned panes; a repeated `up` reuses them.
+if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; then
+  for view in worklog troubleshooting handoff; do
+    view_name="${view}-${PROJECT_SLUG}"
+    view_path="${PWD}/.herdr-swarm/${view}.log"
+    touch "$view_path"
+    view_pane=$(recorded_pane "$view_name")
+    if ! pane_present "$view_pane"; then
+      view_pane=$(split_pane "$OpsAnchor" down 0.5 "$PWD") || true
+      if [[ -n "$view_pane" ]]; then
+        herdr pane rename "$view_pane" "$view" >/dev/null 2>&1 || true
+        printf -v view_cmd 'tail -n 30 -F %q' "$view_path"
+        herdr pane run "$view_pane" "$view_cmd" >/dev/null 2>&1 || warn "$view pane could not start"
+      fi
+    fi
+    if [[ -n "$view_pane" ]]; then
+      SEAT_LEDGER+=$(jq -cn --arg n "$view_name" --arg p "$view_pane" --arg d "$PWD" \
+        '{name:$n,kind:"log",pane:$p,worktree_dir:$d,isolated:false,agentless:true}')$'\n'
+      SEATED_OPS_PANES+=" ${view_pane}"
+    fi
+  done
+  supervisor_name="supervisor-${PROJECT_SLUG}"
+  SRV_PANE=$(recorded_pane "$supervisor_name")
+  supervisor_new=0
+  if ! pane_present "$SRV_PANE"; then
+    SRV_PANE=$(split_pane "$OpsAnchor" down 0.5 "$PWD") || true
+    supervisor_new=1
+  fi
+  if [[ -n "$SRV_PANE" ]]; then
+    herdr pane rename "$SRV_PANE" supervisor >/dev/null 2>&1 || true
+    SEAT_LEDGER+=$(jq -cn --arg n "$supervisor_name" --arg p "$SRV_PANE" --arg d "$PWD" \
+      '{name:$n,kind:"shell",pane:$p,worktree_dir:$d,isolated:false,agentless:true}')$'\n'
+    SEATED_OPS_PANES+=" ${SRV_PANE}"
+  fi
+  if [[ "${PROXY_ENABLED:-false}" == true ]]; then
+    PROXY_PANE=$(recorded_pane "proxy-${PROJECT_SLUG}")
+    if ! pane_present "$PROXY_PANE"; then
+      PROXY_PANE=$(split_pane "$OpsAnchor" down 0.5 "$PWD") || true
+    fi
+    if [[ -n "$PROXY_PANE" ]]; then
+      SEAT_LEDGER+=$(jq -cn --arg n "proxy-${PROJECT_SLUG}" --arg p "$PROXY_PANE" --arg d "$PWD" \
+        '{name:$n,kind:"shell",pane:$p,worktree_dir:$d,isolated:false,agentless:true}')$'\n'
+      SEATED_OPS_PANES+=" ${PROXY_PANE}"
+    fi
+  fi
+else
+  # Legacy install config retains its historical service pane.
+  SRV_PANE=$(split_pane "$OpsAnchor" down 0.5 "$PWD") || true
+fi
 
 # Live telemetry stream occupies the Ops anchor pane (replaces raw log tail)
 herdr pane rename "$OpsAnchor" "telemetry-stream" >/dev/null 2>&1 || true
@@ -585,6 +662,16 @@ if [[ -n "$SEAT_LEDGER" ]]; then
     > "${PWD}/.herdr-swarm/seats.json.tmp" \
     && mv "${PWD}/.herdr-swarm/seats.json.tmp" "${PWD}/.herdr-swarm/seats.json"
   good "Seat ledger written: ${PWD}/.herdr-swarm/seats.json"
+fi
+
+supervisor_pid=""
+[[ -f "${PWD}/.herdr-swarm/supervisor.pid" ]] && supervisor_pid=$(cat "${PWD}/.herdr-swarm/supervisor.pid" 2>/dev/null || true)
+if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 && -n "${SRV_PANE:-}" ]] \
+   && { [[ "${supervisor_new:-0}" == 1 ]] || [[ ! "$supervisor_pid" =~ ^[0-9]+$ ]] || ! kill -0 "$supervisor_pid" 2>/dev/null; }; then
+  printf -v supervisor_cmd 'REPO_DIR=%q STATE_DIR=%q bash %q watch' \
+    "$PWD" "${PWD}/.herdr-swarm" "$SCRIPT_DIR/loop-bot-herd.sh"
+  herdr pane run "$SRV_PANE" "$supervisor_cmd" >/dev/null 2>&1 \
+    || warn "Supervisor could not start; run loop-bot-herd.sh watch manually"
 fi
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -634,6 +721,9 @@ good "Telemetry session: ${SESSION_ID} → ${TRACE_DIR_PATH}"
 # config; a universal target repo never gets a proxy launch by default (no
 # hardcoded localhost fallbacks — DOG-7).
 if [[ "${PROXY_ENABLED:-false}" == "true" ]]; then
+  if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; then
+    SRV_PANE="${PROXY_PANE:-}"
+  fi
   if [[ -n "${PROXY_HEALTH_URL:-}" ]] && curl -sf --max-time 2 "$PROXY_HEALTH_URL" >/dev/null 2>&1; then
     good "Routing proxy already healthy"
   elif [[ -n "${PROXY_SERVE_CMD:-}" ]]; then
@@ -664,16 +754,25 @@ case "$MODE" in
     good "Arch is ready for brainstorming in the Herd tab"
     ;;
   r)
-    step "Kicking Looper on Map #${MAP_NUM}..."
-    herdr agent prompt "$LOOPER_AGENT" "KICKOFF: Work Wayfinder Map #${MAP_NUM} on ${REPO} per your seat brief — drain the frontier in map order until closed, then run milestone closeout and report." >/dev/null 2>&1 || true
-    herdr agent focus "$LOOPER_AGENT" >/dev/null 2>&1 || true
-    good "Looper is active on Map #${MAP_NUM}"
+    if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; then
+      "$PYTHON_BIN" "$LIB_DIR/attention.py" event "$PWD" new "$MAP_NUM" resume-map >/dev/null \
+        || warn "Map #${MAP_NUM} needs human dispatch; see handoff.log"
+    else
+      step "Kicking Looper on Map #${MAP_NUM}..."
+      herdr agent prompt "$LOOPER_AGENT" "KICKOFF: Work Wayfinder Map #${MAP_NUM} on ${REPO} per your seat brief — drain the frontier in map order until closed, then run milestone closeout and report." >/dev/null 2>&1 || true
+      herdr agent focus "$LOOPER_AGENT" >/dev/null 2>&1 || true
+      good "Looper is active on Map #${MAP_NUM}"
+    fi
     ;;
   a)
-    step "Kicking Looper in autonomous queue mode..."
-    herdr agent prompt "$LOOPER_AGENT" "KICKOFF: Autonomous queue mode on ${REPO} — pull open unblocked tickets in order, execute through arch/docs/gh, verify with '${TEST_CMD}', and report when queue is empty." >/dev/null 2>&1 || true
-    herdr agent focus "$LOOPER_AGENT" >/dev/null 2>&1 || true
-    good "Looper is active in autonomous mode"
+    if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; then
+      good "Bounded supervisor will inspect loop:ready tickets on its next pass"
+    else
+      step "Kicking Looper in autonomous queue mode..."
+      herdr agent prompt "$LOOPER_AGENT" "KICKOFF: Autonomous queue mode on ${REPO} — pull open unblocked tickets in order, execute through arch/docs/gh, verify with '${TEST_CMD}', and report when queue is empty." >/dev/null 2>&1 || true
+      herdr agent focus "$LOOPER_AGENT" >/dev/null 2>&1 || true
+      good "Looper is active in autonomous mode"
+    fi
     ;;
   s)
     good "Swarm is seated and idle. Ready for manual prompts."

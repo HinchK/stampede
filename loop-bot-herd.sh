@@ -27,6 +27,9 @@ set -euo pipefail
 # come from the swarm distribution's swarm.config.toml; ALL session state
 # lives inside <REPO_DIR>/.herdr-swarm/ (portable, teardown-aware).
 REPO_DIR="${REPO_DIR:-$PWD}"
+if [[ -f "${REPO_DIR}/swarm.config.toml" ]]; then
+  export STAMPEDE_CONFIG_FILE="${REPO_DIR}/swarm.config.toml"
+fi
 STATE_DIR="${STATE_DIR:-${REPO_DIR}/.herdr-swarm}"
 CONTROL="$STATE_DIR/control.json"
 SESSION_LOG="$STATE_DIR/session-verdicts.jsonl"
@@ -121,6 +124,7 @@ eval "$config_env"
 
 EXPECTED_SEATS=()
 for seat_key in $SEAT_KEYS; do
+  [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 && "$seat_key" == looper ]] && continue
   name_var="SEAT_NAME_${seat_key}"
   EXPECTED_SEATS+=("${!name_var}")
 done
@@ -196,11 +200,28 @@ ctl_set() { # key value(json bool)
 
 # ---- 1. herd health ------------------------------------------------------
 health_pass() {
-  local listing alive=0
+  local listing alive=0 status ticket tickets marker
   listing=$(herdr agent list 2>/dev/null || echo '{}')
   for seat in "${EXPECTED_SEATS[@]}"; do
-    if grep -q "\"$seat\"" <<<"$listing"; then
+    status=$(jq -r --arg seat "$seat" '.result.agents[]? | select(.name == $seat) | .agent_status // .state // "unknown"' <<<"$listing" 2>/dev/null | head -n1)
+    if [[ -n "$status" ]]; then
       alive=$((alive + 1))
+      if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 && "$status" == blocked ]]; then
+        tickets=$(jq -r --arg seat "$seat" '.leases[]? | select(.seat == $seat) | .ticket' \
+          "$STATE_DIR/leases.json" 2>/dev/null || true)
+        marker="$STATE_DIR/blocked-unmapped-${seat}"
+        if [[ -z "$tickets" && ! -f "$marker" ]]; then
+          looper_notice "Herdr reports $seat blocked without an active ticket lease; human: inspect the agent pane."
+          _sup_notify "worker blocked" "$seat is blocked without a ticket lease; inspect its pane"
+          touch "$marker"
+        fi
+        while IFS= read -r ticket; do
+          [[ -n "$ticket" ]] || continue
+          attention_event blocked "$ticket" "Herdr reports $seat blocked" "$seat" || true
+        done <<<"$tickets"
+      elif [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; then
+        rm -f "$STATE_DIR/blocked-unmapped-${seat}"
+      fi
     else
       warn "seat absent: $seat (briefs/ has its brief; ./herdr-loop-swarm.sh up <target-dir> re-seats it)"
     fi
@@ -210,10 +231,12 @@ health_pass() {
   else
     warn "herd partial: ${alive}/${#EXPECTED_SEATS[@]}"
   fi
-  if curl -sf --max-time 3 http://localhost:11434/api/tags >/dev/null 2>&1; then
-    : # ollama up — say nothing unless it's down (quiet loop)
-  else
-    warn "ollama not answering on :11434 — local tiers unavailable"
+  if [[ "${CONFIG_BOUNDED_LOOPER:-0}" != 1 ]]; then
+    if curl -sf --max-time 3 http://localhost:11434/api/tags >/dev/null 2>&1; then
+      : # ollama up — say nothing unless it's down (quiet loop)
+    else
+      warn "ollama not answering on :11434 — local tiers unavailable"
+    fi
   fi
 }
 
@@ -375,7 +398,6 @@ gate_reap() {
       fi
     elif [[ "$rc_val" == "0" ]]; then
       suite_ok="green"; ok "gate job ${jid}: GREEN (log: $gate_log)"
-      looper_notice "LOOP-BOT: filed verdict for #$ticket @ ${sha} from $seat's pane (green)."
       if [[ "$iso" == "true" ]]; then
         # Review loop seam (REV-5): the state machine decides what a green
         # gate means next — ENQUEUE when the loop is off (the pre-REV-5
@@ -548,8 +570,12 @@ _review_directives() { # DIRECTIVES-LINES TICKET SHA
     case "$d0" in
       ENQUEUE)
         # d1=ticket d2=seat d3=sha
-        arbiter_enqueue "$d1" "$d2" "$d3" >/dev/null 2>&1 \
-          || warn "arbiter enqueue failed for #$d1 @ ${d3}"
+        if arbiter_enqueue "$d1" "$d2" "$d3" >/dev/null 2>&1; then
+          attention_event green "$d1" "$d3" "$d2" || \
+            looper_notice "LOOP-BOT: #$d1 @ ${d3} queued for manual arbiter review."
+        else
+          warn "arbiter enqueue failed for #$d1 @ ${d3}"
+        fi
         ;;
       DISPATCH_REVIEWER)
         # d1=reviewer-seat d2=ticket d3=sha d4=round d5=max
@@ -569,6 +595,9 @@ _review_directives() { # DIRECTIVES-LINES TICKET SHA
         else
           _dispatch_reviewer "$rseat" "$d2" "$d3" "$d4" "$d5"
         fi
+        if [[ "${CONFIG_BOUNDED_LOOPER:-0}" != 1 ]]; then
+          looper_notice "LOOP-BOT: filed verdict for #$d2 @ ${d3}; reviewer pending before arbiter."
+        fi
         ;;
       DISPATCH_CRITIQUE)
         # d1=impl-seat d2=ticket d3=round d4=max d5=findings-path
@@ -582,7 +611,8 @@ _review_directives() { # DIRECTIVES-LINES TICKET SHA
       ALERT_BLOCKED)
         # d1=ticket d2=sha d3=round d4=max — fail closed, never enqueued
         bad "review loop: #$d1 @ ${d2} BLOCKED after ${d4} rounds — human review required"
-        looper_notice "LOOP-BOT: review for #${d1} @ ${d2} BLOCKED after ${d4} rounds — human review required."
+        attention_event blocked "$d1" "review blocked after ${d4} rounds @ ${d2}" || \
+          looper_notice "LOOP-BOT: review for #${d1} @ ${d2} BLOCKED after ${d4} rounds — human review required."
         _sup_notify "review BLOCKED" "#$d1 @ ${d2} blocked after ${d4} rounds — human review required"
         # HEADLESS-5 hazard 3: a blocked review is a terminal outcome —
         # dead-letter it so the unattended run's exit code reflects it.
@@ -705,7 +735,29 @@ looper_notice() { # MESSAGE — pane: herdr prompt · headless: durable log
     _headless_notice "$1"
     return 0
   fi
+  if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; then
+    mkdir -p "$STATE_DIR"
+    printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >> "$STATE_DIR/worklog.log"
+    return 0
+  fi
   herdr agent prompt "${SEAT_NAME_looper:-looper}" "$1" >/dev/null 2>&1 || true
+}
+
+attention_event() { # KIND TICKET EVIDENCE [SEAT]
+  [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]] || return 1
+  _headless_active && return 1
+  local result
+  if result=$("$PYTHON_BIN" "$SCRIPT_DIR/lib/attention.py" event "$REPO_DIR" "$1" "$2" "$3" "${4:-}" 2>&1); then
+    note "attention: $result"
+    case "$(jq -r '.status // empty' <<<"$result" 2>/dev/null)" in
+      paused) _sup_notify "ticket paused" "#$2 needs a human decision; see .herdr-swarm/handoff.log" ;;
+      manual_arbiter) _sup_notify "arbiter ready" "#$2 is gated; inspect the receipt and run stampede arbiter <repo> drain manually" ;;
+    esac
+    return 0
+  fi
+  warn "attention policy failed for #$2: $result"
+  _sup_notify "attention failed" "#$2 requires human review: $result"
+  return 1
 }
 
 # Ledger (seats.json v2) field for a seat: worktree_dir / kind.
@@ -721,6 +773,12 @@ _headless_seat_field() { # SEAT FIELD
 worker_feedback() { # SEAT TICKET SHA TAG MESSAGE
   local seat="$1" ticket="$2" sha="$3" tag="$4" msg="$5"
   if ! _headless_active; then
+    if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; then
+      case "$tag" in
+        red) attention_event red "$ticket" "$msg" "$seat" || true; return 0 ;;
+        invalidated|stale|blocked) attention_event blocked "$ticket" "$msg" "$seat" || true; return 0 ;;
+      esac
+    fi
     herdr agent prompt "$seat" "$msg" >/dev/null 2>&1 || true
     return 0
   fi
@@ -919,7 +977,7 @@ harvest_verdicts() {
             _headless_deadletter "$ticket" "$sha" "suite RED — re-verdict ceiling reached"
           else
             worker_feedback "$seat" "$ticket" "$sha" red "LOOP-BOT: verdict for #$ticket @ ${sha} harvested but the suite is RED — fix, commit, and re-verdict with the new sha (gate log: $gate_log)."
-            _sup_notify "suite RED" "#$ticket @ ${sha} gated RED (gate log: $gate_log) — worker re-verdicting"
+            _sup_notify "suite RED" "#$ticket @ ${sha} gated RED (gate log: $gate_log); inspect attention state"
           fi
         fi
       elif [[ "$(ctl_get suite_gate)" == "true" ]]; then
@@ -939,7 +997,7 @@ harvest_verdicts() {
       # fix-and-reverdict. SKIPPED (gate off / no runnable TEST_CMD) is never
       # reported to looper as accepted completion — it escalates to the human.
       if [[ "$suite_ok" == "green" ]]; then
-        looper_notice "LOOP-BOT: filed verdict for #$ticket @ ${sha} from $seat's pane (green)."
+        looper_notice "LOOP-BOT: #$ticket @ ${sha} suite GREEN; review and integration state still pending."
       elif [[ "$suite_ok" == "skipped" ]]; then
         bad "verdict for #$ticket @ ${sha} recorded WITHOUT suite verification — HUMAN EVALUATION REQUIRED"
         looper_notice "LOOP-BOT: verdict for #$ticket @ ${sha} from $seat's pane could NOT be suite-verified (gate off or non-runnable TEST_CMD). Do NOT retire the ticket — human evaluation required."
@@ -969,7 +1027,7 @@ unpushed_watch() {
 # by config_dump_env; ~/ prefixes are expanded); no path is hardcoded (DOG-7).
 credits_watch() {
   local key out creds_path
-  [[ "$(config_get "proxy.enabled" "false" "${SWARM_CONFIG:-$SCRIPT_DIR/swarm.config.toml}")" == "true" ]] || return 0
+  [[ "$(config_get "proxy.enabled" "false" "${SWARM_CONFIG:-$DEFAULT_CONFIG}")" == "true" ]] || return 0
   creds_path="${PROXY_CREDENTIALS:-}"
   [[ -n "$creds_path" ]] || return 0
   creds_path="${creds_path/#\~/$HOME}"
@@ -996,18 +1054,49 @@ EOF
 
 # ---- 5. optional frontier drain (looper remains dispatcher unless enabled) --
 frontier_drain() {
-  [[ "$(ctl_get frontier_drain)" == "true" ]] || return 0
+  local attention_mode=""
+  if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]] && ! _headless_active; then
+    [[ ! -f "$STATE_DIR/seat-only" ]] || return 0
+    attention_mode=$("$PYTHON_BIN" "$SCRIPT_DIR/lib/attention.py" mode "$REPO_DIR" 2>/dev/null || true)
+  fi
+  if [[ -z "$attention_mode" ]]; then
+    [[ "$(ctl_get frontier_drain)" == "true" ]] || return 0
+  elif ! test_cmd_is_runnable "$TEST_CMD" || [[ "$(ctl_get suite_gate)" != true ]]; then
+    if [[ ! -f "$STATE_DIR/intake-gate-warning" ]]; then
+      warn "ticket intake stopped: project suite gate is unavailable"
+      looper_notice "Ticket intake stopped: configure a runnable TEST_CMD and enable the suite gate before dispatch."
+      touch "$STATE_DIR/intake-gate-warning"
+    fi
+    return 0
+  fi
+  rm -f "$STATE_DIR/intake-gate-warning"
   # Local-only projects have no GitHub frontier to drain
   [[ -n "${REPO:-}" && "$REPO" != "none" ]] || return 0
   local next
-  next=$(gh issue list -R "$REPO" --state open --json number,title,assignees \
-    --jq '[.[] | select((.assignees | length) == 0)] | sort_by(.number) | .[0] // empty | "#\(.number) \(.title)"' 2>/dev/null || true)
+  if [[ -n "$attention_mode" ]]; then
+    local next_opt=()
+    [[ "$attention_mode" == quiet && "$(ctl_get frontier_drain)" == true ]] && next_opt=(auto)
+    next=$("$PYTHON_BIN" "$SCRIPT_DIR/lib/attention.py" next "$REPO_DIR" "${next_opt[@]}" 2>/dev/null || true)
+  else
+    next=$(gh issue list -R "$REPO" --state open --label loop:ready --json number,title,assignees \
+      --jq '[.[] | select((.assignees | length) == 0)] | sort_by(.number) | .[0] // empty | "#\(.number) \(.title)"' 2>/dev/null || true)
+  fi
   [[ -n "$next" ]] || return 0
   local rate_key="frontier_last_nudge" now last=0
-  [[ -f "$STATE_DIR/$rate_key" ]] && last=$(cat "$STATE_DIR/$rate_key")
-  now=$(date +%s)
-  (( now - last > 1800 )) || return 0
-  echo "$now" > "$STATE_DIR/$rate_key"
+  if [[ -z "$attention_mode" ]]; then
+    [[ -f "$STATE_DIR/$rate_key" ]] && last=$(cat "$STATE_DIR/$rate_key")
+    now=$(date +%s)
+    (( now - last > 1800 )) || return 0
+    echo "$now" > "$STATE_DIR/$rate_key"
+  fi
+  if [[ -n "$attention_mode" ]]; then
+    local ticket="${next#\#}"
+    ticket="${ticket%% *}"
+    local rule="loop:ready"
+    [[ "$attention_mode" == quiet && "$(ctl_get frontier_drain)" == true ]] && rule="loop:ready:auto"
+    attention_event new "$ticket" "$rule" || true
+    return 0
+  fi
   looper_notice "LOOP-BOT (frontier drain, auto): next unassigned open ticket is $next — dispatch or park it deliberately."
   ok "frontier drain nudged looper → $next"
 }
@@ -1123,13 +1212,9 @@ cmd_dispatch() { # dispatch WORKER BRIEF_FILE [TICKET]
   note "poll: while [ ! -s $out ]; do sleep 5; done"
 }
 
-# ---- 4b. arbiter auto-drain (PROVE-4) --------------------------------------
-# A green enqueue (gate_reap's ENQUEUE directive, or the review loop's PASS
-# path) must not sit in integration.jsonl until an operator runs
-# `lib/arbiter.sh drain`. The drain runs in the same supervisor pass as the
-# enqueue — but never inline: it gates inside its own lock and is slow
-# (P3-3 §2.2), so it spawns as a single background job. Conflicts still
-# abort back to the worker; main still moves only by human promote.
+# ---- 4b. explicit arbiter automation (never called by watch/once) ---------
+# `drain-queued` deliberately opts into a background drain. The ordinary
+# supervisor leaves GREEN candidates queued for the human.
 #
 # PROVE-7: the drain MUST be its own process, not a forked subshell. bash's
 # $$ does not change inside a backgrounded block (and $BASHPID is unavailable
@@ -1186,7 +1271,7 @@ cmd_once() {
   health_pass
   harvest_verdicts
   gate_reap
-  arbiter_auto_drain    # PROVE-4: green enqueues drain without an operator
+  # A green candidate stays queued until a human runs arbiter drain.
   lease_release_integrated   # DOG-16: freed by integration evidence, never by green
   unpushed_watch
   credits_watch
@@ -1194,6 +1279,7 @@ cmd_once() {
 }
 
 cmd_watch() {
+  printf '%s\n' "$$" > "$STATE_DIR/supervisor.pid"
   log "loop-bot watching (poll ${POLL_S}s) — pause with: $0 pause"
   while true; do
     if [[ "$(ctl_get paused)" == "true" ]]; then
@@ -1216,6 +1302,7 @@ cmd_status() {
 case "${1:-watch}" in
   watch)   cmd_watch ;;
   once)    cmd_once ;;
+  drain-queued) arbiter_auto_drain ;;  # explicit automation, never startup
   status)  cmd_status ;;
   pause)   ctl_set paused true;  ok "paused — polling continues, actions skip" ;;
   resume)  ctl_set paused false; ok "resumed" ;;

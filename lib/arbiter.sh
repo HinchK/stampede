@@ -169,13 +169,8 @@ arbiter_enqueue() {
     "$(jq -cn '{summary:"queued for integration"}')"
 }
 
-# ── auto-wire: enqueue → drain in the same pass (PROVE-4) ──────────────────
-# The settled steady state (grilled with the driver 2026-09-23): a green
-# verdict's enqueue must not sit queued until an operator runs
-# `lib/arbiter.sh drain`. Wiring the trigger here changes no gate: the drain
-# still takes the arbiter lock (serialized against any concurrent drain),
-# still never writes the base branch, and still aborts conflicts back to the
-# worker. Only the manual step is removed — promote stays human (ADR 0009).
+# Explicit automation helper retained for deliberate headless callers. The
+# ordinary CLI `enqueue` and interactive supervisor leave candidates queued.
 arbiter_enqueue_and_drain() { # TICKET SEAT SHA
   arbiter_enqueue "$@" || return $?
   arbiter_drain
@@ -570,7 +565,8 @@ if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
   cmd="${1:-}"
   shift 2>/dev/null || true
   case "$cmd" in
-    enqueue) arbiter_enqueue_and_drain "$@" ;;   # PROVE-4: enqueue auto-drains
+    enqueue) arbiter_enqueue "$@" ;;
+    enqueue-and-drain) arbiter_enqueue_and_drain "$@" ;;
     drain)   arbiter_drain ;;
     promote) arbiter_promote "$@" ;;
     grant-session)  arbiter_grant_session "$@" ;;
@@ -578,8 +574,8 @@ if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
     init-ref) arbiter_init_ref "${1:-}" ;;
     pr-body) arbiter_pr_body "${1:?out-file}" ;;
     *)
-      printf 'Usage: %s enqueue <ticket> <seat> <sha> | drain | promote [--pr] [--confirm] | grant-session [--ttl s] | revoke-session | init-ref [base] | pr-body <file>\n' "$0" >&2
-      printf '       enqueue also drains the queue in the same invocation (PROVE-4); drain remains for manual re-runs\n' >&2
+      printf 'Usage: %s enqueue <ticket> <seat> <sha> | drain | enqueue-and-drain <ticket> <seat> <sha> | promote [--pr] [--confirm] | grant-session [--ttl s] | revoke-session | init-ref [base] | pr-body <file>\n' "$0" >&2
+      printf '       enqueue leaves a candidate queued; drain is a separate human command\n' >&2
       exit 1 ;;
   esac
 fi

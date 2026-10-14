@@ -294,6 +294,9 @@ EOF
   done
 
   local repo="${dir:-${REPO_DIR:-$PWD}}"
+  if [[ -z "${STAMPEDE_CONFIG:-}" && -f "$repo/swarm.config.toml" ]]; then
+    config="$repo/swarm.config.toml"
+  fi
   local state="$repo/.herdr-swarm"
   local traces_dir="$state/traces"
   local verdicts_file="$state/session-verdicts.jsonl"

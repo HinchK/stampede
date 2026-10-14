@@ -344,6 +344,38 @@ swarm_status() {
   printf '\n%s%s⚡ Herdr Swarm Status — %s%s\n' "$BOLD" "$CYAN" "$(basename "$abs_target")" "$RESET"
   printf '%sDirectory: %s%s\n\n' "$DIM" "$abs_target" "$RESET"
 
+  local project_config="${abs_target}/swarm.config.toml" attention_mode seat_key
+  if [[ -f "$project_config" ]]; then
+    if ! declare -f config_get >/dev/null 2>&1; then
+      # shellcheck source=/dev/null
+      source "$(dirname "${BASH_SOURCE[0]}")/config.sh"
+    fi
+    attention_mode=$(config_get attention.mode medium "$project_config")
+    if [[ -f "${abs_target}/.herdr-swarm/attention.json" ]]; then
+      attention_mode=$(jq -r --arg fallback "$attention_mode" '.mode // $fallback' \
+        "${abs_target}/.herdr-swarm/attention.json" 2>/dev/null || printf '%s' "$attention_mode")
+    fi
+    printf '  Attention: %s\n' "$attention_mode"
+    printf '  Roster (configured provider/model):\n'
+    for seat_key in $(config_get_seats "$project_config"); do
+      printf '    %-15s %-12s %-13s %s\n' "$seat_key" \
+        "$(config_get_seat_prop "$seat_key" role '' "$project_config")" \
+        "$(config_get_seat_prop "$seat_key" default_kind agy "$project_config")" \
+        "$(config_get_seat_prop "$seat_key" model auto "$project_config")"
+    done
+    printf '\n'
+  fi
+
+  local queue_file="${abs_target}/.herdr-swarm/integration.jsonl" queued=0
+  if [[ -f "$queue_file" ]]; then
+    queued=$(jq -R -s '[split("\n")[] | fromjson? | select(.status == "queued")] | length' "$queue_file" 2>/dev/null || printf '?')
+  fi
+  printf '  Integration queue: %s queued candidate(s)\n' "$queued"
+  if [[ "$queued" != 0 ]]; then
+    printf '  Human command after reviewing gates: stampede arbiter %s drain\n' "$abs_target"
+  fi
+  printf '\n'
+
   # 1. Daemon Check
   if ! herdr workspace list >/dev/null 2>&1; then
     printf '  %s✖ Herdr daemon is not responding.%s\n\n' "$RED" "$RESET"
@@ -498,7 +530,7 @@ _swarm_snapshot() { # ABS_TARGET PANE_SOURCE SEATS_FILE WS_ID → prints dir pat
   # N lines so one chatty seat cannot balloon the snapshot.
   local roster="" seat _pane out
   if [[ "$pane_source" == "seats.json ledger" ]]; then
-    roster=$(jq -r '.seats[]? | "\(.name)\t\(.pane // empty)"' "$seats_file" 2>/dev/null) || roster=""
+    roster=$(jq -r '.seats[]? | select(.agentless != true) | "\(.name)\t\(.pane // empty)"' "$seats_file" 2>/dev/null) || roster=""
   else
     roster=$(herdr agent list 2>/dev/null | jq -r --arg ws "$ws_id" \
       '.result.agents[]? | select(.workspace_id == $ws) | "\(.name)\t\(.pane_id)"') || roster=""
@@ -682,11 +714,11 @@ swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
   local seats_file="${abs_target}/.herdr-swarm/seats.json"
   local seats_spec="" src_label
   if [[ -f "$seats_file" ]] && [[ "$(jq -r '.workspace_id // empty' "$seats_file" 2>/dev/null)" == "$ws_id" ]]; then
-    seats_spec=$(jq -r '.seats[]? | "\(.name)\t\(.kind)\t\(.pane)"' "$seats_file" 2>/dev/null)
+    seats_spec=$(jq -r '.seats[]? | "\(.name)\t\(.kind)\t\(.pane)\t\(.agentless // false)"' "$seats_file" 2>/dev/null)
     src_label="seats.json ledger"
   else
     seats_spec=$(herdr agent list 2>/dev/null | jq -r --arg ws "$ws_id" \
-      '.result.agents[]? | select(.workspace_id == $ws) | "\(.name)\t\(.agent)\t\(.pane_id)"')
+      '.result.agents[]? | select(.workspace_id == $ws) | "\(.name)\t\(.agent)\t\(.pane_id)\tfalse"')
     src_label="live agent registry"
   fi
 
@@ -697,9 +729,18 @@ swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
     return 1
   fi
 
-  local failures=0 name kind pane
-  while IFS=$'\t' read -r name kind pane; do
+  local failures=0 name kind pane agentless
+  while IFS=$'\t' read -r name kind pane agentless; do
     [[ -n "$name" ]] || continue
+    if [[ "$agentless" == true ]]; then
+      if herdr pane list 2>/dev/null | jq -e --arg p "$pane" '.result.panes[]? | select(.pane_id == $p)' >/dev/null 2>&1; then
+        printf '  %s✓ %s (%s in %s): pane present%s\n' "$GREEN" "$name" "$kind" "$pane" "$RESET"
+      else
+        printf '  %s✖ %s: pane not present%s\n' "$RED" "$name" "$RESET"
+        failures=1
+      fi
+      continue
+    fi
     if ! herdr agent get "$name" >/dev/null 2>&1; then
       printf '  %s✖ %s: agent not registered%s\n' "$RED" "$name" "$RESET"
       failures=1
