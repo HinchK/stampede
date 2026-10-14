@@ -730,6 +730,72 @@ swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
   fi
 
   local failures=0 name kind pane agentless
+
+  # Missing-seat roster check (D4): the ledger only records seats that
+  # SEATED, so a seat whose launch failed on every chain kind is invisible
+  # to a ledger-only verify. Compare the configured, enabled roster against
+  # the seated names: a missing arch/pm seat is a failure in EVERY mode; a
+  # missing non-critical seat is a loud warning and is exported for the
+  # swarm_ready payload. SWARM_MISSING_SEATS / SWARM_MISSING_CRITICAL are
+  # set for the launcher (no subshell: the roster loop runs in this shell).
+  SWARM_MISSING_SEATS=""
+  SWARM_MISSING_CRITICAL=""
+  local config_file="${abs_target}/swarm.config.toml" roster_key roster_name roster_slug
+  if [[ -f "$config_file" ]]; then
+    # Roster names must be namespaced exactly as config binding does it
+    # (lib/config.sh: "{name}-{slug}"); the ledger records full names. The
+    # slug derivation mirrors the launcher: profile REPO, else dir basename.
+    if ! declare -F slugify >/dev/null 2>&1; then
+      slugify() {
+        local s="${1:-}"
+        s=$(printf '%s' "$s" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_-]+/-/g')
+        if [[ -z "$s" ]]; then printf 'swarm\n'; return 0; fi
+        [[ "$s" =~ ^[a-z] ]] || s="s-${s}"
+        printf '%s\n' "$s"
+      }
+    fi
+    roster_slug=""
+    local profile_repo
+    # Quoted form matches ensure_profile's writer (REPO="owner/repo"); the
+    # bare form matches hand-written profiles. A missing/unreadable profile
+    # must not kill the verify (pipefail): fall back to the dir basename.
+    profile_repo=""
+    if [[ -f "${abs_target}/.herdr-swarm/profile.env" ]]; then
+      profile_repo=$(sed -nE 's/^REPO="?([^"]*)"?$/\1/p' "${abs_target}/.herdr-swarm/profile.env" 2>/dev/null | tail -n1 || true)
+    fi
+    if [[ -n "$profile_repo" && "$profile_repo" != none ]]; then
+      roster_slug=$(slugify "$profile_repo")
+    else
+      roster_slug=$(slugify "$(basename "$abs_target")")
+    fi
+    while IFS='|' read -r roster_key roster_name; do
+      [[ -n "$roster_key" ]] || continue
+      if awk -F'\t' -v n="$roster_name" '$1 == n { found = 1 } END { exit !found }' <<<"$seats_spec"; then
+        continue
+      fi
+      if [[ "$roster_key" == arch || "$roster_key" == arch_* || "$roster_key" == pm || "$roster_key" == pm_* ]]; then
+        printf '  %s✖ %s: configured critical seat missing from the %s (launch failed on every chain kind)%s\n' \
+          "$RED" "$roster_name" "$src_label" "$RESET"
+        SWARM_MISSING_CRITICAL+="${SWARM_MISSING_CRITICAL:+ }${roster_name}"
+        failures=1
+      else
+        printf '  %s⚠ %s: configured seat missing from the %s — launch failed; swarm continues without it%s\n' \
+          "$YELLOW" "$roster_name" "$src_label" "$RESET"
+        SWARM_MISSING_SEATS+="${SWARM_MISSING_SEATS:+ }${roster_name}"
+      fi
+    done < <("${PYTHON_BIN:-python3}" - "$config_file" "$roster_slug" <<'PYROSTER'
+import sys, tomllib
+with open(sys.argv[1], 'rb') as f:
+    cfg = tomllib.load(f)
+slug = sys.argv[2]
+for k, v in cfg.get('seats', {}).items():
+    if v.get('enabled', True):
+        name = v.get('name', k)
+        print(f'{k}|{name}-{slug}' if slug else f'{k}|{name}')
+PYROSTER
+)
+  fi
+
   while IFS=$'\t' read -r name kind pane agentless; do
     [[ -n "$name" ]] || continue
     if [[ "$agentless" == true ]]; then

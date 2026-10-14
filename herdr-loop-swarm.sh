@@ -731,19 +731,38 @@ else
       exit 1
     fi
     note "Critical seats (arch, pm) ready — continuing despite non-critical seat failures"
+  elif [[ -n "${SWARM_MISSING_CRITICAL:-}" ]]; then
+    # D4: a configured critical seat that never seated is a launch failure
+    # the ledger alone could never show — fail closed in EVERY mode, before
+    # the swarm can report itself ready.
+    printf '  %s✖ FATAL: critical seats missing from the herd: %s%s\n' "$RED" "$SWARM_MISSING_CRITICAL" "$RESET" >&2
+    printf '    %sFix: check these seats provider chains (stampede doctor) and re-run up.%s\n' "$RESET" "$RESET" >&2
+    exit 1
   else
     note "Continuing (non-autonomous mode) — investigate failed seats before dispatching work"
   fi
 fi
+if [[ -n "${SWARM_MISSING_SEATS:-}" ]]; then
+  warn "Non-critical seats missing (named in the swarm_ready event): ${SWARM_MISSING_SEATS}"
+fi
 
-# Telemetry: swarm-ready lifecycle event (streams live into the Ops pane)
+# Telemetry: swarm-ready lifecycle event (streams live into the Ops pane).
+# D4: seats missing from the ledger ride the payload — a swarm that seated
+# partially must never report itself uniformly healthy.
 TRACE_DIR_PATH="${PWD}/.herdr-swarm/traces"
 mkdir -p "$TRACE_DIR_PATH"
+_missing_json='[]'
+if [[ -n "${SWARM_MISSING_SEATS:-}" ]]; then
+  # shellcheck disable=SC2086  # intentional word splitting over the name list
+  _missing_json=$(printf '%s\n' $SWARM_MISSING_SEATS | jq -Rsc 'split("\n") | map(select(length > 0))')
+fi
 _ready_payload=$(jq -cn \
   --arg mode "$MODE" --arg slug "$PROJECT_SLUG" --arg repo "${REPO:-none}" \
   --argjson seats "$(jq '.seats | length' "${PWD}/.herdr-swarm/seats.json" 2>/dev/null || echo 0)" \
-  '{action:"swarm_ready", mode:$mode, slug:$slug, repo:$repo, seats:$seats,
-    summary:("swarm seated+verified (mode=" + $mode + ", seats=" + ($seats|tostring) + ")")}')
+  --argjson missing "$_missing_json" \
+  '{action:"swarm_ready", mode:$mode, slug:$slug, repo:$repo, seats:$seats, missing_seats:$missing,
+    summary:("swarm seated+verified (mode=" + $mode + ", seats=" + ($seats|tostring) + ")" +
+      (if ($missing|length) > 0 then " — MISSING: " + ($missing|join(",")) else "" end))}')
 "$PYTHON_BIN" "$LIB_DIR/telemetry.py" log "$SESSION_ID" swarm.lifecycle "$LOOPER_AGENT" - "$_ready_payload" \
   --trace-dir "$TRACE_DIR_PATH" >/dev/null 2>&1 || true
 good "Telemetry session: ${SESSION_ID} → ${TRACE_DIR_PATH}"

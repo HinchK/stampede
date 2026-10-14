@@ -101,7 +101,14 @@ REPO_DIR="$REPO" STATE_DIR="$REPO/.herdr-swarm" bash -c 'source "$1"; lease_acqu
 jq -e '.leases[] | select(.ticket == "77" and .seat == "arch-test" and .exclusive == true)' \
   "$REPO/.herdr-swarm/leases.json" >/dev/null || fail 'runtime ticket lease was not recorded'
 printf '{"workspace_id":"w1","seats":[{"name":"looper-test","kind":"shell","pane":"w1:p1","agentless":true},{"name":"arch-test","kind":"opencode","pane":"w1:p2"}]}' > "$REPO/.herdr-swarm/seats.json"
-LIFECYCLE_TARGET="$REPO" bash -c '
+# D4 fixture: swarm_verify_seats compares the configured, enabled roster
+# against the ledger, so the verify target needs a config whose namespaced
+# roster matches the seeded ledger exactly (dir name "test" is the slug:
+# looper-test / arch-test).
+mkdir -p "$TMP/test/.herdr-swarm"
+printf '[seats.looper]\nname = "looper"\ndefault_kind = "agy"\n\n[seats.arch_1]\nname = "arch"\ndefault_kind = "opencode"\n' > "$TMP/test/swarm.config.toml"
+cp "$REPO/.herdr-swarm/seats.json" "$TMP/test/.herdr-swarm/seats.json"
+LIFECYCLE_TARGET="$TMP/test" bash -c '
   source "$1/lib/lifecycle.sh"
   BOLD= DIM= RESET= RED= GREEN=
   find_workspace_by_cwd() { printf "w1\n"; }
