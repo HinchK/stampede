@@ -73,6 +73,7 @@ for kind in agy claude opencode; do
 done
 printf '#!/bin/sh\nexit 0\n' > "$TMP/bin/gh"
 chmod +x "$TMP/bin/gh"
+unset HERDR_PANE_ID HERDR_WORKSPACE_ID HERDR_ENV
 export PATH="$TMP/bin:$PATH"
 export FAKE_HERDR_STATE="$TMP/herdr-state.json" FAKE_HERDR_LOG="$TMP/herdr-calls.jsonl"
 "$ROOT/bin/stampede" setup "$TARGET" --non-interactive --launcher "$TMP/yeehaw.sh" >/dev/null

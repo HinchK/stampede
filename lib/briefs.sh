@@ -134,7 +134,7 @@ deliver_brief_nonce() {
   local prompt_msg="STANDING BRIEF: You are seated as '${seat_name}'. Your standing brief is rendered at '${brief_path}'. Read it immediately using your file viewing tools and adopt this posture. Acknowledge when ready."
   local out rc
   if _briefs_prompt_has_wait; then
-    out=$(herdr agent prompt "$seat_name" "$prompt_msg" --wait --timeout 15000 2>&1) && rc=0 || rc=$?
+    out=$(herdr agent prompt "$seat_name" "$prompt_msg" --wait --timeout 90000 2>&1) && rc=0 || rc=$?
   else
     out=$(herdr agent prompt "$seat_name" "$prompt_msg" 2>&1) && rc=0 || rc=$?
   fi

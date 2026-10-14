@@ -724,17 +724,13 @@ swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
 
   printf '%s▸ Seat Verification — %s (%s)%s\n' "$BOLD" "$ws_id" "$src_label" "$RESET"
 
-  if [[ -z "$seats_spec" ]]; then
-    printf '  %s✖ no seats recorded for this workspace%s\n' "$RED" "$RESET"
-    return 1
-  fi
-
   local failures=0 name kind pane agentless
 
   # Missing-seat roster check (D4): the ledger only records seats that
   # SEATED, so a seat whose launch failed on every chain kind is invisible
-  # to a ledger-only verify. Compare the configured, enabled roster against
-  # the seated names: a missing arch/pm seat is a failure in EVERY mode; a
+  # to a ledger-only verify — including the total-failure case of an EMPTY
+  # ledger. Compare the configured, enabled roster against the seated names
+  # BEFORE any early return: a missing arch/pm seat is a failure in EVERY mode; a
   # missing non-critical seat is a loud warning and is exported for the
   # swarm_ready payload. SWARM_MISSING_SEATS / SWARM_MISSING_CRITICAL are
   # set for the launcher (no subshell: the roster loop runs in this shell).
@@ -794,6 +790,11 @@ for k, v in cfg.get('seats', {}).items():
         print(f'{k}|{name}-{slug}' if slug else f'{k}|{name}')
 PYROSTER
 )
+  fi
+
+  if [[ -z "$seats_spec" ]]; then
+    printf '  %s✖ no seats recorded for this workspace%s\n' "$RED" "$RESET"
+    return 1
   fi
 
   while IFS=$'\t' read -r name kind pane agentless; do

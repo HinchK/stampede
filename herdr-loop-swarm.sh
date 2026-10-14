@@ -805,9 +805,15 @@ case "$MODE" in
     good "Arch is ready for brainstorming in the Herd tab"
     ;;
   r)
-    if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; then
-      "$PYTHON_BIN" "$LIB_DIR/attention.py" event "$PWD" new "$MAP_NUM" resume-map >/dev/null \
-        || warn "Map #${MAP_NUM} needs human dispatch; see handoff.log"
+    if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]] || [[ "$(config_get attention.bounded_looper false "$CONFIG_FILE")" == true ]]; then
+      step "Activating Bounded Looper on Map #${MAP_NUM}..."
+      echo "$MAP_NUM" > "$STATE_DIR/active-map"
+      next_t=$("$PYTHON_BIN" "$LIB_DIR/attention.py" next "$PWD" 2>/dev/null || true)
+      if [[ -n "$next_t" ]]; then
+        good "Map #${MAP_NUM} active in bounded mode — next unticked: #${next_t}"
+      else
+        good "Map #${MAP_NUM} active in bounded mode"
+      fi
     else
       step "Kicking Looper on Map #${MAP_NUM}..."
       herdr agent prompt "$LOOPER_AGENT" "KICKOFF: Work Wayfinder Map #${MAP_NUM} on ${REPO} per your seat brief — drain the frontier in map order until closed, then run milestone closeout and report." >/dev/null 2>&1 || true
@@ -816,7 +822,8 @@ case "$MODE" in
     fi
     ;;
   a)
-    if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; then
+    rm -f "$STATE_DIR/active-map"
+    if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]] || [[ "$(config_get attention.bounded_looper false "$CONFIG_FILE")" == true ]]; then
       good "Bounded supervisor will inspect loop:ready tickets on its next pass"
     else
       step "Kicking Looper in autonomous queue mode..."

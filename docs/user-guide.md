@@ -26,7 +26,8 @@ You can change each provider and model, the PM and architect counts, and the
 attention mode. `medium` is the default. The generated configuration is
 `<repo>/swarm.config.toml`. Setup asks where to save `yeehaw.sh`; it does not
 start agents or run the arbiter. Running setup again keeps an existing complete
-setup; editing it makes `.bak` copies before replacement.
+setup; editing it makes `.bak` copies before replacement and retains existing
+non-seat project settings, including the reviewer loop, plus the reviewer seat.
 
 The launcher reads the repository's configuration. Standing briefs are
 rendered from Stampede's installed templates, so the target repository does
@@ -51,6 +52,10 @@ usage is recorded in `.herdr-swarm/looper-usage.jsonl`. A repeated launch
 reuses managed panes and live seats.
 `--seat-only` keeps automatic issue intake idle; a later brainstorm or
 wayfinder launch enables it.
+The `stampede up <repo> -m r -n <MAP_NUM>` Resume Map mode is bounded-looper
+aware: it records the active map and steps through unticked map items
+sequentially without continuous looper turns. Alternatively, label child
+issues `loop:ready` and use `stampede up <repo> -m a` to drain the backlog.
 
 The launch checks the project's test command. If Stampede cannot identify a
 runnable suite, supply one when prompted; a gate cannot be trusted without

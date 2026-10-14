@@ -32,6 +32,13 @@ class Attention:
         with (self.repo / "swarm.config.toml").open("rb") as handle:
             self.config = tomllib.load(handle)
         self.file = self.state_dir / "attention.json"
+        if self.file.exists():
+            self._locked(self._recover_inflight)
+
+    def _recover_inflight(self, data):
+        for ticket in set(data["inflight"].values()):
+            self._pause(data, ticket, "interrupted decision: inspect seat, lease, and logs before resuming")
+        data["inflight"].clear()
 
     def _read(self):
         if not self.file.exists():
@@ -136,14 +143,29 @@ class Attention:
         return not control.exists() or json.loads(control.read_text()).get("suite_gate", True) is True
 
     def issue(self, ticket):
-        result = subprocess.run(["gh", "issue", "view", ticket, "-R", self.github_repo(),
-                                 "--json", "title,body,assignees,labels"],
-                                cwd=self.repo, capture_output=True, text=True, timeout=20, check=True)
-        return json.loads(result.stdout)
+        try:
+            repo = self.github_repo()
+        except ValueError:
+            return None
+        if not str(ticket).isdigit():
+            return None
+        try:
+            result = subprocess.run(["gh", "issue", "view", str(ticket), "-R", repo,
+                                     "--json", "title,body,assignees,labels"],
+                                    cwd=self.repo, capture_output=True, text=True, timeout=20, check=True)
+            return json.loads(result.stdout)
+        except (subprocess.SubprocessError, ValueError, OSError):
+            return None
 
-    def issue_ready(self, issue):
+    def issue_ready(self, issue, rule=""):
+        if issue is None:
+            return True
         labels = {item.get("name") for item in issue.get("labels", [])}
-        return "loop:ready" in labels and "loop:blocked" not in labels and not issue.get("assignees")
+        if "loop:blocked" in labels or issue.get("assignees"):
+            return False
+        if str(rule).startswith("map:") or (self.state_dir / "active-map").exists():
+            return True
+        return "loop:ready" in labels
 
     def list_issues(self):
         result = subprocess.run(["gh", "issue", "list", "-R", self.github_repo(),
@@ -152,10 +174,75 @@ class Attention:
                                 cwd=self.repo, capture_output=True, text=True, timeout=20, check=True)
         return json.loads(result.stdout)
 
+    def map_body(self, map_id):
+        maps_dir = self.repo / "maps"
+        if maps_dir.exists():
+            direct = maps_dir / f"{map_id}.md"
+            if direct.exists():
+                return direct.read_text()
+            for cand in maps_dir.glob("*.md"):
+                if str(map_id) in cand.name:
+                    return cand.read_text()
+        if str(map_id).isdigit():
+            try:
+                result = subprocess.run(["gh", "issue", "view", str(map_id), "-R", self.github_repo(),
+                                         "--json", "body"], cwd=self.repo, capture_output=True, text=True,
+                                        timeout=20, check=True)
+                return json.loads(result.stdout).get("body", "")
+            except (subprocess.SubprocessError, ValueError, OSError):
+                pass
+        return ""
+
+    def map_tickets(self, map_id):
+        body = self.map_body(map_id)
+        if not body:
+            return []
+        tickets = []
+        for line in body.splitlines():
+            match = re.match(r"^\s*-\s*\[\s*\]\s*(.*)$", line)
+            if not match:
+                continue
+            rest = match.group(1)
+            gh_match = re.search(r"#([0-9]+)", rest)
+            if gh_match:
+                tickets.append(gh_match.group(1))
+                continue
+            file_match = re.search(r"(?:tickets/|\b)([A-Za-z0-9_.-]+)\.md", rest)
+            if file_match:
+                tickets.append(file_match.group(1))
+                continue
+            token_match = re.search(r"\b([A-Za-z0-9_]+-[0-9]+)\b", rest)
+            if token_match:
+                tickets.append(token_match.group(1))
+                continue
+            words = rest.strip().split()
+            if words:
+                clean = re.sub(r"[^A-Za-z0-9_.-]", "", words[0])
+                if clean:
+                    tickets.append(clean)
+        return tickets
+
     def next_ready_ticket(self, auto=False):
         data = self._read()
         seen = {item["ticket"] for item in data["seen"] if item.get("kind") == "new"
                 and (not auto or item.get("status") != "queued")}
+        active_map_file = self.state_dir / "active-map"
+        if active_map_file.exists():
+            map_id = active_map_file.read_text().strip()
+            if map_id:
+                for ticket in self.map_tickets(map_id):
+                    ticket_str = str(ticket)
+                    if ticket_str not in seen and ticket_str not in data["paused"]:
+                        if ticket_str.isdigit():
+                            try:
+                                issue = self.issue(ticket_str)
+                                if issue and (issue.get("assignees") or "loop:blocked" in {item.get("name") for item in issue.get("labels", [])}):
+                                    continue
+                            except Exception:
+                                pass
+                        return ticket_str
+                return ""
+
         issues = sorted(self.list_issues(), key=lambda issue: issue["number"])
         for issue in issues:
             ticket = str(issue["number"])
@@ -270,7 +357,10 @@ class Attention:
             self._write(data)
             try:
                 result = decide(data)
-                data["seen"][-1]["status"] = result["status"]
+                if result["status"] == "deferred":
+                    data["seen"].pop()
+                else:
+                    data["seen"][-1]["status"] = result["status"]
                 return result
             finally:
                 data["inflight"].pop(key, None)
@@ -307,8 +397,10 @@ class Attention:
                 if kind == "new" and not self.gate_ready():
                     raise ValueError("project suite gate is unavailable; ticket intake stopped")
                 issue = self.issue(ticket) if kind == "new" else None
-                if issue and not self.issue_ready(issue):
+                if issue and not self.issue_ready(issue, evidence):
                     raise ValueError("issue is no longer ready or is assigned")
+                if kind == "new" and not candidates:
+                    return {"status": "deferred"}
                 if mode == "quiet" and kind == "new":
                     proposal = {"action": "assign", "seat": candidates[0] if candidates else "",
                                 "summary": "deterministic quiet dispatch"}
@@ -316,16 +408,28 @@ class Attention:
                     model_evidence = evidence
                     if issue:
                         model_evidence += f"; issue: {issue['title']} — {(issue.get('body') or '')[:800]}"
+                    else:
+                        local_ticket = self.repo / "maps" / "tickets" / f"{ticket}.md"
+                        if local_ticket.exists():
+                            model_evidence += f"; ticket: {local_ticket.read_text()[:800]}"
                     proposal = self.ask(kind, ticket, model_evidence, candidates if kind == "new" else [seat])
                 selected = proposal.get("seat")
                 if kind == "new":
                     if proposal["action"] != "assign" or selected not in candidates:
                         raise ValueError("looper selected no ready architect seat")
                     issue = self.issue(ticket)
-                    if not self.issue_ready(issue):
+                    if issue and not self.issue_ready(issue, evidence):
                         raise ValueError("issue changed while looper was deciding; dispatch stopped")
-                    issue_body = issue.get("body") or ""
-                    body = f"Ticket #{ticket}: {issue['title']}\n\n{issue_body}\n"
+                    if issue:
+                        issue_body = issue.get("body") or ""
+                        body = f"Ticket #{ticket}: {issue['title']}\n\n{issue_body}\n"
+                    else:
+                        local_ticket = self.repo / "maps" / "tickets" / f"{ticket}.md"
+                        if local_ticket.exists():
+                            body = local_ticket.read_text()
+                        else:
+                            body = f"Ticket #{ticket}\nDispatched from {evidence}\n"
+                        issue_body = body
                     owns = next((line for line in issue_body.splitlines()
                                  if line.startswith("owns:")), "")
                     ticket_file = self.state_dir / "tickets" / f"{ticket}.md"

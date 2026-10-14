@@ -1093,6 +1093,7 @@ frontier_drain() {
     local ticket="${next#\#}"
     ticket="${ticket%% *}"
     local rule="loop:ready"
+    [[ -f "$STATE_DIR/active-map" ]] && rule="map:$(cat "$STATE_DIR/active-map")"
     [[ "$attention_mode" == quiet && "$(ctl_get frontier_drain)" == true ]] && rule="loop:ready:auto"
     attention_event new "$ticket" "$rule" || true
     return 0

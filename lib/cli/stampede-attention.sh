@@ -14,7 +14,14 @@ stampede_cmd_attention() {
   case "${1:-}" in
     quiet|medium|loud) "$PYTHON_BIN" "$root/lib/attention.py" mode "$repo" "$1" ;;
     resume) "$PYTHON_BIN" "$root/lib/attention.py" resume "$repo" "${2:-}" ;;
+    next)
+      if [[ -n "${2:-}" ]]; then
+        "$PYTHON_BIN" "$root/lib/attention.py" next "$repo" "$2"
+      else
+        "$PYTHON_BIN" "$root/lib/attention.py" next "$repo"
+      fi
+      ;;
     '') "$PYTHON_BIN" "$root/lib/attention.py" mode "$repo" ;;
-    *) printf 'attention: expected quiet, medium, loud, or resume TICKET\n' >&2; return 2 ;;
+    *) printf 'attention: expected quiet, medium, loud, resume TICKET, or next\n' >&2; return 2 ;;
   esac
 }

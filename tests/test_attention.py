@@ -141,6 +141,17 @@ class AttentionTests(unittest.TestCase):
         self.policy.list_issues = lambda: issues
         self.assertEqual(self.policy.next_ready_ticket(), "4")
 
+    def test_busy_architect_waits_without_spending_a_looper_turn(self):
+        self.policy.list_issues = lambda: [{"number": 5, "assignees": [],
+                                            "labels": [{"name": "loop:ready"}]}]
+        self.policy.seat_ready = lambda seat: False
+        self.assertEqual(self.policy.event("new", "5", "loop:ready")["status"], "deferred")
+        self.assertFalse(self.policy.is_paused("5"))
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self.policy.next_ready_ticket(), "5")
+        self.policy.seat_ready = lambda seat: True
+        self.assertEqual(self.policy.event("new", "5", "loop:ready")["status"], "dispatched")
+
     def test_quiet_queued_ticket_becomes_eligible_when_auto_intake_enabled(self):
         self.policy.set_mode("quiet")
         self.assertEqual(self.policy.event("new", "7", "loop:ready")["status"], "queued")
@@ -163,10 +174,13 @@ class AttentionTests(unittest.TestCase):
     def test_interrupted_decision_requires_human_recovery(self):
         self.policy.ask = lambda *args: (_ for _ in ()).throw(KeyboardInterrupt())
         with self.assertRaises(KeyboardInterrupt):
-            self.policy.event("red", "71", "gate", "arch-1-test")
+            self.policy.event("new", "71", "loop:ready")
         restarted = module.Attention(self.repo)
-        self.assertEqual(restarted.event("red", "71", "gate", "arch-1-test")["status"], "paused")
         self.assertTrue(restarted.is_paused("71"))
+        self.assertIn("interrupted decision", (self.repo / ".herdr-swarm/handoff.log").read_text())
+        restarted.list_issues = lambda: [{"number": 71, "assignees": [],
+                                          "labels": [{"name": "loop:ready"}]}]
+        self.assertEqual(restarted.next_ready_ticket(), "")
 
     def test_repair_requires_matching_live_lease(self):
         actual = module.Attention(self.repo)
@@ -198,6 +212,27 @@ class AttentionTests(unittest.TestCase):
         self.policy.issue = lambda ticket: views.pop(0)
         self.assertEqual(self.policy.event("new", "92", "loop:ready")["status"], "paused")
         self.assertNotIn(("dispatch", "arch-1-test", "92"), self.calls)
+
+    def test_map_aware_bounded_dispatcher_sequential_intake(self):
+        maps_dir = self.repo / "maps"
+        maps_dir.mkdir(exist_ok=True)
+        (maps_dir / "alpha.md").write_text(
+            "# Wayfinder Map: Alpha\n\n"
+            "## Active Frontier\n"
+            "- [x] #101 Initial setup\n"
+            "- [ ] #102 Second task\n"
+            "- [ ] #103 Third task\n"
+        )
+        (self.repo / ".herdr-swarm/active-map").write_text("alpha\n")
+        self.assertEqual(self.policy.next_ready_ticket(), "102")
+        self.assertEqual(self.policy.event("new", "102", "map:alpha")["status"], "dispatched")
+        self.assertIn(("dispatch", "arch-1-test", "102"), self.calls)
+
+        self.assertEqual(self.policy.next_ready_ticket(), "103")
+        self.assertEqual(self.policy.event("new", "103", "map:alpha")["status"], "dispatched")
+        self.assertIn(("dispatch", "arch-1-test", "103"), self.calls)
+
+        self.assertEqual(self.policy.next_ready_ticket(), "")
 
 
 if __name__ == "__main__":
