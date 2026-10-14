@@ -559,7 +559,7 @@ for tab_name in herd ops; do
       fi
 
       step "Starting agent '${seat_name}' (${resolved_kind})..."
-      providers_start_agent "$seat_name" "$resolved_kind" "$seat_pane" "$seat_model" >/dev/null 2>&1 \
+      providers_start_agent "$seat_name" "$resolved_kind" "$seat_pane" "$seat_model" "$seat_cwd" >/dev/null 2>&1 \
         || { warn "Failed to seat agent '${seat_name}' in pane ${seat_pane}"; seat_pane=""; }
       if [[ -n "$seat_pane" ]]; then
         # Nonce file-path protocol (lib/briefs.sh): never inline brief text

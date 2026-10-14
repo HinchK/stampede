@@ -141,14 +141,53 @@ PYCODE
   return "$bad_count"
 }
 
-# Herdr forwards arguments after `--` to each harness. A configured model
-# must reach the actual process for cost and role fit to be meaningful.
-providers_start_agent() { # NAME KIND PANE MODEL
-  if [[ -n "${4:-}" && "$4" != auto ]]; then
-    herdr agent start "$1" --kind "$2" --pane "$3" -- --model "$4"
-  else
-    herdr agent start "$1" --kind "$2" --pane "$3"
+# Herdr forwards arguments after `--` to each harness — but only flags the
+# harness actually supports. opencode v2's TUI has no --model flag (it exists
+# only on `opencode run`): a forwarded flag prints usage and kills the seat
+# (HERDR-1 D1). The opencode model travels instead as a per-seat project
+# config — `.opencode/opencode.json` in the pane's working directory, which
+# opencode resolves natively (verified: session messages record the pinned
+# provider/model) and git ignores (`/.opencode`).
+providers_write_opencode_model() { # CWD MODEL
+  local cfg="${1%/}/.opencode/opencode.json" tmp
+  if [[ -f "$cfg" ]]; then
+    if jq -e --arg m "$2" '.model == $m' "$cfg" >/dev/null 2>&1; then
+      return 0
+    fi
+    if ! jq -e type "$cfg" >/dev/null 2>&1; then
+      printf 'opencode config is not valid JSON (left untouched): %s\n' "$cfg" >&2
+      return 1
+    fi
+    tmp=$(mktemp) || return 1
+    if jq --arg m "$2" '.model = $m' "$cfg" > "$tmp" 2>/dev/null && mv "$tmp" "$cfg"; then
+      return 0
+    fi
+    rm -f "$tmp"
+    return 1
   fi
+  mkdir -p "${1%/}/.opencode" || return 1
+  local payload
+  payload=$(jq -cn --arg m "$2" '{"$schema": "https://opencode.ai/config.json", model: $m}') || return 1
+  printf '%s\n' "$payload" > "$cfg" || return 1
+}
+
+providers_start_agent() { # NAME KIND PANE MODEL [CWD]
+  local name="$1" kind="$2" pane="$3" model="${4:-}" cwd="${5:-$PWD}"
+  case "$kind" in
+    opencode)
+      if [[ -n "$model" && "$model" != auto ]]; then
+        providers_write_opencode_model "$cwd" "$model" || return 1
+      fi
+      herdr agent start "$name" --kind "$kind" --pane "$pane"
+      ;;
+    *)
+      if [[ -n "$model" && "$model" != auto ]]; then
+        herdr agent start "$name" --kind "$kind" --pane "$pane" -- --model "$model"
+      else
+        herdr agent start "$name" --kind "$kind" --pane "$pane"
+      fi
+      ;;
+  esac
 }
 
 # ── Config enumeration ─────────────────────────────────────────────────────

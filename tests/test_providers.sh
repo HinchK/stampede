@@ -171,5 +171,50 @@ else
   bad "absent opencode binary must not fail the preflight"
 fi
 
+# [10] model transport per kind (D1): opencode v2 has no TUI --model flag —
+# a forwarded flag kills the seat. The model must travel by per-seat project
+# config instead; kinds that support --model keep forwarding it.
+cat > "$SCRATCH/bin/herdr" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$HERDR_STUB_CALLS"
+EOF
+chmod +x "$SCRATCH/bin/herdr"
+export HERDR_STUB_CALLS="$SCRATCH/herdr.calls"
+: > "$HERDR_STUB_CALLS"
+SEAT_CWD="$SCRATCH/seat-home"; mkdir -p "$SEAT_CWD"
+
+providers_start_agent pm claude p2 sonnet >/dev/null 2>&1
+grep -q 'agent start pm --kind claude --pane p2 -- --model sonnet' "$HERDR_STUB_CALLS" \
+  && ok "claude keeps --model forwarding" || bad "claude forward: $(cat "$HERDR_STUB_CALLS")"
+
+: > "$HERDR_STUB_CALLS"
+providers_start_agent arch opencode p3 zai-coding-plan/glm-5.3 "$SEAT_CWD" >/dev/null 2>&1
+grep -q 'agent start arch --kind opencode --pane p3$' "$HERDR_STUB_CALLS" \
+  && ok "opencode starts with no forwarded flags" || bad "opencode forward: $(cat "$HERDR_STUB_CALLS")"
+[[ -f "$SEAT_CWD/.opencode/opencode.json" ]] \
+  && ok "opencode project config written under the seat cwd" || bad "no .opencode/opencode.json under seat cwd"
+grep -q '"model": *"zai-coding-plan/glm-5.3"' "$SEAT_CWD/.opencode/opencode.json" 2>/dev/null \
+  && ok "project config pins the configured model" || bad "model pin: $(cat "$SEAT_CWD/.opencode/opencode.json" 2>/dev/null)"
+
+printf '{"$schema":"https://opencode.ai/config.json","model":"zai-coding-plan/glm-4.6","permission":{"external_directory":"allow"}}\n' \
+  > "$SEAT_CWD/.opencode/opencode.json"
+providers_start_agent arch opencode p3 zai-coding-plan/glm-5.3 "$SEAT_CWD" >/dev/null 2>&1
+python3 - "$SEAT_CWD/.opencode/opencode.json" <<'PY' && ok "existing project config merged, sibling keys preserved" || bad "merge clobbered sibling keys"
+import json, sys
+cfg = json.load(open(sys.argv[1]))
+assert cfg["model"] == "zai-coding-plan/glm-5.3", cfg
+assert cfg["permission"] == {"external_directory": "allow"}, cfg
+PY
+start_calls=$(grep -c 'agent start arch' "$HERDR_STUB_CALLS")
+[[ "$start_calls" -eq 2 ]] && ok "start still invoked on the model-pinned path" || bad "start calls: $start_calls"
+
+AUTO_CWD="$SCRATCH/auto-home"; mkdir -p "$AUTO_CWD"
+: > "$HERDR_STUB_CALLS"
+providers_start_agent arch opencode p4 auto "$AUTO_CWD" >/dev/null 2>&1
+grep -q 'agent start arch --kind opencode --pane p4$' "$HERDR_STUB_CALLS" \
+  && ok "auto model starts plainly, no flags" || bad "auto forward: $(cat "$HERDR_STUB_CALLS")"
+[[ ! -e "$AUTO_CWD/.opencode" ]] \
+  && ok "auto model writes no project config" || bad "auto model wrote a config"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

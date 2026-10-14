@@ -84,10 +84,12 @@ printf '%s\n' "$*" >> "$HERDR_CALLS"
 EOF
 chmod +x "$TMP/bin/herdr"
 export HERDR_CALLS="$TMP/herdr.calls"
-bash -c 'source "$1"; providers_start_agent looper agy p1 gemini-3.8-flash-low; providers_start_agent pm claude p2 sonnet; providers_start_agent arch opencode p3 zai-coding-plan/glm-5.3' _ "$ROOT/lib/providers.sh"
+mkdir -p "$TMP/seat-cwd"
+bash -c 'source "$1"; cd "$2"; providers_start_agent looper agy p1 gemini-3.8-flash-low; providers_start_agent pm claude p2 sonnet; providers_start_agent arch opencode p3 zai-coding-plan/glm-5.3' _ "$ROOT/lib/providers.sh" "$TMP/seat-cwd"
 grep -q 'agent start looper --kind agy --pane p1 -- --model gemini-3.8-flash-low' "$HERDR_CALLS" || fail 'AGY model not passed to Herdr'
 grep -q 'agent start pm --kind claude --pane p2 -- --model sonnet' "$HERDR_CALLS" || fail 'Claude model not passed to Herdr'
-grep -q 'agent start arch --kind opencode --pane p3 -- --model zai-coding-plan/glm-5.3' "$HERDR_CALLS" || fail 'OpenCode model not passed to Herdr'
+grep -q 'agent start arch --kind opencode --pane p3$' "$HERDR_CALLS" || fail 'OpenCode start must not forward flags'
+grep -q '"model": *"zai-coding-plan/glm-5.3"' "$TMP/seat-cwd/.opencode/opencode.json" 2>/dev/null || fail 'OpenCode model not pinned in seat project config'
 
 mkdir -p "$REPO/.herdr-swarm"
 mkdir -p "$REPO/.herdr-swarm/tickets"

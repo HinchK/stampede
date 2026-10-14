@@ -90,8 +90,13 @@ assert all(s['isolated'] for s in seats if not s.get('agentless')), seats
 assert len([s for s in seats if s.get('agentless')]) >= 5, seats
 starts = [c for c in calls if c[:2] == ['agent', 'start']]
 assert len(starts) == 6, starts
-assert any('--model' in c and 'zai-coding-plan/glm-5.3' in c for c in starts), starts
+oc_starts = [c for c in starts if c[c.index('--kind') + 1] == 'opencode']
+assert len(oc_starts) == 2, starts
+assert all('--model' not in c for c in oc_starts), starts
 assert any('--model' in c and 'sonnet' in c for c in starts), starts
+arch = next(s for s in seats if s['name'].startswith('arch-1'))
+pin = open(arch['worktree_dir'] + '/.opencode/opencode.json').read()
+assert 'zai-coding-plan/glm-5.3' in pin, pin
 assert not any(c[:2] == ['agent', 'start'] and 'looper' in c[2] for c in calls), calls
 assert not any('arbiter' in ' '.join(c) for c in calls), calls
 PY
