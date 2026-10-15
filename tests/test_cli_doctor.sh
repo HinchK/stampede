@@ -265,5 +265,17 @@ else
   ok "foreign agent filtered out (ledger names are exact)"
 fi
 
+# [11] project-local setup is the default for an explicit doctor target.
+mkdir -p "$SCRATCH/project"
+cat > "$SCRATCH/project/swarm.config.toml" <<'EOF'
+[seats.pm]
+name = "pm"
+default_kind = "claude"
+EOF
+out=$("$REPO_ROOT/bin/stampede" doctor "$SCRATCH/project" 2>&1); rc=$?
+check "project-local doctor config → rc 0" 0 "$rc"
+[[ "$out" == *"/project/swarm.config.toml)"* ]] \
+  && ok "doctor names target config" || bad "doctor ignored target config: $out"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

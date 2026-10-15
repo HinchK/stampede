@@ -322,6 +322,10 @@ _lease_write() { # STATE_DIR JQ_FILTER_TEXT (already evaluated JSON on stdin)
 # frontmatter `id:` scan using the same idiom as partition_check above.
 _partition_ticket_file() { # TICKET REPO — prints the path; rc 1 when unresolved
   local ticket="$1" repo="$2" tf tid
+  if [[ -f "$repo/.herdr-swarm/tickets/${ticket}.md" ]]; then
+    printf '%s\n' "$repo/.herdr-swarm/tickets/${ticket}.md"
+    return 0
+  fi
   if [[ -f "$repo/maps/tickets/${ticket}.md" ]]; then
     printf '%s\n' "$repo/maps/tickets/${ticket}.md"
     return 0

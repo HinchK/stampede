@@ -344,6 +344,38 @@ swarm_status() {
   printf '\n%s%s⚡ Herdr Swarm Status — %s%s\n' "$BOLD" "$CYAN" "$(basename "$abs_target")" "$RESET"
   printf '%sDirectory: %s%s\n\n' "$DIM" "$abs_target" "$RESET"
 
+  local project_config="${abs_target}/swarm.config.toml" attention_mode seat_key
+  if [[ -f "$project_config" ]]; then
+    if ! declare -f config_get >/dev/null 2>&1; then
+      # shellcheck source=/dev/null
+      source "$(dirname "${BASH_SOURCE[0]}")/config.sh"
+    fi
+    attention_mode=$(config_get attention.mode medium "$project_config")
+    if [[ -f "${abs_target}/.herdr-swarm/attention.json" ]]; then
+      attention_mode=$(jq -r --arg fallback "$attention_mode" '.mode // $fallback' \
+        "${abs_target}/.herdr-swarm/attention.json" 2>/dev/null || printf '%s' "$attention_mode")
+    fi
+    printf '  Attention: %s\n' "$attention_mode"
+    printf '  Roster (configured provider/model):\n'
+    for seat_key in $(config_get_seats "$project_config"); do
+      printf '    %-15s %-12s %-13s %s\n' "$seat_key" \
+        "$(config_get_seat_prop "$seat_key" role '' "$project_config")" \
+        "$(config_get_seat_prop "$seat_key" default_kind agy "$project_config")" \
+        "$(config_get_seat_prop "$seat_key" model auto "$project_config")"
+    done
+    printf '\n'
+  fi
+
+  local queue_file="${abs_target}/.herdr-swarm/integration.jsonl" queued=0
+  if [[ -f "$queue_file" ]]; then
+    queued=$(jq -R -s '[split("\n")[] | fromjson? | select(.status == "queued")] | length' "$queue_file" 2>/dev/null || printf '?')
+  fi
+  printf '  Integration queue: %s queued candidate(s)\n' "$queued"
+  if [[ "$queued" != 0 ]]; then
+    printf '  Human command after reviewing gates: stampede arbiter %s drain\n' "$abs_target"
+  fi
+  printf '\n'
+
   # 1. Daemon Check
   if ! herdr workspace list >/dev/null 2>&1; then
     printf '  %s✖ Herdr daemon is not responding.%s\n\n' "$RED" "$RESET"
@@ -498,7 +530,7 @@ _swarm_snapshot() { # ABS_TARGET PANE_SOURCE SEATS_FILE WS_ID → prints dir pat
   # N lines so one chatty seat cannot balloon the snapshot.
   local roster="" seat _pane out
   if [[ "$pane_source" == "seats.json ledger" ]]; then
-    roster=$(jq -r '.seats[]? | "\(.name)\t\(.pane // empty)"' "$seats_file" 2>/dev/null) || roster=""
+    roster=$(jq -r '.seats[]? | select(.agentless != true) | "\(.name)\t\(.pane // empty)"' "$seats_file" 2>/dev/null) || roster=""
   else
     roster=$(herdr agent list 2>/dev/null | jq -r --arg ws "$ws_id" \
       '.result.agents[]? | select(.workspace_id == $ws) | "\(.name)\t\(.pane_id)"') || roster=""
@@ -646,9 +678,11 @@ swarm_down() { # TARGET_DIR ASSUME_YES KEEP_WS
 # signal the audit's S18/S23 rows asked for); without it, the pre-HERDR-2
 # agent-lifecycle wait, unchanged. On success SEAT_WAIT_MODE names the signal
 # that passed ("brief-ready" | "interactive-ready") for the caller's label.
-seat_wait_ready() { # NAME PANE TIMEOUT_MS
-  local name="$1" pane="${2:-}" timeout_ms="${3:-30000}"
-  if [[ -n "$pane" ]] && herdr_has_wait_output; then
+seat_wait_ready() { # NAME PANE TIMEOUT_MS [KIND]
+  local name="$1" pane="${2:-}" timeout_ms="${3:-30000}" kind="${4:-}"
+  # Opencode TUIs redraw onto an alternate screen and scroll off the brief
+  # anchor (F-B), so pane wait-output times out. Use agent lifecycle wait.
+  if [[ -n "$pane" ]] && [[ "$kind" != "opencode" ]] && herdr_has_wait_output; then
     SEAT_WAIT_MODE=brief-ready
     herdr pane wait-output "$pane" --regex "$BRIEF_ACK_REGEX" --timeout "$timeout_ms" >/dev/null 2>&1
     return
@@ -671,41 +705,144 @@ swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
     return 1
   }
 
-  local ws_id
+  local ws_id workspace_missing=0
   ws_id=$(find_workspace_by_cwd "$abs_target")
   if [[ -z "$ws_id" ]]; then
     printf '  %s✖ no active workspace for %s%s\n' "$RED" "$abs_target" "$RESET"
-    return 1
+    workspace_missing=1
   fi
 
-  # Seat roster: fresh seats.json ledger, else live agents in the workspace
+  # Seat roster: fresh seats.json ledger, else live agents in the workspace.
+  # A missing workspace must not skip the configured-roster comparison: a
+  # critical seat that never seated is still a launch failure.
   local seats_file="${abs_target}/.herdr-swarm/seats.json"
   local seats_spec="" src_label
-  if [[ -f "$seats_file" ]] && [[ "$(jq -r '.workspace_id // empty' "$seats_file" 2>/dev/null)" == "$ws_id" ]]; then
-    seats_spec=$(jq -r '.seats[]? | "\(.name)\t\(.kind)\t\(.pane)"' "$seats_file" 2>/dev/null)
+  if [[ -f "$seats_file" ]] && { (( workspace_missing )) || [[ "$(jq -r '.workspace_id // empty' "$seats_file" 2>/dev/null)" == "$ws_id" ]]; }; then
+    seats_spec=$(jq -r '.seats[]? | "\(.name)\t\(.kind)\t\(.pane)\t\(.agentless // false)"' "$seats_file" 2>/dev/null)
     src_label="seats.json ledger"
   else
     seats_spec=$(herdr agent list 2>/dev/null | jq -r --arg ws "$ws_id" \
-      '.result.agents[]? | select(.workspace_id == $ws) | "\(.name)\t\(.agent)\t\(.pane_id)"')
+      '.result.agents[]? | select(.workspace_id == $ws) | "\(.name)\t\(.agent)\t\(.pane_id)\tfalse"')
     src_label="live agent registry"
   fi
 
   printf '%s▸ Seat Verification — %s (%s)%s\n' "$BOLD" "$ws_id" "$src_label" "$RESET"
+
+  local failures=0 name kind pane agentless
+
+  # Missing-seat roster check (D4): the ledger only records seats that
+  # SEATED, so a seat whose launch failed on every chain kind is invisible
+  # to a ledger-only verify — including the total-failure case of an EMPTY
+  # ledger. Compare the configured, enabled roster against the seated names
+  # BEFORE any early return: a missing seat with critical = true is a failure
+  # in EVERY mode; a missing non-critical seat is a loud warning and is exported for the
+  # swarm_ready payload. SWARM_MISSING_SEATS / SWARM_MISSING_CRITICAL are
+  # set for the launcher (no subshell: the roster loop runs in this shell).
+  SWARM_MISSING_SEATS=""
+  SWARM_MISSING_CRITICAL=""
+  SWARM_CRITICAL_SEATS=""
+  local config_file="${abs_target}/swarm.config.toml" roster_key roster_name roster_critical roster_slug
+  if [[ ! -f "$config_file" && -f "${abs_target}/.herdr-swarm/config.path" ]]; then
+    local bound_cfg
+    bound_cfg=$(head -n1 "${abs_target}/.herdr-swarm/config.path" 2>/dev/null || true)
+    if [[ -n "$bound_cfg" && -f "$bound_cfg" ]]; then
+      config_file="$bound_cfg"
+    fi
+  fi
+  if [[ ! -f "$config_file" && -n "${STAMPEDE_CONFIG_FILE:-}" && -f "${STAMPEDE_CONFIG_FILE}" ]]; then
+    config_file="${STAMPEDE_CONFIG_FILE}"
+  fi
+  if [[ -f "$config_file" ]]; then
+    # Roster names must be namespaced exactly as config binding does it
+    # (lib/config.sh: "{name}-{slug}"); the ledger records full names. The
+    # slug derivation mirrors the launcher: profile REPO, else dir basename.
+    if ! declare -F slugify >/dev/null 2>&1; then
+      slugify() {
+        local s="${1:-}"
+        s=$(printf '%s' "$s" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_-]+/-/g')
+        if [[ -z "$s" ]]; then printf 'swarm\n'; return 0; fi
+        [[ "$s" =~ ^[a-z] ]] || s="s-${s}"
+        printf '%s\n' "$s"
+      }
+    fi
+    roster_slug=""
+    local profile_repo
+    # Quoted form matches ensure_profile's writer (REPO="owner/repo"); the
+    # bare form matches hand-written profiles. A missing/unreadable profile
+    # must not kill the verify (pipefail): fall back to the dir basename.
+    profile_repo=""
+    if [[ -f "${abs_target}/.herdr-swarm/profile.env" ]]; then
+      profile_repo=$(sed -nE 's/^REPO="?([^"]*)"?$/\1/p' "${abs_target}/.herdr-swarm/profile.env" 2>/dev/null | tail -n1 || true)
+    fi
+    if [[ -n "$profile_repo" && "$profile_repo" != none ]]; then
+      roster_slug=$(slugify "$profile_repo")
+    else
+      roster_slug=$(slugify "$(basename "$abs_target")")
+    fi
+    local roster_text roster_rc=0
+    roster_text=$("${PYTHON_BIN:-python3}" - "$config_file" "$roster_slug" <<'PYROSTER'
+import sys, tomllib
+with open(sys.argv[1], 'rb') as f:
+    cfg = tomllib.load(f)
+slug = sys.argv[2]
+for k, v in cfg.get('seats', {}).items():
+    if not v.get('enabled', True):
+        continue
+    critical = v.get('critical', False)
+    if not isinstance(critical, bool):
+        raise SystemExit(f'config error: seats.{k}.critical must be a boolean')
+    name = v.get('name', k)
+    full = f'{name}-{slug}' if slug else name
+    print(f'{k}|{full}|{1 if critical else 0}')
+PYROSTER
+) || roster_rc=$?
+    if (( roster_rc )); then
+      printf '  %s✖ could not read the configured seat roster%s\n' "$RED" "$RESET" >&2
+      return 1
+    fi
+    while IFS='|' read -r roster_key roster_name roster_critical; do
+      [[ -n "$roster_key" ]] || continue
+      if [[ "$roster_critical" == 1 ]]; then
+        SWARM_CRITICAL_SEATS+="${SWARM_CRITICAL_SEATS:+ }${roster_name}"
+      fi
+      if awk -F'\t' -v n="$roster_name" '$1 == n { found = 1 } END { exit !found }' <<<"$seats_spec"; then
+        continue
+      fi
+      if [[ "$roster_critical" == 1 ]]; then
+        printf '  %s✖ %s: configured critical seat missing from the %s (launch failed on every chain kind)%s\n' \
+          "$RED" "$roster_name" "$src_label" "$RESET"
+        SWARM_MISSING_CRITICAL+="${SWARM_MISSING_CRITICAL:+ }${roster_name}"
+        failures=1
+      else
+        printf '  %s⚠ %s: configured seat missing from the %s — launch failed; swarm continues without it%s\n' \
+          "$YELLOW" "$roster_name" "$src_label" "$RESET"
+        SWARM_MISSING_SEATS+="${SWARM_MISSING_SEATS:+ }${roster_name}"
+      fi
+    done <<<"$roster_text"
+  fi
 
   if [[ -z "$seats_spec" ]]; then
     printf '  %s✖ no seats recorded for this workspace%s\n' "$RED" "$RESET"
     return 1
   fi
 
-  local failures=0 name kind pane
-  while IFS=$'\t' read -r name kind pane; do
+  while IFS=$'\t' read -r name kind pane agentless; do
     [[ -n "$name" ]] || continue
+    if [[ "$agentless" == true ]]; then
+      if herdr pane list 2>/dev/null | jq -e --arg p "$pane" '.result.panes[]? | select(.pane_id == $p)' >/dev/null 2>&1; then
+        printf '  %s✓ %s (%s in %s): pane present%s\n' "$GREEN" "$name" "$kind" "$pane" "$RESET"
+      else
+        printf '  %s✖ %s: pane not present%s\n' "$RED" "$name" "$RESET"
+        failures=1
+      fi
+      continue
+    fi
     if ! herdr agent get "$name" >/dev/null 2>&1; then
       printf '  %s✖ %s: agent not registered%s\n' "$RED" "$name" "$RESET"
       failures=1
       continue
     fi
-    if seat_wait_ready "$name" "$pane" "$timeout_ms"; then
+    if seat_wait_ready "$name" "$pane" "$timeout_ms" "$kind"; then
       printf '  %s✓ %s (%s in %s): %s%s\n' "$GREEN" "$name" "$kind" "$pane" "$SEAT_WAIT_MODE" "$RESET"
     else
       printf '  %s✖ %s: not ready within %sms%s\n' "$RED" "$name" "$timeout_ms" "$RESET"
@@ -713,6 +850,9 @@ swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
     fi
   done <<<"$seats_spec"
 
+  if (( workspace_missing )); then
+    failures=1
+  fi
   return "$failures"
 }
 

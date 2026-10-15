@@ -50,7 +50,7 @@ lint:
 	shellcheck $(LINT_SH); \
 	shellcheck --severity=warning $(LINT_TESTS_SH); \
 	for f in $(LINT_SH) $(LINT_TESTS_SH); do bash -n "$$f"; done; \
-	"$$PYTHON_BIN" -m py_compile lib/telemetry.py; \
+	"$$PYTHON_BIN" -m py_compile lib/telemetry.py lib/setup.py lib/attention.py; \
 	printf 'Lint clean (%d shell files: %d strict, %d warnings-bar)\n' \
 	  "$$(($(words $(LINT_SH)) + $(words $(LINT_TESTS_SH))))" "$(words $(LINT_SH))" "$(words $(LINT_TESTS_SH))"
 

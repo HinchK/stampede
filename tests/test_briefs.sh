@@ -65,8 +65,8 @@ out=$(deliver_brief_nonce seat-x "$BRIEF" 2>"$SCRATCH/e") && rc=0 || rc=$?
   && ok "single-submission delivery on --wait-capable herdr" || bad "delivery: rc=$rc out=$out"
 [[ "$(grep -c '^agent prompt seat-' "$B_LOG")" == 1 ]] \
   && ok "exactly one agent prompt per delivery" || bad "prompt count: $(grep -c '^agent prompt seat-' "$B_LOG")"
-grep -q -- '--wait --timeout 15000$' "$B_LOG" \
-  && ok "prompt carries --wait --timeout 15000 (options after text)" || bad "argv: $(cat "$B_LOG")"
+grep -q -- '--wait --timeout 90000$' "$B_LOG" \
+  && ok "prompt carries --wait --timeout 90000 (options after text)" || bad "argv: $(cat "$B_LOG")"
 if grep -Eq 'send-keys|^agent wait ' "$B_LOG"; then
   bad "legacy double-enter/pre-wait traffic present: $(grep -E 'send-keys|^agent wait ' "$B_LOG")"
 else

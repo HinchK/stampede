@@ -10,9 +10,20 @@
 # never affect the exit code — you opted out, you don't get gaslit.
 
 stampede_cmd_doctor() {
-  local root config="${STAMPEDE_CONFIG:-}" seat kind enabled
+  local root repo="${REPO_DIR:-$PWD}" config="${STAMPEDE_CONFIG:-}" seat kind enabled
   root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-  [[ -n "$config" ]] || config="$root/swarm.config.toml"
+  if [[ "${1:-}" == -h || "${1:-}" == --help ]]; then
+    printf 'Usage: stampede doctor [repo]\n'
+    return 0
+  fi
+  if [[ -n "${1:-}" ]]; then
+    repo=$(cd "$1" 2>/dev/null && pwd -P) || { printf 'doctor: repo not found: %s\n' "$1" >&2; return 1; }
+  fi
+  if [[ -z "$config" ]]; then
+    if [[ -f "$repo/swarm.config.toml" ]]; then config="$repo/swarm.config.toml"
+    else config="$root/swarm.config.toml"; fi
+  fi
+  REPO_DIR="$repo"
 
   # shellcheck disable=SC1091  # sibling libs resolved from orchestrator root
   source "$root/lib/common.sh"

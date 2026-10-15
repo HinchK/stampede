@@ -227,3 +227,23 @@
     - **SNAP-1 (INTEGRATED & RESOLVED)**: Implemented by `arch-2-hinchk-stampede` at commit `e4c015e95795817960751f2013556633c662e659` (`e4c015e`), swept at `9582ec69d21c5e08317744af666137fc0282eb8b` (`9582ec6`). Capture transcript tails and ledgers to `.herdr-swarm/snapshots/<ts>/` before `swarm down` closes panes. Tests in `tests/test_worktree.sh` §9b.
     - **Epic Closeout**: "Pick Up Where We Left Off" epic completed and closed out.
     - **Total Test Suite Health**: All 21 suites green (`make check`), 0 ShellCheck warnings.
+
+14. **Frontier Swarm Pivot & Map-Aware Bounded Dispatcher (VERIFIED & GREEN)**:
+    - **Epic Charter**: Chartered from the frontier swarm pivot plan (`docs/superpowers/plans/2026-10-13-frontier-swarm-pivot.md`), session handoff (`stampede-handoff-h7n6kqra.md`), and `#TICKET-opencode-seat-launch`.
+    - **Map-Aware Bounded Dispatcher**: Implemented map body and checklist parser in `lib/attention.py` (`map_body`, `map_tickets`). Updated `next_ready_ticket` to prioritize unticked items from `.herdr-swarm/active-map`, and updated `issue_ready` and `event` to accept local and remote tickets from active maps without requiring `loop:ready` label pre-application. In `herdr-loop-swarm.sh`, removed bounded resume refusal, bound active map on `-m r -n <MAP_NUM>`, and announced next unticked ticket. In `loop-bot-herd.sh`, tagged frontier drain rules with `map:<id>`. In `lib/cli/stampede-attention.sh`, added `stampede attention <repo> next` CLI inspection.
+    - **OpenCode Seat Launch Defect Closures (D1–D4 / #TICKET-opencode-seat-launch)**:
+      - **D1 (TUI Model Pinning)**: Replaced unsupported `--model` CLI invocation with per-seat `.opencode/opencode.json` configuration in `lib/providers.sh` (`providers_write_opencode_model`).
+      - **D2 (Model ID & Preflight)**: Corrected GLM-5.3 identifier to `zai-coding-plan/glm-5.3` in `swarm.config.toml` and `lib/setup.py`. Added fail-closed model preflight validation (`providers_validate_models`) in `lib/preflight.sh`.
+      - **D3 (Launch Failure Fallback)**: Added active agent registration verification in `providers_launch_agent`; failed seat launches fall back to next configured chain provider (e.g. Claude) and record `seat.fallback` telemetry.
+      - **D4 (Missing-Seat Visibility)**: Reordered `swarm_verify_seats` in `lib/lifecycle.sh` to check configured roster before empty-ledger early return (`tests/test_seat_missing.sh`). Critical arch seats fail closed; non-critical seats warn and carry `missing_seats`.
+    - **OpenCode Brief Delivery Timeout**: Increased brief delivery prompt wait timeout in `lib/briefs.sh` from 15,000ms (15s) to 90,000ms (90s) (`--wait --timeout 90000`) and updated test assertions in `tests/test_briefs.sh`, resolving false-timeout errors during OpenCode / GLM-5.3 startup posture parsing.
+    - **Setup Config Preservation**: Enhanced `lib/setup.py` (`render_config`, `append_table`, `toml_value`) to preserve non-seat project settings, reviewer loop configuration, and custom reviewer seats across repeated or modified setup runs. Verified in `tests/test_setup.sh`.
+    - **Ambient Test Hygiene**: Unset `HERDR_PANE_ID`, `HERDR_WORKSPACE_ID`, and `HERDR_ENV` in `tests/test_frontier_launch.sh` to prevent host terminal workspace leaking into mock test assertions.
+    - **Incidental Findings Recorded**:
+      1. Fresh-pane shell race (`not an available shell` on instant `agent start`).
+      2. Claude fresh-dir interactive trust dialog blocking automated readiness.
+      3. OpenCode background service caches project configuration per directory.
+    - **Live Findings Follow-up (F-A & F-B Resolved)**:
+      - **F-A (Universal Target Roster Check Bypass)**: Persisted active config path to `.herdr-swarm/config.path` at launch time in `herdr-loop-swarm.sh`. Updated `swarm_verify_seats` in `lib/lifecycle.sh` to resolve config via `.herdr-swarm/config.path` and `STAMPEDE_CONFIG_FILE` fallback, ensuring config-less universal targets enforce missing-seat roster checks and fail closed on missing critical seats (`tests/test_seat_missing.sh` Scenarios C and D).
+      - **F-B (OpenCode Verify Anchor Invisibility)**: Updated `seat_wait_ready` in `lib/lifecycle.sh` to accept seat kind. For `opencode`, bypasses `pane wait-output` (whose `STANDING BRIEF:` anchor is scrolled off by alternate-screen TUI redraws) and routes to `herdr agent wait --until idle|done|working`, eliminating false-negative verify timeouts (`tests/test_cli.sh`).
+    - **Total Test Suite Health**: All 27 suites green (`make check`), 0 ShellCheck warnings (58 shell files).

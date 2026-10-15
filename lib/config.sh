@@ -14,7 +14,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/pyenv.sh"
 resolve_python
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-DEFAULT_CONFIG="${SCRIPT_DIR}/swarm.config.toml"
+DEFAULT_CONFIG="${STAMPEDE_CONFIG_FILE:-${SCRIPT_DIR}/swarm.config.toml}"
 
 # Run python code with argv (never interpolated into the source): argv[1] is
 # the TOML path, extra args follow. Stderr is suppressed; failure is tolerated
@@ -133,6 +133,16 @@ fanout = cfg.get('fanout', {})
 seats = cfg.get('seats', {})
 reviewer = cfg.get('reviewer', {})
 headless = cfg.get('headless', {})
+attention = cfg.get('attention', {})
+
+attention_mode = attention.get('mode', 'medium')
+if attention_mode not in ('quiet', 'medium', 'loud'):
+    sys.exit('config error: attention.mode must be quiet, medium, or loud')
+emit('CONFIG_ATTENTION_MODE', attention_mode)
+bounded_looper = attention.get('bounded_looper', False)
+if not isinstance(bounded_looper, bool):
+    sys.exit('config error: attention.bounded_looper must be a boolean')
+emit('CONFIG_BOUNDED_LOOPER', 1 if bounded_looper else 0)
 
 emit('SWARM_CONFIG_NAME', swarm.get('name', 'herd'))
 emit('SWARM_WORKSPACE_LABEL', swarm.get('workspace_label', 'herd'))
@@ -235,7 +245,7 @@ for k in enabled_seats:
     wt = s.get('worktree', False)
     if not isinstance(wt, bool):
         sys.exit(f"config error: seats.{k}.worktree must be a boolean (got {type(wt).__name__})")
-    if wt and (k in ('looper', 'pm') or s.get('name') in ('looper', 'pm')):
+    if wt and (k in ('looper', 'pm') or s.get('name') in ('looper', 'pm')) and not bounded_looper:
         sys.exit(f"config error: seats.{k} is a root anchor and cannot set worktree = true (ADR 0006 §4.A)")
     emit(f'SEAT_WORKTREE_{k}', 1 if wt else 0)
 PYCODE

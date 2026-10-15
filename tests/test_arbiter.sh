@@ -486,16 +486,17 @@ check "auto-wire conflict lists the conflicting file" \
 check "auto-wire conflict never touches main" \
   '[[ $(git -C "$REPO" rev-parse main) == "$MAIN_AUTO" ]]'
 
-# CLI parity: the enqueue subcommand auto-drains (operator runs one step,
-# not two); drain stays for manual re-runs. seat-g's follow-up restores
-# alpha.txt to its base content so the merge is clean.
+# CLI enqueue now preserves a human drain decision. seat-g's follow-up
+# restores alpha.txt to its base content so the merge is clean.
 printf 'alpha\n' > "$TEST_DIR/wg/alpha.txt"
 printf 'golf\n' > "$TEST_DIR/wg/golf.txt"
 SHA_G2=$(commit_at "$TEST_DIR/wg" "seat-g clean work")
 bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/arbiter.sh" \
   enqueue 211 seat-g "$SHA_G2" >/dev/null 2>&1
-ck 211 integrated "CLI enqueue auto-drains (no separate drain invocation)"
-check "CLI auto-drain never touches main" \
+ck 211 queued "CLI enqueue leaves the candidate queued"
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/arbiter.sh" drain >/dev/null 2>&1
+ck 211 integrated "explicit CLI drain integrates the candidate"
+check "CLI drain never touches main" \
   '[[ $(git -C "$REPO" rev-parse main) == "$MAIN_AUTO" ]]'
 
 # serialization: while another drain holds arbiter.lock, enqueue_and_drain
