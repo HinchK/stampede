@@ -1,7 +1,7 @@
 # ADR 0014: Arbiter Drain Automation and Non-Blocking Supervisor Integration
 
-- **Status**: Accepted
-- **Date**: 2026-09-23
+- **Status**: Accepted (Amended 2026-10-15)
+- **Date**: 2026-09-23 (Amended 2026-10-15)
 - **Deciders**: `arch`, `pm`, `looper`, `agy-docs`
 - **Consulted**: [ADR 0009: Arbiter Branch Integration and CAS Merge](0009-arbiter-branch-integration-and-cas-merge.md), [ADR 0013: Asynchronous Supervisor Suite Gating](0013-asynchronous-supervisor-gate-jobs.md), [PROVE-4 Ticket](../../maps/tickets/prove-auto-wire-arbiter-drain.md), [PROVE-5 Ticket](../../maps/tickets/prove-drain-adr.md), [PM Audit 2026-09-23 §6](../audits/2026-09-23-promote-blocker-and-unproven-reviewer-loop.md)
 
@@ -123,3 +123,9 @@ This architecture explicitly distinguishes **integration** from **promotion**:
 ### Neutral / Trade-offs
 - **Background Resource Usage**: Spawning background drain suites consumes CPU and I/O during integration passes. Concurrency bounds and `arbiter.lock` serialization prevent runaway resource exhaustion.
 - **Operator Model Realignment**: Operators must understand that `drain` occurs automatically, but `promote` remains manual. Telemetry and `bin/stampede status` reflect the live state of both refs.
+
+## 6. Amendment (2026-10-15, PR #157): Drain Is Explicit Again
+
+The frontier-swarm workflow puts a human inspection between a GREEN gate and integration. `cmd_once` no longer calls `arbiter_auto_drain`, so ordinary watcher passes leave GREEN candidates queued. Draining happens only through an explicit command: a human `stampede arbiter <dir> drain`, or the supervisor's `drain-queued` subcommand for deliberate automation. `arbiter_enqueue_and_drain` stays available to headless callers that opt in. `tests/test_manual_arbiter.sh` guards that a normal pass never drains.
+
+This reverses the "Zero Operator Drain Burden" consequence above for interactive swarms. Sections 4.A and 4.C still describe the drain itself. Section 4.B now describes the `drain-queued` path, not the polling loop. Leases still release only on integration evidence (DOG-16), so a ticket stays leased until a human drains it.
