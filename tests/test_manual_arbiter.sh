@@ -33,6 +33,7 @@ frontier_drain
 
 rm -f "$STATE_DIR/seat-only"
 printf 'REPO=none\nTEST_CMD=make test\n' > "$STATE_DIR/profile.env"
+# shellcheck disable=SC2034  # read by the sourced frontier_drain function
 REPO=none
 printf '17\n' > "$STATE_DIR/active-map"
 printf '{"paused": false, "frontier_drain": false, "suite_gate": true}\n' > "$STATE_DIR/control.json"

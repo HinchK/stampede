@@ -1307,7 +1307,6 @@ cmd_once() {
   harvest_verdicts
   gate_reap
   # A green candidate stays queued until a human runs arbiter drain.
-  arbiter_auto_drain    # PROVE-4: green enqueues drain without an operator
   arbiter_handback_feedback
   lease_release_integrated   # DOG-16: freed by integration evidence, never by green
   unpushed_watch
