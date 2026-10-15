@@ -265,4 +265,84 @@ git -C "$REPO" worktree add --detach -q "$LINKED"
 git -C "$LINKED" check-ignore -q .herdr-swarm/test.log \
   || fail 'linked worktree runtime state is not excluded'
 
+fresh_repo() {
+  mkdir -p "$1"
+  git -C "$1" init -q
+  git -C "$1" -c user.name=Test -c user.email=test@example.com commit --allow-empty -qm initial
+}
+seat_block() { # FILE KEY — the [seats.KEY] table body
+  awk -v h="[seats.$2]" '$0 == h { on = 1; next } /^\[/ { on = 0 } on' "$1"
+}
+
+# A provider-only edit applies the provider's compatible model too, so an
+# OpenCode model is never left behind on a Claude seat.
+EDIT_REPO="$TMP/edit repo"
+fresh_repo "$EDIT_REPO"
+"$ROOT/bin/stampede" setup "$EDIT_REPO" --non-interactive --launcher "$TMP/edit-yeehaw.sh" >/dev/null \
+  || fail 'edit fixture setup failed'
+"$ROOT/bin/stampede" setup "$EDIT_REPO" --non-interactive --force --launcher "$TMP/edit-yeehaw.sh" \
+  --provider architect=claude >/dev/null || fail 'provider-only edit failed'
+seat_block "$EDIT_REPO/swarm.config.toml" arch_1 | grep -q 'default_kind = "claude"' \
+  || fail 'provider-only edit did not change the existing architect provider'
+seat_block "$EDIT_REPO/swarm.config.toml" arch_1 | grep -q 'model = "sonnet"' \
+  || fail 'provider-only edit kept an incompatible OpenCode model on a Claude seat'
+
+# Interactive answers reach existing seats, not only fresh ones.
+printf '%s\n' edit '' '' '' '' '' '' '' '' '' '' opencode zai-coding-plan/glm-5.3-flash '' '' '' '' yes \
+  | "$ROOT/bin/stampede" setup "$EDIT_REPO" --launcher "$TMP/edit-yeehaw.sh" >/dev/null 2>&1 \
+  || fail 'interactive edit failed'
+seat_block "$EDIT_REPO/swarm.config.toml" arch_1 | grep -q 'default_kind = "opencode"' \
+  || fail 'interactive provider answer was not saved to the existing architect'
+seat_block "$EDIT_REPO/swarm.config.toml" arch_1 | grep -q 'model = "zai-coding-plan/glm-5.3-flash"' \
+  || fail 'interactive model answer was not saved to the existing architect'
+
+# The launcher path answered interactively can never replace the config.
+SAME_REPO="$TMP/same file repo"
+fresh_repo "$SAME_REPO"
+if printf '%s\n' '' '' '' '' '' '' '' '' '' '' '' '' '' '' '' "$SAME_REPO/swarm.config.toml" yes \
+    | "$ROOT/bin/stampede" setup "$SAME_REPO" --launcher "$TMP/same-yeehaw.sh" >/dev/null 2>&1; then
+  fail 'setup accepted the config path as the launcher destination'
+fi
+[[ ! -e "$SAME_REPO/swarm.config.toml" ]] || python3 -c 'import sys, tomllib; tomllib.load(open(sys.argv[1], "rb"))' \
+  "$SAME_REPO/swarm.config.toml" || fail 'launcher overwrote the generated config'
+
+# An attention-only edit keeps the architect roster size when the existing
+# architect has a custom key or a descriptive role.
+ROLE_REPO="$TMP/role repo"
+fresh_repo "$ROLE_REPO"
+cat > "$ROLE_REPO/swarm.config.toml" <<'EOF'
+[seats.looper]
+name = "looper"
+role = "Autonomous Loop Orchestrator"
+default_kind = "agy"
+model = "gemini-3.8-flash-low"
+
+[seats.pm]
+name = "pm"
+role = "Product Manager & Overseer"
+default_kind = "claude"
+model = "sonnet"
+
+[seats.builder]
+name = "builder"
+role = "architect"
+default_kind = "opencode"
+model = "zai-coding-plan/glm-5.3"
+EOF
+"$ROOT/bin/stampede" setup "$ROLE_REPO" --non-interactive --force --launcher "$TMP/role-yeehaw.sh" \
+  --attention quiet >/dev/null || fail 'custom-key attention edit failed'
+grep -q '\[seats.builder\]' "$ROLE_REPO/swarm.config.toml" || fail 'custom architect key was dropped'
+! grep -q '\[seats.arch_' "$ROLE_REPO/swarm.config.toml" || fail 'attention-only edit added architects beside builder'
+grep -c '^\[seats.pm' "$ROLE_REPO/swarm.config.toml" | grep -qx 1 || fail 'descriptive PM role grew the PM roster'
+DESC_REPO="$TMP/descriptive repo"
+fresh_repo "$DESC_REPO"
+sed -e 's/^\[seats.builder\]/[seats.arch_1]/' -e 's/^name = "builder"/name = "arch-1"/' \
+  -e 's/^role = "architect"/role = "Implementation Engine (GLM-5.3)"/' \
+  "$ROLE_REPO/swarm.config.toml.bak" > "$DESC_REPO/swarm.config.toml"
+"$ROOT/bin/stampede" setup "$DESC_REPO" --non-interactive --force --launcher "$TMP/desc-yeehaw.sh" \
+  --attention quiet >/dev/null || fail 'descriptive-role attention edit failed'
+! grep -q '\[seats.arch_2\]' "$DESC_REPO/swarm.config.toml" || fail 'descriptive architect role grew the roster'
+seat_block "$DESC_REPO/swarm.config.toml" arch_1 | grep -q 'critical = true' \
+  || fail 'descriptive architect role lost its critical default'
+
 printf 'test_setup: PASS\n'

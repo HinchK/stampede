@@ -22,6 +22,7 @@ ROLES = (
     ("helper", "agy", "gemini-3.8-flash-low", "low", "briefs/helper.md", "ops"),
 )
 KINDS = ("agy", "claude", "opencode")
+ROLE_NAMES = {row[0] for row in ROLES}
 
 
 def ask(label, default):
@@ -147,6 +148,24 @@ exec {shlex.quote(str(stampede))} up {shlex.quote(str(target))} -m "$mode" -t "$
 '''
 
 
+def seat_role(key, seat):
+    # Shipped and init configs use descriptive roles, so the key decides then.
+    if seat.get("role") in ROLE_NAMES:
+        return seat["role"]
+    if re.fullmatch(r"arch(_\d+)?", key):
+        return "architect"
+    if re.fullmatch(r"pm(_\d+)?", key):
+        return "pm"
+    return key
+
+
+def fresh_key(role, taken):
+    index = 1
+    while seat_key_for(role, index) in taken and seat_key_for(role, index) != seat_key_for(role, index + 1):
+        index += 1
+    return seat_key_for(role, index)
+
+
 def seat_key_for(role, index):
     if role == "architect":
         return f"arch_{index}"
@@ -182,19 +201,9 @@ def apply_explicit_choice(seat, role, choices, provider_overrides, model_overrid
     if role in model_overrides:
         seat["model"] = model
         seat["cost_tier"] = cost_tier(model)
-    if seat.get("role") in ("pm", "architect") and "critical" not in seat:
+    if role in ("pm", "architect") and "critical" not in seat:
         seat["critical"] = True
     return seat
-
-
-def surplus_indexed_seat(key, counts):
-    arch = re.fullmatch(r"arch_(\d+)", key)
-    if arch and int(arch.group(1)) > counts.get("architect", 1):
-        return True
-    pm = re.fullmatch(r"pm_(\d+)", key)
-    if pm and int(pm.group(1)) > counts.get("pm", 1):
-        return True
-    return False
 
 
 def render_config(target, choices, counts, attention, existing=None,
@@ -217,12 +226,20 @@ def render_config(target, choices, counts, attention, existing=None,
         if key not in ("swarm", "attention", "seats") and isinstance(values, dict):
             append_table(lines, (key,), values)
     role_meta = {role: (brief, tab) for role, _, _, _, brief, tab in ROLES}
+    by_role = {}
+    for key, seat in existing_seats.items():
+        by_role.setdefault(seat_role(key, seat), []).append(key)
     generated_keys = set()
     for role, _, _, _, _, _ in ROLES:
         count = counts[role] if role in counts else 1
         brief, tab = role_meta[role]
+        existing_keys = by_role.get(role, [])
         for index in range(1, count + 1):
-            key = seat_key_for(role, index)
+            # Existing seats of a role fill its slots first, whatever their key.
+            if index <= len(existing_keys):
+                key = existing_keys[index - 1]
+            else:
+                key = fresh_key(role, generated_keys | set(existing_seats))
             generated_keys.add(key)
             prior = existing_seats.get(key)
             if prior:
@@ -232,10 +249,11 @@ def render_config(target, choices, counts, attention, existing=None,
                 seat = fresh_seat(key, role, kind, model, brief, tab)
             append_table(lines, ("seats", key), seat)
     for key, seat in existing_seats.items():
-        if key in generated_keys or surplus_indexed_seat(key, counts):
+        # A counted role's unused seats are surplus; other custom seats stay.
+        if key in generated_keys or seat_role(key, seat) in counts:
             continue
         preserved = dict(seat)
-        if preserved.get("role") in ("pm", "architect") and "critical" not in preserved:
+        if seat_role(key, seat) in ("pm", "architect") and "critical" not in preserved:
             preserved["critical"] = True
         append_table(lines, ("seats", key), preserved)
     return "\n".join(lines) + "\n"
@@ -283,7 +301,7 @@ def main():
     old_choices = {}
     old_counts = {"pm": 0, "architect": 0}
     for key, seat in existing.get("seats", {}).items():
-        role = seat.get("role") or ("architect" if key.startswith("arch") else "pm" if key.startswith("pm") else key)
+        role = seat_role(key, seat)
         if role in old_counts:
             old_counts[role] += 1
         if role not in old_choices and seat.get("default_kind") and seat.get("model"):
@@ -385,6 +403,8 @@ def main():
         if attention not in ("quiet", "medium", "loud"):
             parser.error("attention mode must be quiet, medium, or loud")
         launcher = Path(ask("Save quick launcher at", str(launcher))).expanduser().resolve()
+        if launcher == config:
+            parser.error("launcher and configuration cannot be the same file")
         if launcher.exists() and not args.force:
             parser.error("quick launcher exists; use --force for a backed-up replacement")
     print(f"Setup summary: {args.pm_count} PM, {args.architect_count} architects, attention {attention}")
@@ -392,9 +412,13 @@ def main():
     if not args.non_interactive and ask("Write these files? (yes/no)", "yes").lower() not in ("yes", "y"):
         print("Setup cancelled; no files changed.")
         return
+    # A changed role gets its provider and model together, from flags or
+    # answers alike; unchanged roles keep each existing seat's own pins.
+    changed = {role for role, choice in choices.items()
+               if role in providers or role in models
+               or (role in old_choices and choice != old_choices[role])}
     content = render_config(target, choices, {"pm": args.pm_count, "architect": args.architect_count},
-                            attention, existing, provider_overrides=set(providers),
-                            model_overrides=set(models))
+                            attention, existing, provider_overrides=changed, model_overrides=changed)
     staged_config = stage(config, content)
     staged_launcher = stage(launcher, launcher_text(root / "bin/stampede", target), executable=True)
     try:
