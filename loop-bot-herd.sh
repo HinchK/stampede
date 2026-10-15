@@ -1230,7 +1230,9 @@ cmd_dispatch() { # dispatch WORKER BRIEF_FILE [TICKET]
   local worker="$1" brief="$2" ticket="${3:-}" nonce out
   [[ -f "$brief" ]] || { bad "brief file not found: $brief"; exit 1; }
   # Before the guard: a refused sync must not leave a lease behind.
-  if [[ -n "$ticket" ]] && ! dispatch_sync_worker "$worker"; then
+  # A ticket arrives as the argument or as the brief's own frontmatter.
+  if { [[ -n "$ticket" ]] || _dispatch_resolve_ticket "$brief" >/dev/null; } \
+      && ! dispatch_sync_worker "$worker"; then
     exit 1
   fi
   if ! dispatch_partition_guard "$worker" "$brief" "$ticket"; then

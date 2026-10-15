@@ -122,4 +122,15 @@ fi
 ( cmd_dispatch pm-test "$TMP/sync-brief.md" 20 ) >/dev/null 2>&1 || { echo 'root anchor dispatch failed' >&2; exit 1; }
 [[ "$(git -C "$G" rev-parse main)" == "$main_before" ]] || { echo 'dispatch moved the base checkout' >&2; exit 1; }
 
+# A brief carrying ticket frontmatter is a ticket too: it syncs without the
+# optional ticket argument.
+W3="$TMP/w3"
+git -C "$G" worktree add -q -b swarm/test/arch_3 "$W3" main
+printf '{"seats":[{"name":"arch-3-test","isolated":true,"worktree_dir":"%s"}]}' "$W3" > "$STATE_DIR/seats.json"
+printf -- '---\nid: 21\nowns: src/next.py\n---\n\nNext task\n' > "$TMP/sync-ticket-brief.md"
+( cmd_dispatch arch-3-test "$TMP/sync-ticket-brief.md" ) >/dev/null 2>&1 \
+  || { echo 'frontmatter ticket dispatch failed' >&2; exit 1; }
+[[ "$(git -C "$W3" rev-parse HEAD)" == "$(git -C "$G" rev-parse swarm/test/integration)" ]] \
+  || { echo 'frontmatter ticket brief skipped the checkout sync' >&2; exit 1; }
+
 printf 'test_manual_arbiter: PASS\n'
