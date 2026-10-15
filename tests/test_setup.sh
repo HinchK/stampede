@@ -35,6 +35,12 @@ grep -q '\[seats.arch_2\]' "$REPO/swarm.config.toml" || fail 'second architect a
 grep -q 'briefs/arch-frontier.md' "$REPO/swarm.config.toml" || fail 'architect still uses persistent-looper brief'
 grep -q '\[seats.helper\]' "$REPO/swarm.config.toml" || fail 'helper absent'
 grep -q 'briefs/helper.md' "$REPO/swarm.config.toml" || fail 'helper not bounded to its own brief'
+grep -A9 '\[seats.pm\]' "$REPO/swarm.config.toml" | grep -q 'critical = true' \
+  || fail 'PM seat is not marked critical'
+grep -A9 '\[seats.arch_1\]' "$REPO/swarm.config.toml" | grep -q 'critical = true' \
+  || fail 'architect seat is not marked critical'
+grep -A9 '\[seats.docs\]' "$REPO/swarm.config.toml" | grep -q 'critical = true' \
+  && fail 'docs seat must not be critical'
 for seat in pm gh docs helper; do
   grep -A9 "\[seats.$seat\]" "$REPO/swarm.config.toml" | grep -q 'worktree = true' \
     || fail "$seat can write the base checkout"
@@ -112,7 +118,7 @@ printf '{"workspace_id":"w1","seats":[{"name":"looper-test","kind":"shell","pane
 # roster matches the seeded ledger exactly (dir name "test" is the slug:
 # looper-test / arch-test).
 mkdir -p "$TMP/test/.herdr-swarm"
-printf '[seats.looper]\nname = "looper"\ndefault_kind = "agy"\n\n[seats.arch_1]\nname = "arch"\ndefault_kind = "opencode"\n' > "$TMP/test/swarm.config.toml"
+printf '[seats.looper]\nname = "looper"\ndefault_kind = "agy"\n\n[seats.arch_1]\nname = "arch"\ndefault_kind = "opencode"\ncritical = true\n' > "$TMP/test/swarm.config.toml"
 cp "$REPO/.herdr-swarm/seats.json" "$TMP/test/.herdr-swarm/seats.json"
 LIFECYCLE_TARGET="$TMP/test" bash -c '
   source "$1/lib/lifecycle.sh"
@@ -125,6 +131,7 @@ LIFECYCLE_TARGET="$TMP/test" bash -c '
 # D4 total-failure case: an EMPTY ledger with a configured critical seat
 # must fail verification and name the missing critical seat — the early
 # "no seats recorded" return must not bypass the roster comparison.
+printf '[seats.looper]\nname = "looper"\ndefault_kind = "agy"\n\n[seats.arch_1]\nname = "arch"\ndefault_kind = "opencode"\ncritical = true\n\n[seats.builder]\nname = "builder"\ndefault_kind = "opencode"\ncritical = true\n\n[seats.arch_9]\nname = "arch-9"\ndefault_kind = "opencode"\n' > "$TMP/test/swarm.config.toml"
 printf '{"workspace_id":"w1","seats":[]}' > "$TMP/test/.herdr-swarm/seats.json"
 LIFECYCLE_TARGET="$TMP/test" bash -c '
   source "$1/lib/lifecycle.sh"
@@ -134,7 +141,10 @@ LIFECYCLE_TARGET="$TMP/test" bash -c '
   seat_wait_ready() { SEAT_WAIT_MODE=ready; return 0; }
   swarm_verify_seats "$LIFECYCLE_TARGET" >/dev/null 2>&1 || true
   [[ -n "${SWARM_MISSING_CRITICAL:-}" ]] || exit 1
-  case " ${SWARM_MISSING_CRITICAL} " in *" arch-test "*) exit 0 ;; *) exit 1 ;; esac
+  case " ${SWARM_MISSING_CRITICAL} " in *" arch-test "*) ;; *) exit 1 ;; esac
+  case " ${SWARM_MISSING_CRITICAL} " in *" builder-test "*) ;; *) exit 1 ;; esac
+  case " ${SWARM_MISSING_CRITICAL} " in *" arch-9-test "*) exit 1 ;; esac
+  case " ${SWARM_MISSING_SEATS:-} " in *" arch-9-test "*) exit 0 ;; *) exit 1 ;; esac
 ' _ "$ROOT" || fail 'empty ledger with a configured critical seat must fail verify (D4)'
 
 before=$(shasum "$REPO/swarm.config.toml" | cut -d' ' -f1)
@@ -172,9 +182,44 @@ tab = "ops"
 enabled = true
 EOF
 
+python3 - "$REPO/swarm.config.toml" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+text = text.replace('name = "arch-1"\n', 'name = "builder"\nposition = "top-right"\nkinds = ["opencode", "claude"]\n', 1)
+text = text.replace('[seats.helper]\n', '[seats.helper]\nenabled = false\n', 1)
+text += '''
+[seats.notes]
+name = "notes"
+role = "notes"
+default_kind = "agy"
+model = "gemini-3.8-flash-low"
+brief = "briefs/notes.md"
+tab = "ops"
+position = "bottom"
+'''
+path.write_text(text)
+PY
+"$ROOT/bin/stampede" setup "$REPO" --non-interactive --force --launcher "$TMP/yeehaw.sh" \
+  --attention quiet >/dev/null || fail 'attention-only edit failed'
+grep -q 'mode = "quiet"' "$REPO/swarm.config.toml" || fail 'attention-only edit missed the mode'
+grep -A8 '\[seats.arch_1\]' "$REPO/swarm.config.toml" | grep -q 'name = "builder"' \
+  || fail 'attention-only edit reset a custom seat name'
+grep -A12 '\[seats.arch_1\]' "$REPO/swarm.config.toml" | grep -Fq 'kinds = ["opencode", "claude"]' \
+  || fail 'attention-only edit dropped the fallback chain'
+grep -A12 '\[seats.arch_1\]' "$REPO/swarm.config.toml" | grep -q 'position = "top-right"' \
+  || fail 'attention-only edit dropped the seat position'
+grep -A3 '\[seats.helper\]' "$REPO/swarm.config.toml" | grep -q 'enabled = false' \
+  || fail 'attention-only edit cleared enabled = false'
+grep -q '\[seats.notes\]' "$REPO/swarm.config.toml" || fail 'attention-only edit dropped a custom seat'
+grep -q '\[seats.reviewer\]' "$REPO/swarm.config.toml" || fail 'attention-only edit dropped the reviewer'
 "$ROOT/bin/stampede" setup "$REPO" --non-interactive --force --launcher "$TMP/yeehaw.sh" \
   --attention quiet --provider architect=claude --model architect=opus \
   --architect-count 3 --pm-count 2 >/dev/null || fail 'replacement failed'
+grep -A8 '\[seats.arch_1\]' "$REPO/swarm.config.toml" | grep -q 'name = "builder"' \
+  || fail 'provider edit reset a custom seat name'
+grep -q '\[seats.notes\]' "$REPO/swarm.config.toml" || fail 'provider edit dropped a custom seat'
 [[ -f "$REPO/swarm.config.toml.bak" && -f "$TMP/yeehaw.sh.bak" ]] || fail 'backups absent'
 grep -q 'mode = "quiet"' "$REPO/swarm.config.toml" || fail 'chosen attention absent'
 grep -q '\[seats.arch_3\]' "$REPO/swarm.config.toml" || fail 'scaled architect absent'

@@ -70,6 +70,8 @@ enforce_floor = true
 auto_relocate_cramped = true
 
 # Agent Seats Definition
+# critical = true fails launch when that seat never seats. The flag is the
+# protection; the seat key can be renamed without editing shell code.
 [seats.pm]
 name = "pm"
 role = "Product Manager & Overseer"
@@ -78,6 +80,7 @@ model = "claude-3-7-sonnet"
 brief = "briefs/overseer-pm.md"
 tab = "herd"
 position = "top-left"
+critical = true
 
 [seats.arch_1]
 name = "arch-1"
@@ -91,6 +94,7 @@ brief = "briefs/arch.md"
 tab = "herd"
 position = "top-right"
 worktree = true
+critical = true
 
 [seats.arch_2]
 name = "arch-2"
@@ -101,6 +105,7 @@ brief = "briefs/arch.md"
 tab = "herd"
 position = "bottom-right"
 worktree = true
+critical = true
 
 # Optional local engine, disabled by default (DOG-7): a fresh clone has no
 # pi/kultivait runtime, and `herdr agent start --kind pi` would fail to seat.

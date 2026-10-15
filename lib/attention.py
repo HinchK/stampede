@@ -18,6 +18,7 @@ import tomllib
 
 VALID_MODES = ("quiet", "medium", "loud")
 VALID_EVENTS = ("green", "new", "red", "blocked")
+PAUSED_SUMMARY_LIMIT = 8
 SCHEMA = json.dumps({"type": "object", "properties": {
     "action": {"enum": ["summary", "assign", "repair", "escalate"]},
     "seat": {"type": "string"}, "summary": {"type": "string"}},
@@ -154,18 +155,57 @@ class Attention:
                                      "--json", "title,body,assignees,labels"],
                                     cwd=self.repo, capture_output=True, text=True, timeout=20, check=True)
             return json.loads(result.stdout)
-        except (subprocess.SubprocessError, ValueError, OSError):
-            return None
+        except (subprocess.SubprocessError, ValueError, OSError) as exc:
+            raise ValueError(f"could not read GitHub issue #{ticket}") from exc
 
     def issue_ready(self, issue, rule=""):
-        if issue is None:
-            return True
+        if not issue:
+            return False
         labels = {item.get("name") for item in issue.get("labels", [])}
         if "loop:blocked" in labels or issue.get("assignees"):
             return False
         if str(rule).startswith("map:") or (self.state_dir / "active-map").exists():
             return True
         return "loop:ready" in labels
+
+    def local_ticket_path(self, ticket):
+        return self.repo / "maps" / "tickets" / f"{ticket}.md"
+
+    def local_ticket_ready(self, text):
+        if not str(text).strip():
+            return False
+        lines = text.splitlines()
+        front = lines[1:] if lines and lines[0].strip() == "---" else lines
+        for line in front:
+            if line.strip() == "---":
+                break
+            if line.lower().startswith("status:"):
+                status = line.split(":", 1)[1].strip().strip("\"'").lower()
+                if status in {"blocked", "paused"}:
+                    return False
+        return True
+
+    def seat_has_outstanding_work(self, seat):
+        lease_file = self.state_dir / "leases.json"
+        if lease_file.is_file():
+            try:
+                leases = json.loads(lease_file.read_text()).get("leases", [])
+            except ValueError:
+                leases = []
+            if any(item.get("seat") == seat for item in leases):
+                return True
+        gates = self.state_dir / "gates"
+        if gates.is_dir():
+            for job in gates.glob("*.job"):
+                if (gates / f"{job.stem}.rc").exists():
+                    continue
+                try:
+                    record = json.loads(job.read_text())
+                except ValueError:
+                    continue
+                if record.get("seat") == seat:
+                    return True
+        return False
 
     def list_issues(self):
         result = subprocess.run(["gh", "issue", "list", "-R", self.github_repo(),
@@ -175,22 +215,28 @@ class Attention:
         return json.loads(result.stdout)
 
     def map_body(self, map_id):
+        map_id = str(map_id).strip()
+        if not map_id or map_id in {".", ".."} or "/" in map_id or "\\" in map_id:
+            raise ValueError(f"invalid map id {map_id}")
         maps_dir = self.repo / "maps"
-        if maps_dir.exists():
-            direct = maps_dir / f"{map_id}.md"
-            if direct.exists():
-                return direct.read_text()
-            for cand in maps_dir.glob("*.md"):
-                if str(map_id) in cand.name:
-                    return cand.read_text()
-        if str(map_id).isdigit():
+        if maps_dir.is_dir():
+            exact = [cand for cand in maps_dir.glob("*.md") if cand.stem == map_id]
+            if len(exact) > 1:
+                raise ValueError(f"ambiguous local map match for {map_id}")
+            if len(exact) == 1:
+                return exact[0].read_text()
+        if map_id.isdigit():
             try:
-                result = subprocess.run(["gh", "issue", "view", str(map_id), "-R", self.github_repo(),
+                repo = self.github_repo()
+            except ValueError:
+                return ""
+            try:
+                result = subprocess.run(["gh", "issue", "view", map_id, "-R", repo,
                                          "--json", "body"], cwd=self.repo, capture_output=True, text=True,
                                         timeout=20, check=True)
                 return json.loads(result.stdout).get("body", "")
             except (subprocess.SubprocessError, ValueError, OSError):
-                pass
+                return ""
         return ""
 
     def map_tickets(self, map_id):
@@ -222,6 +268,36 @@ class Attention:
                     tickets.append(clean)
         return tickets
 
+    def _ticket_settled(self, ticket):
+        path = self.state_dir / "integration.jsonl"
+        if not path.is_file():
+            return False
+        for line in path.read_text().splitlines():
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if str(row.get("ticket")) == str(ticket) and row.get("status") in ("integrated", "promoted"):
+                return True
+        return False
+
+    def _latest_new(self, data, ticket):
+        found = None
+        for item in data.get("seen", []):
+            if item.get("ticket") == ticket and item.get("kind") == "new":
+                found = item
+        return found
+
+    def _map_head_ready(self, ticket):
+        if not str(ticket).isdigit():
+            return True
+        try:
+            self.github_repo()
+        except ValueError:
+            return True
+        issue = self.issue(ticket)
+        return issue is not None and self.issue_ready(issue, "map:")
+
     def next_ready_ticket(self, auto=False):
         data = self._read()
         seen = {item["ticket"] for item in data["seen"] if item.get("kind") == "new"
@@ -230,17 +306,23 @@ class Attention:
         if active_map_file.exists():
             map_id = active_map_file.read_text().strip()
             if map_id:
+                # Resume Map is sequential: an earlier unchecked item that is
+                # still running, paused, or not yet integrated holds the rest.
                 for ticket in self.map_tickets(map_id):
                     ticket_str = str(ticket)
-                    if ticket_str not in seen and ticket_str not in data["paused"]:
-                        if ticket_str.isdigit():
-                            try:
-                                issue = self.issue(ticket_str)
-                                if issue and (issue.get("assignees") or "loop:blocked" in {item.get("name") for item in issue.get("labels", [])}):
-                                    continue
-                            except Exception:
-                                pass
-                        return ticket_str
+                    if self._ticket_settled(ticket_str):
+                        continue
+                    if ticket_str in data["paused"]:
+                        return ""
+                    latest = self._latest_new(data, ticket_str)
+                    if latest and not (auto and latest.get("status") == "queued"):
+                        return ""
+                    try:
+                        if not self._map_head_ready(ticket_str):
+                            return ""
+                    except (OSError, ValueError, subprocess.SubprocessError):
+                        return ""
+                    return ticket_str
                 return ""
 
         issues = sorted(self.list_issues(), key=lambda issue: issue["number"])
@@ -297,8 +379,13 @@ class Attention:
             return records
         lease_file = self.state_dir / "leases.json"
         active_leases = json.loads(lease_file.read_text()).get("leases", [])[:20] if lease_file.exists() else []
+        paused_items = list(self._read()["paused"].items())
         checkpoint = {"event": kind, "ticket": ticket, "evidence": evidence[:1000],
-                      "candidate_seats": seats, "paused": self._read()["paused"],
+                      "candidate_seats": seats,
+                      "paused_count": len(paused_items),
+                      "paused_recent": [{"ticket": item[0], "reason": item[1][:160]}
+                                        for item in paused_items[-PAUSED_SUMMARY_LIMIT:]],
+                      "paused_path": str(self.file),
                       "active_leases": active_leases,
                       "pending_arbiter": recent(self.state_dir / "integration.jsonl", ("ticket", "sha", "status")),
                       "recent_verdicts": recent(self.state_dir / "session-verdicts.jsonl", ("ticket", "sha", "suite")),
@@ -394,11 +481,19 @@ class Attention:
             try:
                 candidates = [item["name"] for item in self._candidates(kind == "new")
                               if self.seat_ready(item["name"])]
+                if kind == "new":
+                    candidates = [name for name in candidates if not self.seat_has_outstanding_work(name)]
                 if kind == "new" and not self.gate_ready():
                     raise ValueError("project suite gate is unavailable; ticket intake stopped")
                 issue = self.issue(ticket) if kind == "new" else None
-                if issue and not self.issue_ready(issue, evidence):
+                if kind == "new" and issue is not None and not self.issue_ready(issue, evidence):
                     raise ValueError("issue is no longer ready or is assigned")
+                if kind == "new" and issue is None:
+                    local_ticket = self.local_ticket_path(ticket)
+                    if not local_ticket.is_file():
+                        raise ValueError(f"ticket {ticket} could not be read; dispatch stopped")
+                    if not self.local_ticket_ready(local_ticket.read_text()):
+                        raise ValueError("local ticket is not ready; dispatch stopped")
                 if kind == "new" and not candidates:
                     return {"status": "deferred"}
                 if mode == "quiet" and kind == "new":
@@ -418,17 +513,18 @@ class Attention:
                     if proposal["action"] != "assign" or selected not in candidates:
                         raise ValueError("looper selected no ready architect seat")
                     issue = self.issue(ticket)
-                    if issue and not self.issue_ready(issue, evidence):
-                        raise ValueError("issue changed while looper was deciding; dispatch stopped")
-                    if issue:
+                    if issue is not None:
+                        if not self.issue_ready(issue, evidence):
+                            raise ValueError("issue changed while looper was deciding; dispatch stopped")
                         issue_body = issue.get("body") or ""
                         body = f"Ticket #{ticket}: {issue['title']}\n\n{issue_body}\n"
                     else:
-                        local_ticket = self.repo / "maps" / "tickets" / f"{ticket}.md"
-                        if local_ticket.exists():
-                            body = local_ticket.read_text()
-                        else:
-                            body = f"Ticket #{ticket}\nDispatched from {evidence}\n"
+                        local_ticket = self.local_ticket_path(ticket)
+                        if not local_ticket.is_file():
+                            raise ValueError(f"ticket {ticket} could not be read; dispatch stopped")
+                        body = local_ticket.read_text()
+                        if not self.local_ticket_ready(body):
+                            raise ValueError("local ticket is not ready; dispatch stopped")
                         issue_body = body
                     owns = next((line for line in issue_body.splitlines()
                                  if line.startswith("owns:")), "")

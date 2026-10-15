@@ -224,15 +224,115 @@ class AttentionTests(unittest.TestCase):
             "- [ ] #103 Third task\n"
         )
         (self.repo / ".herdr-swarm/active-map").write_text("alpha\n")
+        self.assertEqual(self.policy.event("blocked", "102", "stuck")["status"], "paused")
+        self.assertEqual(self.policy.next_ready_ticket(), "")
+        self.policy.resume("102")
         self.assertEqual(self.policy.next_ready_ticket(), "102")
         self.assertEqual(self.policy.event("new", "102", "map:alpha")["status"], "dispatched")
         self.assertIn(("dispatch", "arch-1-test", "102"), self.calls)
-
+        self.assertEqual(self.policy.next_ready_ticket(), "")
+        (self.repo / ".herdr-swarm/integration.jsonl").write_text(
+            json.dumps({"ticket": "102", "sha": "abc", "status": "integrated"}) + "\n")
         self.assertEqual(self.policy.next_ready_ticket(), "103")
         self.assertEqual(self.policy.event("new", "103", "map:alpha")["status"], "dispatched")
         self.assertIn(("dispatch", "arch-1-test", "103"), self.calls)
 
         self.assertEqual(self.policy.next_ready_ticket(), "")
+
+    def test_map_body_uses_exact_identity(self):
+        maps = self.repo / "maps"
+        maps.mkdir()
+        (maps / "117.md").write_text("from 117\n- [ ] #999\n")
+        (maps / "17.md").write_text("from 17\n- [ ] #18\n")
+        self.assertIn("from 17", self.policy.map_body("17"))
+        (maps / "17.md").unlink()
+
+        class Result:
+            stdout = '{"body": "remote 17"}'
+
+        with patch.object(module.subprocess, "run", return_value=Result()) as run:
+            body = module.Attention(self.repo).map_body("17")
+        self.assertEqual(body, "remote 17")
+        self.assertIn("17", run.call_args.args[0])
+        self.assertNotIn("117", body)
+
+    def test_ambiguous_local_map_is_rejected(self):
+        maps = self.repo / "maps"
+        maps.mkdir()
+        (maps / "17.md").write_text("one")
+
+        def fake_glob(self, pattern):
+            return [maps / "17.md", maps / "17.md"]
+
+        with patch.object(module.Path, "glob", fake_glob):
+            with self.assertRaises(ValueError):
+                self.policy.map_body("17")
+
+    def test_failed_issue_reread_does_not_dispatch_stub(self):
+        calls = {"n": 0}
+
+        def issue(ticket):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return {"title": "Ready", "body": "real body", "assignees": [],
+                        "labels": [{"name": "loop:ready"}]}
+            raise ValueError("gh read failed")
+
+        self.policy.issue = issue
+        result = self.policy.event("new", "44", "loop:ready")
+        self.assertEqual(result["status"], "paused")
+        self.assertNotIn(("dispatch", "arch-1-test", "44"), self.calls)
+        self.assertFalse((self.repo / ".herdr-swarm/tickets/44.md").exists())
+
+    def test_local_ticket_must_be_readable_and_ready(self):
+        self.policy.issue = lambda ticket: None
+        missing = self.policy.event("new", "LOCAL-1", "map:alpha")
+        self.assertEqual(missing["status"], "paused")
+        self.assertNotIn(("dispatch", "arch-1-test", "LOCAL-1"), self.calls)
+        self.policy.resume("LOCAL-1")
+        path = self.repo / "maps" / "tickets" / "LOCAL-1.md"
+        path.parent.mkdir(parents=True)
+        path.write_text("---\nid: LOCAL-1\nowns: src/a.py\nstatus: blocked\n---\n\nDo not send\n")
+        blocked = self.policy.event("new", "LOCAL-1", "map:alpha")
+        self.assertEqual(blocked["status"], "paused")
+        self.policy.resume("LOCAL-1")
+        path.write_text("---\nid: LOCAL-1\nowns: src/a.py\n---\n\nDo the thing\n")
+        sent = self.policy.event("new", "LOCAL-1", "map:alpha")
+        self.assertEqual(sent["status"], "dispatched")
+        brief = next((self.repo / ".herdr-swarm/briefs").glob("attention-LOCAL-1-*.md"))
+        self.assertIn("Do the thing", brief.read_text())
+
+    def test_new_ticket_skips_seat_with_lease_or_pending_gate(self):
+        (self.repo / ".herdr-swarm/leases.json").write_text(json.dumps(
+            {"leases": [{"ticket": "1", "seat": "arch-1-test"}]}))
+        self.assertEqual(self.policy.event("new", "61", "loop:ready")["status"], "deferred")
+        self.assertNotIn(("dispatch", "arch-1-test", "61"), self.calls)
+        (self.repo / ".herdr-swarm/leases.json").write_text('{"leases":[]}')
+        gates = self.repo / ".herdr-swarm/gates"
+        gates.mkdir()
+        (gates / "arch-1-test-abc1234.job").write_text(json.dumps(
+            {"seat": "arch-1-test", "ticket": "1", "sha": "abc1234"}))
+        self.assertEqual(self.policy.event("new", "62", "loop:ready")["status"], "deferred")
+        (gates / "arch-1-test-abc1234.rc").write_text("0")
+        self.assertEqual(self.policy.event("new", "62", "loop:ready")["status"], "dispatched")
+
+    def test_ask_bounds_paused_history(self):
+        paused = {f"t{i}": f"reason {i} " + ("x" * 300) for i in range(30)}
+        (self.repo / ".herdr-swarm/attention.json").write_text(json.dumps(
+            {"seen": [], "paused": paused, "repairs": {}, "inflight": {}}))
+
+        class Result:
+            stdout = json.dumps({"structured_output": {"action": "summary", "summary": "brief"},
+                                 "usage": {}, "num_turns": 1})
+
+        with patch.object(module.subprocess, "run", return_value=Result()) as run:
+            module.Attention(self.repo).ask("green", "70", "sha", [])
+        prompt = run.call_args.args[0][run.call_args.args[0].index("--print") + 1]
+        self.assertIn('"paused_count": 30', prompt)
+        self.assertIn("paused_path", prompt)
+        self.assertIn("t29", prompt)
+        self.assertNotIn('"ticket": "t0"', prompt)
+        self.assertNotIn("x" * 300, prompt)
 
 
 if __name__ == "__main__":

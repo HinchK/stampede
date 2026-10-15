@@ -147,8 +147,62 @@ exec {shlex.quote(str(stampede))} up {shlex.quote(str(target))} -m "$mode" -t "$
 '''
 
 
-def render_config(target, choices, counts, attention, existing=None):
+def seat_key_for(role, index):
+    if role == "architect":
+        return f"arch_{index}"
+    if role == "pm" and index > 1:
+        return f"pm_{index}"
+    return role
+
+
+def fresh_seat(key, role, kind, model, brief, tab):
+    seat = {
+        "name": key.replace("_", "-"),
+        "role": role,
+        "default_kind": kind,
+        "model": model,
+        "cost_tier": cost_tier(model),
+        "brief": brief,
+        "tab": tab,
+    }
+    if role in ("pm", "architect"):
+        seat["critical"] = True
+    if role != "looper":
+        seat["worktree"] = True
+    return seat
+
+
+def apply_explicit_choice(seat, role, choices, provider_overrides, model_overrides):
+    kind, model = choices[role]
+    if role in provider_overrides:
+        if isinstance(seat.get("kinds"), list) and seat["kinds"]:
+            rest = [item for item in seat["kinds"] if item != kind]
+            seat["kinds"] = [kind, *rest]
+        seat["default_kind"] = kind
+    if role in model_overrides:
+        seat["model"] = model
+        seat["cost_tier"] = cost_tier(model)
+    if seat.get("role") in ("pm", "architect") and "critical" not in seat:
+        seat["critical"] = True
+    return seat
+
+
+def surplus_indexed_seat(key, counts):
+    arch = re.fullmatch(r"arch_(\d+)", key)
+    if arch and int(arch.group(1)) > counts.get("architect", 1):
+        return True
+    pm = re.fullmatch(r"pm_(\d+)", key)
+    if pm and int(pm.group(1)) > counts.get("pm", 1):
+        return True
+    return False
+
+
+def render_config(target, choices, counts, attention, existing=None,
+                  provider_overrides=None, model_overrides=None):
     existing = existing or {}
+    provider_overrides = set(provider_overrides or ())
+    model_overrides = set(model_overrides or ())
+    existing_seats = existing.get("seats", {})
     slug = re.sub(r"[^a-z0-9_-]+", "-", target.name.lower()).strip("-") or "project"
     swarm = {"name": slug, "workspace_label": "swarm-dev", "trace_dir": ".herdr-swarm/traces",
              "worktree_root": ".herdr-swarm/worktrees", **existing.get("swarm", {})}
@@ -159,28 +213,31 @@ def render_config(target, choices, counts, attention, existing=None):
             lines.append(f"{key} = {toml_value(value)}")
     append_table(lines, ("swarm",), swarm)
     append_table(lines, ("attention",), attention_config)
-    generated_keys = set()
-    for role, _, _, tier, brief, tab in ROLES:
-        count = counts[role] if role in counts else 1
-        for index in range(1, count + 1):
-            key = f"arch_{index}" if role == "architect" else f"pm_{index}" if role == "pm" and index > 1 else role
-            generated_keys.add(key)
-            kind, model = choices[role]
-            name = key.replace("_", "-")
-            lines += ["", f"[seats.{key}]", f"name = {quote(name)}",
-                      f"role = {quote(role)}", f"default_kind = {quote(kind)}",
-                      f"model = {quote(model)}", f"cost_tier = {quote(cost_tier(model))}",
-                      f"brief = {quote(brief)}", f"tab = {quote(tab)}"]
-            if role != "looper":
-                lines.append("worktree = true")
-    reviewer = existing.get("reviewer", {})
     for key, values in existing.items():
         if key not in ("swarm", "attention", "seats") and isinstance(values, dict):
             append_table(lines, (key,), values)
-    for key in dict.fromkeys(("reviewer", reviewer.get("failover_seat", ""))):
-        if key and key not in generated_keys and key in existing.get("seats", {}):
-            seat = {**existing["seats"][key], "worktree": True}
+    role_meta = {role: (brief, tab) for role, _, _, _, brief, tab in ROLES}
+    generated_keys = set()
+    for role, _, _, _, _, _ in ROLES:
+        count = counts[role] if role in counts else 1
+        brief, tab = role_meta[role]
+        for index in range(1, count + 1):
+            key = seat_key_for(role, index)
+            generated_keys.add(key)
+            prior = existing_seats.get(key)
+            if prior:
+                seat = apply_explicit_choice(dict(prior), role, choices, provider_overrides, model_overrides)
+            else:
+                kind, model = choices[role]
+                seat = fresh_seat(key, role, kind, model, brief, tab)
             append_table(lines, ("seats", key), seat)
+    for key, seat in existing_seats.items():
+        if key in generated_keys or surplus_indexed_seat(key, counts):
+            continue
+        preserved = dict(seat)
+        if preserved.get("role") in ("pm", "architect") and "critical" not in preserved:
+            preserved["critical"] = True
+        append_table(lines, ("seats", key), preserved)
     return "\n".join(lines) + "\n"
 
 
@@ -336,7 +393,8 @@ def main():
         print("Setup cancelled; no files changed.")
         return
     content = render_config(target, choices, {"pm": args.pm_count, "architect": args.architect_count},
-                            attention, existing)
+                            attention, existing, provider_overrides=set(providers),
+                            model_overrides=set(models))
     staged_config = stage(config, content)
     staged_launcher = stage(launcher, launcher_text(root / "bin/stampede", target), executable=True)
     try:

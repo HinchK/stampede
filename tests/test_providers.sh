@@ -137,6 +137,10 @@ enabled = false
 name = "other-seat"
 default_kind = "claude"
 model = "zai/not-listed"
+[seats.claude_primary]
+name = "claude-primary"
+kinds = ["claude", "opencode"]
+model = "sonnet"
 EOF
 if providers_check_opencode_models "$SCRATCH/models.toml" >/dev/null 2>&1; then
   bad "unlisted opencode model must fail the preflight"
@@ -148,6 +152,7 @@ out=$(providers_check_opencode_models "$SCRATCH/models.toml" 2>&1) || true
   && ok "failure names the seat and the offending model id" || bad "message: $out"
 [[ "$out" != *"off-seat"* ]] && ok "disabled seats are not preflighted" || bad "disabled seat flagged: $out"
 [[ "$out" != *"other-seat"* ]] && ok "non-opencode seats are not preflighted" || bad "claude seat flagged: $out"
+[[ "$out" != *"claude-primary"* ]] && ok "claude-primary fallback is not preflighted as opencode" || bad "claude primary flagged: $out"
 sed 's/zai\/not-listed/zai-coding-plan\/glm-5.3/' "$SCRATCH/models.toml" > "$SCRATCH/models-fixed.toml"
 if providers_check_opencode_models "$SCRATCH/models-fixed.toml" >/dev/null 2>&1; then
   ok "listed models pass the preflight"
@@ -215,6 +220,100 @@ grep -q 'agent start arch --kind opencode --pane p4$' "$HERDR_STUB_CALLS" \
   && ok "auto model starts plainly, no flags" || bad "auto forward: $(cat "$HERDR_STUB_CALLS")"
 [[ ! -e "$AUTO_CWD/.opencode" ]] \
   && ok "auto model writes no project config" || bad "auto model wrote a config"
+
+# Runtime pins must not dirty a worker checkout. gate_tree_matches rejects
+# any porcelain — untracked files included — so a new pin is excluded, and
+# a tracked config is never edited (a later untracked opencode.jsonc wins).
+init_pin_repo() {
+  mkdir -p "$1"
+  git -C "$1" init -q
+  printf 'readme\n' > "$1/README"
+  git -C "$1" add README
+  git -C "$1" -c user.name=Test -c user.email=test@example.com commit -qm init
+}
+pin_repo_clean() { # DIR SHA
+  [[ "$(git -C "$1" rev-parse HEAD)" == "$2" ]] \
+    && [[ -z "$(git -C "$1" status --porcelain)" ]]
+}
+
+PIN_REPO="$SCRATCH/pin-repo"
+init_pin_repo "$PIN_REPO"
+pin_sha=$(git -C "$PIN_REPO" rev-parse HEAD)
+providers_write_opencode_model "$PIN_REPO" zai-coding-plan/glm-5.3
+pin_repo_clean "$PIN_REPO" "$pin_sha" \
+  && ok "new pin leaves the checkout clean for the gate" || bad "new pin dirtied: $(git -C "$PIN_REPO" status --porcelain)"
+grep -q '"model": *"zai-coding-plan/glm-5.3"' "$PIN_REPO/.opencode/opencode.json" \
+  && ok "untracked checkout still receives the pin file" || bad "missing pin: $(cat "$PIN_REPO/.opencode/opencode.json" 2>/dev/null)"
+git -C "$PIN_REPO" add -A
+[[ -z "$(git -C "$PIN_REPO" diff --cached --name-only)" ]] \
+  && ok "new pin is excluded from git add" || bad "pin staged: $(git -C "$PIN_REPO" diff --cached --name-only)"
+exclude_file=$(git -C "$PIN_REPO" rev-parse --path-format=absolute --git-path info/exclude)
+exclude_n=$(grep -cxF '/.opencode/opencode.json' "$exclude_file" || true)
+providers_write_opencode_model "$PIN_REPO" zai-coding-plan/glm-5.3
+exclude_n2=$(grep -cxF '/.opencode/opencode.json' "$exclude_file" || true)
+[[ "$exclude_n" -eq "$exclude_n2" ]] \
+  && ok "excluding the pin is idempotent" || bad "exclude lines $exclude_n -> $exclude_n2"
+
+# Worker seats are linked worktrees. info/exclude lives in the common git
+# dir, so the pin must stay invisible there too.
+PIN_WT="$SCRATCH/pin-wt"
+git -C "$PIN_REPO" worktree add -q "$PIN_WT" -b worker-pin
+providers_write_opencode_model "$PIN_WT" zai-coding-plan/glm-5.3
+wt_sha=$(git -C "$PIN_WT" rev-parse HEAD)
+pin_repo_clean "$PIN_WT" "$wt_sha" \
+  && grep -q '"model": *"zai-coding-plan/glm-5.3"' "$PIN_WT/.opencode/opencode.json" \
+  && ok "worktree pin stays out of the worker checkout" \
+  || bad "worktree pin: $(git -C "$PIN_WT" status --porcelain)"
+
+TRACKED_REPO="$SCRATCH/tracked-pin"
+init_pin_repo "$TRACKED_REPO"
+mkdir -p "$TRACKED_REPO/.opencode"
+printf '%s\n' '{"$schema":"https://opencode.ai/config.json","model":"zai-coding-plan/glm-4.6","permission":{"external_directory":"allow"}}' \
+  > "$TRACKED_REPO/.opencode/opencode.json"
+git -C "$TRACKED_REPO" add -f .opencode/opencode.json
+git -C "$TRACKED_REPO" -c user.name=Test -c user.email=test@example.com commit -qm 'track opencode config'
+tracked_sha=$(git -C "$TRACKED_REPO" rev-parse HEAD)
+providers_write_opencode_model "$TRACKED_REPO" zai-coding-plan/glm-4.6
+pin_repo_clean "$TRACKED_REPO" "$tracked_sha" && [[ ! -e "$TRACKED_REPO/.opencode/opencode.jsonc" ]] \
+  && ok "matching tracked model writes no runtime file" || bad "match path: $(git -C "$TRACKED_REPO" status --porcelain) jsonc=$(ls "$TRACKED_REPO/.opencode")"
+providers_write_opencode_model "$TRACKED_REPO" zai-coding-plan/glm-5.3
+pin_repo_clean "$TRACKED_REPO" "$tracked_sha" \
+  && ok "tracked config pin leaves the checkout clean" || bad "tracked pin dirtied: $(git -C "$TRACKED_REPO" status --porcelain)"
+git -C "$TRACKED_REPO" diff --quiet -- .opencode/opencode.json \
+  && ok "tracked opencode.json was not modified" || bad "tracked config changed"
+grep -q '"model": *"zai-coding-plan/glm-5.3"' "$TRACKED_REPO/.opencode/opencode.jsonc" \
+  && ok "tracked config is overridden by an excluded jsonc pin" || bad "jsonc pin: $(cat "$TRACKED_REPO/.opencode/opencode.jsonc" 2>/dev/null)"
+python3 - "$TRACKED_REPO/.opencode/opencode.json" <<'PY' && ok "tracked sibling keys survived the pin" || bad "tracked siblings changed"
+import json, sys
+cfg = json.load(open(sys.argv[1]))
+assert cfg["model"] == "zai-coding-plan/glm-4.6", cfg
+assert cfg["permission"] == {"external_directory": "allow"}, cfg
+PY
+git -C "$TRACKED_REPO" add -A
+[[ -z "$(git -C "$TRACKED_REPO" diff --cached --name-only)" ]] \
+  && ok "jsonc override is excluded from git add" || bad "jsonc staged: $(git -C "$TRACKED_REPO" diff --cached --name-only)"
+
+providers_write_opencode_model "$TRACKED_REPO" zai-coding-plan/glm-4.6
+pin_repo_clean "$TRACKED_REPO" "$tracked_sha" \
+  && [[ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["model"])' "$TRACKED_REPO/.opencode/opencode.jsonc")" == "zai-coding-plan/glm-4.6" ]] \
+  && ok "a later runtime pin follows the requested model without dirtying the checkout" \
+  || bad "retarget dirtied: $(git -C "$TRACKED_REPO" status --porcelain) $(cat "$TRACKED_REPO/.opencode/opencode.jsonc" 2>/dev/null)"
+
+BOTH_REPO="$SCRATCH/both-tracked"
+init_pin_repo "$BOTH_REPO"
+mkdir -p "$BOTH_REPO/.opencode"
+printf '%s\n' '{"model":"zai-coding-plan/glm-4.6"}' > "$BOTH_REPO/.opencode/opencode.json"
+printf '%s\n' '{"model":"zai-coding-plan/glm-4.6","permission":{"edit":"allow"}}' > "$BOTH_REPO/.opencode/opencode.jsonc"
+git -C "$BOTH_REPO" add -f .opencode/opencode.json .opencode/opencode.jsonc
+git -C "$BOTH_REPO" -c user.name=Test -c user.email=test@example.com commit -qm 'track both configs'
+both_sha=$(git -C "$BOTH_REPO" rev-parse HEAD)
+if providers_write_opencode_model "$BOTH_REPO" zai-coding-plan/glm-5.3 2>/dev/null; then
+  bad "tracked jsonc pin should refuse rather than edit"
+else
+  ok "tracked jsonc with a different model is left untouched"
+fi
+pin_repo_clean "$BOTH_REPO" "$both_sha" \
+  && ok "refused pin leaves the tracked checkout clean" || bad "refused pin dirtied: $(git -C "$BOTH_REPO" status --porcelain)"
 
 # [11] healthy-chain enumeration (D3): launch retries need every healthy
 # kind in chain order, not just the winner.

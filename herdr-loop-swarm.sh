@@ -413,10 +413,19 @@ case "$MODE" in
 esac
 
 if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; then
+  mkdir -p "${PWD}/.herdr-swarm"
   if [[ "$MODE" == s ]]; then
     touch "${PWD}/.herdr-swarm/seat-only"
+    rm -f "${PWD}/.herdr-swarm/intake-hold"
   else
     rm -f "${PWD}/.herdr-swarm/seat-only"
+    # Bind the requested mode before any watcher can run, and keep intake
+    # stopped until seat verification succeeds.
+    case "$MODE" in
+      r) printf '%s\n' "$MAP_NUM" > "${PWD}/.herdr-swarm/active-map" ;;
+      a) rm -f "${PWD}/.herdr-swarm/active-map" ;;
+    esac
+    touch "${PWD}/.herdr-swarm/intake-hold"
   fi
 fi
 
@@ -698,29 +707,28 @@ if [[ -n "$SEAT_LEDGER" ]]; then
   good "Seat ledger written: ${PWD}/.herdr-swarm/seats.json"
 fi
 
-supervisor_pid=""
-[[ -f "${PWD}/.herdr-swarm/supervisor.pid" ]] && supervisor_pid=$(cat "${PWD}/.herdr-swarm/supervisor.pid" 2>/dev/null || true)
-if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 && -n "${SRV_PANE:-}" ]] \
-   && { [[ "${supervisor_new:-0}" == 1 ]] || [[ ! "$supervisor_pid" =~ ^[0-9]+$ ]] || ! kill -0 "$supervisor_pid" 2>/dev/null; }; then
-  printf -v supervisor_cmd 'REPO_DIR=%q STATE_DIR=%q bash %q watch' \
-    "$PWD" "${PWD}/.herdr-swarm" "$SCRIPT_DIR/loop-bot-herd.sh"
-  herdr pane run "$SRV_PANE" "$supervisor_cmd" >/dev/null 2>&1 \
-    || warn "Supervisor could not start; run loop-bot-herd.sh watch manually"
-fi
-
 # ──────────────────────────────────────────────────────────────────────────
 # Post-Seating Verification (T-010): readiness + brief acknowledgment gate
+# The supervisor watch starts only after this gate. intake-hold keeps a
+# pre-existing watcher from dispatching while checks are still running.
 # ──────────────────────────────────────────────────────────────────────────
 
 if swarm_verify_seats "$PWD"; then
   good "All seats verified ready"
 else
   warn "One or more seats failed readiness verification"
-  if [[ "$MODE" == "a" ]]; then
-    # Auto-queue fails closed when CRITICAL seats (arch, pm) are not ready —
-    # an unattended loop must not start on an unverified herd.
+  # A configured critical seat that never seated is a launch failure in
+  # every mode, including auto-queue. Mode a used to recheck only two
+  # seat names and could report ready while another critical seat was absent.
+  if [[ -n "${SWARM_MISSING_CRITICAL:-}" ]]; then
+    printf '  %s✖ FATAL: critical seats missing from the herd: %s%s\n' "$RED" "$SWARM_MISSING_CRITICAL" "$RESET" >&2
+    printf '    %sFix: check these seats provider chains (stampede doctor) and re-run up.%s\n' "$RESET" "$RESET" >&2
+    exit 1
+  elif [[ "$MODE" == "a" ]]; then
+    # Auto-queue also fails closed when a seated critical seat is not ready.
     critical_fail=0
-    for critical_seat in "$ARCH_AGENT" "${SEAT_NAME_pm:-pm}"; do
+    # shellcheck disable=SC2086  # critical seat names are slug tokens
+    for critical_seat in ${SWARM_CRITICAL_SEATS:-}; do
       cpane=$(jq -r --arg n "$critical_seat" '.seats[]? | select(.name == $n) | .pane // empty' \
         "${PWD}/.herdr-swarm/seats.json" 2>/dev/null) || cpane=""
       ckind=$(jq -r --arg n "$critical_seat" '.seats[]? | select(.name == $n) | .kind // empty' \
@@ -731,20 +739,23 @@ else
       fi
     done
     if (( critical_fail )); then
-      printf '  %s✖ FATAL: auto-queue requires verified seats (arch, pm). Re-run seating or investigate panes.%s\n' "$RED" "$RESET" >&2
+      printf '  %s✖ FATAL: auto-queue requires verified critical seats. Re-run seating or investigate panes.%s\n' "$RED" "$RESET" >&2
       exit 1
     fi
-    note "Critical seats (arch, pm) ready — continuing despite non-critical seat failures"
-  elif [[ -n "${SWARM_MISSING_CRITICAL:-}" ]]; then
-    # D4: a configured critical seat that never seated is a launch failure
-    # the ledger alone could never show — fail closed in EVERY mode, before
-    # the swarm can report itself ready.
-    printf '  %s✖ FATAL: critical seats missing from the herd: %s%s\n' "$RED" "$SWARM_MISSING_CRITICAL" "$RESET" >&2
-    printf '    %sFix: check these seats provider chains (stampede doctor) and re-run up.%s\n' "$RESET" "$RESET" >&2
-    exit 1
+    note "Critical seats ready — continuing despite non-critical seat failures"
   else
     note "Continuing (non-autonomous mode) — investigate failed seats before dispatching work"
   fi
+fi
+rm -f "${PWD}/.herdr-swarm/intake-hold"
+supervisor_pid=""
+[[ -f "${PWD}/.herdr-swarm/supervisor.pid" ]] && supervisor_pid=$(cat "${PWD}/.herdr-swarm/supervisor.pid" 2>/dev/null || true)
+if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 && -n "${SRV_PANE:-}" ]] \
+   && { [[ "${supervisor_new:-0}" == 1 ]] || [[ ! "$supervisor_pid" =~ ^[0-9]+$ ]] || ! kill -0 "$supervisor_pid" 2>/dev/null; }; then
+  printf -v supervisor_cmd 'REPO_DIR=%q STATE_DIR=%q bash %q watch' \
+    "$PWD" "${PWD}/.herdr-swarm" "$SCRIPT_DIR/loop-bot-herd.sh"
+  herdr pane run "$SRV_PANE" "$supervisor_cmd" >/dev/null 2>&1 \
+    || warn "Supervisor could not start; run loop-bot-herd.sh watch manually"
 fi
 if [[ -n "${SWARM_MISSING_SEATS:-}" ]]; then
   warn "Non-critical seats missing (named in the swarm_ready event): ${SWARM_MISSING_SEATS}"
@@ -811,7 +822,7 @@ case "$MODE" in
   r)
     if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]] || [[ "$(config_get attention.bounded_looper false "$CONFIG_FILE")" == true ]]; then
       step "Activating Bounded Looper on Map #${MAP_NUM}..."
-      echo "$MAP_NUM" > "$STATE_DIR/active-map"
+      printf '%s\n' "$MAP_NUM" > "${PWD}/.herdr-swarm/active-map"
       next_t=$("$PYTHON_BIN" "$LIB_DIR/attention.py" next "$PWD" 2>/dev/null || true)
       if [[ -n "$next_t" ]]; then
         good "Map #${MAP_NUM} active in bounded mode — next unticked: #${next_t}"
@@ -826,7 +837,7 @@ case "$MODE" in
     fi
     ;;
   a)
-    rm -f "$STATE_DIR/active-map"
+    rm -f "${PWD}/.herdr-swarm/active-map"
     if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]] || [[ "$(config_get attention.bounded_looper false "$CONFIG_FILE")" == true ]]; then
       good "Bounded supervisor will inspect loop:ready tickets on its next pass"
     else

@@ -90,7 +90,7 @@ providers_resolve_chain() {
 
 # ── Model preflight (D2) ────────────────────────────────────────────────────
 # providers_check_opencode_models <toml-path>
-#   Every ENABLED seat whose chain includes opencode pins a model id that
+#   Every ENABLED seat whose primary kind is opencode pins a model id that
 #   `opencode models` must list. An unlisted id is not a launch error —
 #   opencode silently serves a different model — so the only honest gate is
 #   a preflight comparison, fail-closed before any workspace or pane exists.
@@ -108,8 +108,13 @@ with open(sys.argv[1], 'rb') as f:
 for k, v in cfg.get('seats', {}).items():
     if not v.get('enabled', True):
         continue
-    kinds = v.get('kinds') or ([v['default_kind']] if v.get('default_kind') else [])
-    if 'opencode' not in kinds:
+    kinds = v.get('kinds')
+    if kinds is None:
+        kinds = [v['default_kind']] if v.get('default_kind') else []
+    # The model id belongs to the primary kind. A Claude-primary chain that
+    # only falls back to opencode must not be rejected because `sonnet` is
+    # absent from `opencode models`.
+    if not kinds or kinds[0] != 'opencode':
         continue
     model = v.get('model', 'auto')
     if model and model != 'auto':
@@ -156,14 +161,58 @@ providers_healthy_chain() {
 # Herdr forwards arguments after `--` to each harness — but only flags the
 # harness actually supports. opencode v2's TUI has no --model flag (it exists
 # only on `opencode run`): a forwarded flag prints usage and kills the seat
-# (HERDR-1 D1). The opencode model travels instead as a per-seat project
-# config — `.opencode/opencode.json` in the pane's working directory, which
-# opencode resolves natively (verified: session messages record the pinned
-# provider/model) and git ignores (`/.opencode`).
-providers_write_opencode_model() { # CWD MODEL
-  local cfg="${1%/}/.opencode/opencode.json" tmp
+# (HERDR-1 D1). The seat model is a runtime pin opencode loads from the pane
+# directory (`.opencode/opencode.json`, then `opencode.jsonc`, later wins).
+# gate_tree_matches rejects a dirty checkout, and gitignore does not hide
+# edits to a tracked file, so the pin is never written into a tracked
+# application file. A new pin file is recorded in $GIT_DIR/info/exclude so
+# it stays out of status and out of `git add` when the worker commits.
+providers_opencode_model_matches() { # FILE MODEL
+  [[ -f "$1" ]] || return 1
+  jq -e --arg m "$2" '.model == $m' "$1" >/dev/null 2>&1
+}
+
+providers_opencode_tracked() { # DIR REL
+  git -C "$1" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+  git -C "$1" ls-files --error-unmatch -- "$2" >/dev/null 2>&1
+}
+
+# providers_exclude_runtime DIR REL — hide an untracked pin from status.
+# info/exclude is local git metadata, not a tracked application file.
+# No-op when DIR is not a worktree or the path is already ignored.
+providers_exclude_runtime() { # DIR REL
+  local dir="$1" rel="${2#/}" top dir_abs top_abs suffix pattern exclude
+  git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+  if git -C "$dir" check-ignore -q -- "$rel" 2>/dev/null; then
+    return 0
+  fi
+  top=$(git -C "$dir" rev-parse --show-toplevel) || return 1
+  dir_abs=$(cd "$dir" && pwd -P) || return 1
+  top_abs=$(cd "$top" && pwd -P) || return 1
+  if [[ "$dir_abs" == "$top_abs" ]]; then
+    pattern="/$rel"
+  else
+    suffix="${dir_abs#"$top_abs"/}"
+    pattern="/$suffix/$rel"
+  fi
+  exclude=$(git -C "$dir" rev-parse --path-format=absolute --git-path info/exclude 2>/dev/null || true)
+  if [[ -z "$exclude" || "$exclude" != /* ]]; then
+    exclude=$(git -C "$dir" rev-parse --git-path info/exclude 2>/dev/null) || return 1
+    if [[ "$exclude" != /* ]]; then
+      exclude="$top_abs/$exclude"
+    fi
+  fi
+  mkdir -p "${exclude%/*}" || return 1
+  if [[ -f "$exclude" ]] && grep -qxF "$pattern" "$exclude"; then
+    return 0
+  fi
+  printf '%s\n' "$pattern" >> "$exclude"
+}
+
+providers_write_opencode_model_file() { # FILE MODEL
+  local cfg="$1" model="$2" tmp payload
   if [[ -f "$cfg" ]]; then
-    if jq -e --arg m "$2" '.model == $m' "$cfg" >/dev/null 2>&1; then
+    if providers_opencode_model_matches "$cfg" "$model"; then
       return 0
     fi
     if ! jq -e type "$cfg" >/dev/null 2>&1; then
@@ -171,16 +220,49 @@ providers_write_opencode_model() { # CWD MODEL
       return 1
     fi
     tmp=$(mktemp) || return 1
-    if jq --arg m "$2" '.model = $m' "$cfg" > "$tmp" 2>/dev/null && mv "$tmp" "$cfg"; then
+    if jq --arg m "$model" '.model = $m' "$cfg" > "$tmp" 2>/dev/null && mv "$tmp" "$cfg"; then
       return 0
     fi
     rm -f "$tmp"
     return 1
   fi
-  mkdir -p "${1%/}/.opencode" || return 1
-  local payload
-  payload=$(jq -cn --arg m "$2" '{"$schema": "https://opencode.ai/config.json", model: $m}') || return 1
+  mkdir -p "${cfg%/*}" || return 1
+  payload=$(jq -cn --arg m "$model" '{"$schema": "https://opencode.ai/config.json", model: $m}') || return 1
   printf '%s\n' "$payload" > "$cfg" || return 1
+}
+
+# Pin MODEL for a seat rooted at DIR. Later OpenCode files win, so a tracked
+# opencode.json is left alone and the pin is written to an untracked
+# opencode.jsonc. A tracked opencode.jsonc whose model differs cannot be
+# overridden without dirtying the checkout — refuse rather than edit it.
+providers_pin_untracked_model() { # DIR REL MODEL
+  providers_write_opencode_model_file "${1%/}/$2" "$3" || return 1
+  providers_exclude_runtime "$1" "$2"
+}
+
+providers_write_opencode_model() { # CWD MODEL
+  local dir="${1%/}" model="$2"
+  local json_rel=".opencode/opencode.json" jsonc_rel=".opencode/opencode.jsonc"
+  if [[ -f "$dir/$jsonc_rel" ]]; then
+    if providers_opencode_tracked "$dir" "$jsonc_rel"; then
+      if providers_opencode_model_matches "$dir/$jsonc_rel" "$model"; then
+        return 0
+      fi
+      printf 'opencode model pin would modify tracked config (left untouched): %s\n' \
+        "$dir/$jsonc_rel" >&2
+      return 1
+    fi
+    providers_pin_untracked_model "$dir" "$jsonc_rel" "$model"
+    return
+  fi
+  if providers_opencode_tracked "$dir" "$json_rel"; then
+    if providers_opencode_model_matches "$dir/$json_rel" "$model"; then
+      return 0
+    fi
+    providers_pin_untracked_model "$dir" "$jsonc_rel" "$model"
+    return
+  fi
+  providers_pin_untracked_model "$dir" "$json_rel" "$model"
 }
 
 providers_start_agent() { # NAME KIND PANE MODEL [CWD]

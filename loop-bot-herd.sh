@@ -1056,7 +1056,10 @@ EOF
 frontier_drain() {
   local attention_mode=""
   if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]] && ! _headless_active; then
+    # seat-only never intakes. intake-hold stays until launch verification
+    # succeeds, so a watcher cannot dispatch during seat checks.
     [[ ! -f "$STATE_DIR/seat-only" ]] || return 0
+    [[ ! -f "$STATE_DIR/intake-hold" ]] || return 0
     attention_mode=$("$PYTHON_BIN" "$SCRIPT_DIR/lib/attention.py" mode "$REPO_DIR" 2>/dev/null || true)
   fi
   if [[ -z "$attention_mode" ]]; then
@@ -1070,14 +1073,17 @@ frontier_drain() {
     return 0
   fi
   rm -f "$STATE_DIR/intake-gate-warning"
-  # Local-only projects have no GitHub frontier to drain
-  [[ -n "${REPO:-}" && "$REPO" != "none" ]] || return 0
   local next
   if [[ -n "$attention_mode" ]]; then
-    local next_opt=()
-    [[ "$attention_mode" == quiet && "$(ctl_get frontier_drain)" == true ]] && next_opt=(auto)
-    next=$("$PYTHON_BIN" "$SCRIPT_DIR/lib/attention.py" next "$REPO_DIR" "${next_opt[@]}" 2>/dev/null || true)
+    # Bounded intake reads the active map or loop:ready queue. A local-only
+    # project has no GitHub remote; that requirement belongs to the gh path.
+    if [[ "$attention_mode" == quiet && "$(ctl_get frontier_drain)" == true ]]; then
+      next=$("$PYTHON_BIN" "$SCRIPT_DIR/lib/attention.py" next "$REPO_DIR" auto 2>/dev/null || true)
+    else
+      next=$("$PYTHON_BIN" "$SCRIPT_DIR/lib/attention.py" next "$REPO_DIR" 2>/dev/null || true)
+    fi
   else
+    [[ -n "${REPO:-}" && "$REPO" != "none" ]] || return 0
     next=$(gh issue list -R "$REPO" --state open --label loop:ready --json number,title,assignees \
       --jq '[.[] | select((.assignees | length) == 0)] | sort_by(.number) | .[0] // empty | "#\(.number) \(.title)"' 2>/dev/null || true)
   fi

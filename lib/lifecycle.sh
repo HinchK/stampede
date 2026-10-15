@@ -705,17 +705,19 @@ swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
     return 1
   }
 
-  local ws_id
+  local ws_id workspace_missing=0
   ws_id=$(find_workspace_by_cwd "$abs_target")
   if [[ -z "$ws_id" ]]; then
     printf '  %s✖ no active workspace for %s%s\n' "$RED" "$abs_target" "$RESET"
-    return 1
+    workspace_missing=1
   fi
 
-  # Seat roster: fresh seats.json ledger, else live agents in the workspace
+  # Seat roster: fresh seats.json ledger, else live agents in the workspace.
+  # A missing workspace must not skip the configured-roster comparison: a
+  # critical seat that never seated is still a launch failure.
   local seats_file="${abs_target}/.herdr-swarm/seats.json"
   local seats_spec="" src_label
-  if [[ -f "$seats_file" ]] && [[ "$(jq -r '.workspace_id // empty' "$seats_file" 2>/dev/null)" == "$ws_id" ]]; then
+  if [[ -f "$seats_file" ]] && { (( workspace_missing )) || [[ "$(jq -r '.workspace_id // empty' "$seats_file" 2>/dev/null)" == "$ws_id" ]]; }; then
     seats_spec=$(jq -r '.seats[]? | "\(.name)\t\(.kind)\t\(.pane)\t\(.agentless // false)"' "$seats_file" 2>/dev/null)
     src_label="seats.json ledger"
   else
@@ -732,13 +734,14 @@ swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
   # SEATED, so a seat whose launch failed on every chain kind is invisible
   # to a ledger-only verify — including the total-failure case of an EMPTY
   # ledger. Compare the configured, enabled roster against the seated names
-  # BEFORE any early return: a missing arch/pm seat is a failure in EVERY mode; a
-  # missing non-critical seat is a loud warning and is exported for the
+  # BEFORE any early return: a missing seat with critical = true is a failure
+  # in EVERY mode; a missing non-critical seat is a loud warning and is exported for the
   # swarm_ready payload. SWARM_MISSING_SEATS / SWARM_MISSING_CRITICAL are
   # set for the launcher (no subshell: the roster loop runs in this shell).
   SWARM_MISSING_SEATS=""
   SWARM_MISSING_CRITICAL=""
-  local config_file="${abs_target}/swarm.config.toml" roster_key roster_name roster_slug
+  SWARM_CRITICAL_SEATS=""
+  local config_file="${abs_target}/swarm.config.toml" roster_key roster_name roster_critical roster_slug
   if [[ ! -f "$config_file" && -f "${abs_target}/.herdr-swarm/config.path" ]]; then
     local bound_cfg
     bound_cfg=$(head -n1 "${abs_target}/.herdr-swarm/config.path" 2>/dev/null || true)
@@ -776,12 +779,36 @@ swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
     else
       roster_slug=$(slugify "$(basename "$abs_target")")
     fi
-    while IFS='|' read -r roster_key roster_name; do
+    local roster_text roster_rc=0
+    roster_text=$("${PYTHON_BIN:-python3}" - "$config_file" "$roster_slug" <<'PYROSTER'
+import sys, tomllib
+with open(sys.argv[1], 'rb') as f:
+    cfg = tomllib.load(f)
+slug = sys.argv[2]
+for k, v in cfg.get('seats', {}).items():
+    if not v.get('enabled', True):
+        continue
+    critical = v.get('critical', False)
+    if not isinstance(critical, bool):
+        raise SystemExit(f'config error: seats.{k}.critical must be a boolean')
+    name = v.get('name', k)
+    full = f'{name}-{slug}' if slug else name
+    print(f'{k}|{full}|{1 if critical else 0}')
+PYROSTER
+) || roster_rc=$?
+    if (( roster_rc )); then
+      printf '  %s✖ could not read the configured seat roster%s\n' "$RED" "$RESET" >&2
+      return 1
+    fi
+    while IFS='|' read -r roster_key roster_name roster_critical; do
       [[ -n "$roster_key" ]] || continue
+      if [[ "$roster_critical" == 1 ]]; then
+        SWARM_CRITICAL_SEATS+="${SWARM_CRITICAL_SEATS:+ }${roster_name}"
+      fi
       if awk -F'\t' -v n="$roster_name" '$1 == n { found = 1 } END { exit !found }' <<<"$seats_spec"; then
         continue
       fi
-      if [[ "$roster_key" == arch || "$roster_key" == arch_* || "$roster_key" == pm || "$roster_key" == pm_* ]]; then
+      if [[ "$roster_critical" == 1 ]]; then
         printf '  %s✖ %s: configured critical seat missing from the %s (launch failed on every chain kind)%s\n' \
           "$RED" "$roster_name" "$src_label" "$RESET"
         SWARM_MISSING_CRITICAL+="${SWARM_MISSING_CRITICAL:+ }${roster_name}"
@@ -791,17 +818,7 @@ swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
           "$YELLOW" "$roster_name" "$src_label" "$RESET"
         SWARM_MISSING_SEATS+="${SWARM_MISSING_SEATS:+ }${roster_name}"
       fi
-    done < <("${PYTHON_BIN:-python3}" - "$config_file" "$roster_slug" <<'PYROSTER'
-import sys, tomllib
-with open(sys.argv[1], 'rb') as f:
-    cfg = tomllib.load(f)
-slug = sys.argv[2]
-for k, v in cfg.get('seats', {}).items():
-    if v.get('enabled', True):
-        name = v.get('name', k)
-        print(f'{k}|{name}-{slug}' if slug else f'{k}|{name}')
-PYROSTER
-)
+    done <<<"$roster_text"
   fi
 
   if [[ -z "$seats_spec" ]]; then
@@ -833,6 +850,9 @@ PYROSTER
     fi
   done <<<"$seats_spec"
 
+  if (( workspace_missing )); then
+    failures=1
+  fi
   return "$failures"
 }
 

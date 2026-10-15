@@ -11,6 +11,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
 make_env() { # REFUSE_PREFIX -> sets ENV_DIR (bin stubs + fresh target)
+  unset FAKE_HERDR_REFUSE
   ENV_DIR=$(mktemp -d)
   local target="$ENV_DIR/fresh project"
   mkdir -p "$target" "$ENV_DIR/bin"
@@ -75,6 +76,20 @@ elif a[:2] == ['agent', 'start']:
             'cwd': next(p['cwd'] for p in state['panes'] if p['pane_id'] == seat_pane)}
     state['agents'].append(seat)
     emit({'agent': seat})
+elif a[:2] == ['pane', 'run']:
+    cmd = a[3] if len(a) > 3 else ''
+    note = os.environ.get('FAKE_HERDR_WATCH_NOTE', '')
+    if note and 'loop-bot-herd.sh' in cmd and cmd.rstrip().endswith('watch'):
+        import shlex
+        state_dir = ''
+        for part in shlex.split(cmd):
+            if part.startswith('STATE_DIR='):
+                state_dir = part.split('=', 1)[1]
+        active = Path(state_dir) / 'active-map'
+        Path(note).write_text(
+            f"map={active.is_file()} hold={(Path(state_dir) / 'intake-hold').exists()} "
+            f"body={active.read_text().strip() if active.is_file() else ''}\n")
+    emit({})
 else:
     emit({})
 PY
@@ -119,6 +134,12 @@ if traces_of "$ENV_DIR/fresh project" | grep -q '"swarm_ready"'; then
   echo "A: swarm_ready emitted despite a broken critical seat" >&2
   exit 1
 fi
+if grep -q 'loop-bot-herd.sh' "$FAKE_HERDR_LOG"; then
+  echo "A: supervisor watch started before verification succeeded" >&2
+  exit 1
+fi
+[[ -f "$ENV_DIR/fresh project/.herdr-swarm/intake-hold" ]] \
+  || { echo "A: failed launch released ticket intake" >&2; exit 1; }
 
 echo "==> B: broken docs seat is loud but non-fatal"
 make_env
@@ -133,6 +154,10 @@ traces_of "$ENV_DIR/fresh project" | grep '"swarm_ready"' | grep -q '"missing_se
   || { echo "B: swarm_ready payload does not carry missing_seats" >&2; traces_of "$ENV_DIR/fresh project" >&2; exit 1; }
 traces_of "$ENV_DIR/fresh project" | grep '"swarm_ready"' | grep -q 'docs-' \
   || { echo "B: swarm_ready does not name the docs seat" >&2; exit 1; }
+[[ ! -f "$ENV_DIR/fresh project/.herdr-swarm/intake-hold" ]] \
+  || { echo "B: successful launch left ticket intake held" >&2; exit 1; }
+grep -q 'loop-bot-herd.sh' "$FAKE_HERDR_LOG" \
+  || { echo "B: supervisor watch did not start after verification" >&2; exit 1; }
 
 echo "==> C: config-less universal target fails closed on broken arch seat (F-A)"
 make_env
@@ -158,5 +183,37 @@ v_rc=$?
 set -e
 [[ "$v_rc" -ne 0 ]] || { echo "D: standalone verify exited 0 on config-less target with missing arch seat" >&2; exit 1; }
 grep -q "arch-1" "$ENV_DIR/verify.log" || { echo "D: standalone verify does not name missing arch seat" >&2; tail -20 "$ENV_DIR/verify.log" >&2; exit 1; }
+
+echo "==> E: mode a fails closed when a later critical seat never launches"
+make_env
+export FAKE_HERDR_REFUSE='arch-2'
+set +e
+"$ROOT/bin/stampede" up "$ENV_DIR/fresh project" -m a > "$ENV_DIR/up.log" 2>&1
+rc=$?
+set -e
+[[ "$rc" -ne 0 ]] || { echo "E: mode a exited 0 with arch_2 missing" >&2; tail -30 "$ENV_DIR/up.log" >&2; exit 1; }
+grep -q "arch-2" "$ENV_DIR/up.log" || { echo "E: mode a did not name the missing arch_2 seat" >&2; tail -30 "$ENV_DIR/up.log" >&2; exit 1; }
+if traces_of "$ENV_DIR/fresh project" | grep -q '"swarm_ready"'; then
+  echo "E: swarm_ready emitted with a missing critical seat in mode a" >&2
+  exit 1
+fi
+
+echo "==> F: resume map is bound before watch, and intake stays stopped until verification"
+make_env
+export FAKE_HERDR_WATCH_NOTE="$ENV_DIR/watch-order.txt"
+mkdir -p "$ENV_DIR/fresh project/maps"
+printf '# Map 17\n- [ ] #18\n' > "$ENV_DIR/fresh project/maps/17.md"
+"$ROOT/bin/stampede" up "$ENV_DIR/fresh project" -m r -n 17 > "$ENV_DIR/up.log" 2>&1 \
+  || { echo "F: resume launch failed" >&2; tail -40 "$ENV_DIR/up.log" >&2; exit 1; }
+[[ "$(tr -d '[:space:]' < "$ENV_DIR/fresh project/.herdr-swarm/active-map")" == "17" ]] \
+  || { echo "F: active map was not bound to 17" >&2; exit 1; }
+[[ ! -f "$ENV_DIR/fresh project/.herdr-swarm/intake-hold" ]] \
+  || { echo "F: intake remained held after verification" >&2; exit 1; }
+grep -q 'map=True' "$ENV_DIR/watch-order.txt" \
+  || { echo "F: watch started before the map existed" >&2; cat "$ENV_DIR/watch-order.txt" >&2; exit 1; }
+grep -q 'hold=False' "$ENV_DIR/watch-order.txt" \
+  || { echo "F: watch started while intake was held" >&2; cat "$ENV_DIR/watch-order.txt" >&2; exit 1; }
+grep -q 'body=17' "$ENV_DIR/watch-order.txt" \
+  || { echo "F: watch did not observe map 17" >&2; cat "$ENV_DIR/watch-order.txt" >&2; exit 1; }
 
 printf 'test_seat_missing: PASS\n'
