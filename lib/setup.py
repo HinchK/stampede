@@ -148,9 +148,10 @@ exec {shlex.quote(str(stampede))} up {shlex.quote(str(target))} -m "$mode" -t "$
 '''
 
 
-# Roles whose key is the seat. Anything else with a long role is an architect
-# only when the config has no architect yet (a renamed builder). notes and
-# reviewer beside a real arch_* stay custom seats.
+# Roles whose key is the seat. When nothing is an architect yet, the one custom
+# seat with a descriptive role is that renamed architect. notes and reviewer
+# (role equals the key) stay custom, as does any extra descriptive seat —
+# claiming every unresolved seat would drop or overwrite them.
 _STANDING_KEYS = {"looper", "pm", "gh", "docs", "helper"}
 
 
@@ -169,10 +170,18 @@ def seat_roles(existing_seats):
     roles = {key: seat_role(key, seat) for key, seat in existing_seats.items()}
     if any(role == "architect" for role in roles.values()):
         return roles
-    for key, role in roles.items():
-        if role == key and key not in _STANDING_KEYS:
-            roles[key] = "architect"
+    renamed = [
+        key for key, role in roles.items()
+        if role == key and key not in _STANDING_KEYS and _descriptive_role(existing_seats[key], key)
+    ]
+    if len(renamed) == 1:
+        roles[renamed[0]] = "architect"
     return roles
+
+
+def _descriptive_role(seat, key):
+    role = seat.get("role")
+    return isinstance(role, str) and bool(role) and role != key
 
 
 def fresh_key(role, taken):
