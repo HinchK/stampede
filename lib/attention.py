@@ -47,13 +47,15 @@ class Attention:
 
     def _read(self):
         if not self.file.exists():
-            return {"seen": [], "paused": {}, "repairs": {}, "inflight": {}, "approved": {}}
+            return {"seen": [], "paused": {}, "repairs": {}, "inflight": {}, "approved": {}, "finished": []}
         data = json.loads(self.file.read_text())
         if not isinstance(data, dict) or not isinstance(data.get("seen"), list) or not isinstance(data.get("paused"), dict):
             raise ValueError("invalid attention state; refusing to dispatch")
         data.setdefault("repairs", {})
         data.setdefault("inflight", {})
         data.setdefault("approved", {})
+        if not isinstance(data.get("finished"), list):
+            data["finished"] = []
         return data
 
     def _write(self, data):
@@ -97,6 +99,8 @@ class Attention:
             data["seen"] = [item for item in data["seen"] if item["ticket"] != ticket]
             # Resuming is the human's approval: loud mode lets the next decision through.
             data["approved"][ticket] = True
+            # A remembered closed issue can be reopened by the same resume.
+            data["finished"] = [item for item in data["finished"] if str(item) != str(ticket)]
         self._locked(change)
 
     def _log(self, name, message):
@@ -305,6 +309,17 @@ class Attention:
                 found = item
         return found
 
+    def _remember_finished(self, ids):
+        # shortcut: a closed issue remembered here stays skipped until resume,
+        # even if GitHub reopens it. Local files are re-read; they are cheap.
+        if not ids:
+            return
+        def remember(data):
+            have = {str(item) for item in data["finished"]}
+            have.update(ids)
+            data["finished"] = sorted(have)
+        self._locked(remember)
+
     def _map_head_ready(self, ticket):
         if not str(ticket).isdigit():
             return True
@@ -325,28 +340,45 @@ class Attention:
             if map_id:
                 # Resume Map is sequential: an earlier unchecked item that is
                 # still running, paused, or not yet integrated holds the rest.
-                for ticket in self.map_tickets(map_id):
-                    ticket_str = str(ticket)
-                    if self._ticket_settled(ticket_str):
-                        continue
-                    # A finished ticket left unchecked must not hold the map forever.
-                    try:
-                        if self._ticket_finished(ticket_str):
+                remembered = {str(item) for item in data["finished"]}
+                found = set()
+                cache = {}
+                real_issue = self.issue
+                def cached_issue(ticket):
+                    key = str(ticket)
+                    if key not in cache:
+                        cache[key] = real_issue(ticket)
+                    return cache[key]
+                self.issue = cached_issue
+                try:
+                    for ticket in self.map_tickets(map_id):
+                        ticket_str = str(ticket)
+                        if self._ticket_settled(ticket_str) or ticket_str in remembered:
                             continue
-                    except (OSError, ValueError, subprocess.SubprocessError):
-                        return ""
-                    if ticket_str in data["paused"]:
-                        return ""
-                    latest = self._latest_new(data, ticket_str)
-                    if latest and not (auto and latest.get("status") == "queued"):
-                        return ""
-                    try:
-                        if not self._map_head_ready(ticket_str):
+                        # A finished ticket left unchecked must not hold the map forever.
+                        try:
+                            finished = self._ticket_finished(ticket_str)
+                        except (OSError, ValueError, subprocess.SubprocessError):
                             return ""
-                    except (OSError, ValueError, subprocess.SubprocessError):
-                        return ""
-                    return ticket_str
-                return ""
+                        if finished:
+                            if cache.get(ticket_str) is not None:
+                                found.add(ticket_str)
+                            continue
+                        if ticket_str in data["paused"]:
+                            return ""
+                        latest = self._latest_new(data, ticket_str)
+                        if latest and not (auto and latest.get("status") == "queued"):
+                            return ""
+                        try:
+                            if not self._map_head_ready(ticket_str):
+                                return ""
+                        except (OSError, ValueError, subprocess.SubprocessError):
+                            return ""
+                        return ticket_str
+                    return ""
+                finally:
+                    self.issue = real_issue
+                    self._remember_finished(found)
 
         issues = sorted(self.list_issues(), key=lambda issue: issue["number"])
         for issue in issues:
@@ -471,7 +503,9 @@ class Attention:
                     data["seen"].pop()
                 else:
                     data["seen"][-1]["status"] = result["status"]
-                    data["approved"].pop(ticket, None)  # one approval, one decision
+                    # A blocked health ping is not the decision the human approved.
+                    if kind != "blocked":
+                        data["approved"].pop(ticket, None)
                 return result
             finally:
                 data["inflight"].pop(key, None)
@@ -483,6 +517,8 @@ class Attention:
             if ticket in data["paused"]:
                 return {"status": "paused", "reason": data["paused"][ticket]}
             if kind == "blocked":
+                if data["approved"].get(ticket):
+                    return {"status": "noted"}
                 return self._pause(data, ticket, f"blocked: {evidence}")
             if mode == "loud" and not data["approved"].get(ticket):
                 return self._pause(data, ticket, f"{kind}: human review required")

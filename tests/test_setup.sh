@@ -373,6 +373,35 @@ sed -e 's/^\[seats.builder\]/[seats.arch_1]/' -e 's/^name = "builder"/name = "ar
 seat_block "$DESC_REPO/swarm.config.toml" arch_1 | grep -q 'critical = true' \
   || fail 'descriptive architect role lost its critical default'
 
+# A custom key and a descriptive role together are still the one architect.
+COMBO_REPO="$TMP/combo repo"
+fresh_repo "$COMBO_REPO"
+cat > "$COMBO_REPO/swarm.config.toml" <<'EOF'
+[seats.looper]
+name = "looper"
+role = "Autonomous Loop Orchestrator"
+default_kind = "agy"
+model = "gemini-3.8-flash-low"
+
+[seats.pm]
+name = "pm"
+role = "Product Manager & Overseer"
+default_kind = "claude"
+model = "sonnet"
+
+[seats.builder]
+name = "builder"
+role = "Implementation Engine (GLM-5.3)"
+default_kind = "opencode"
+model = "zai-coding-plan/glm-5.3"
+EOF
+"$ROOT/bin/stampede" setup "$COMBO_REPO" --non-interactive --force --launcher "$TMP/combo-yeehaw.sh" \
+  --attention quiet >/dev/null || fail 'renamed descriptive architect edit failed'
+grep -q '\[seats.builder\]' "$COMBO_REPO/swarm.config.toml" || fail 'renamed descriptive architect was dropped'
+! grep -q '\[seats.arch_' "$COMBO_REPO/swarm.config.toml" || fail 'renamed descriptive architect grew the roster'
+seat_block "$COMBO_REPO/swarm.config.toml" builder | grep -q 'role = "Implementation Engine (GLM-5.3)"' \
+  || fail 'renamed descriptive architect lost its role'
+
 # A repurposed singleton key is not rendered twice: [seats.docs] serving as
 # the architect leaves the docs role a fresh, unused key.
 REUSE_REPO="$TMP/reuse repo"
@@ -409,11 +438,24 @@ cat > "$TMP/bin/opencode" <<'EOF'
 exit 0
 EOF
 chmod +x "$TMP/bin/opencode"
-"$ROOT/bin/stampede" setup "$PIN_REPO" --non-interactive --force --launcher "$TMP/pin-yeehaw.sh" \
-  --attention quiet >/dev/null || fail 'attention edit with a delisted pin failed'
+pin_out=$("$ROOT/bin/stampede" setup "$PIN_REPO" --non-interactive --force --launcher "$TMP/pin-yeehaw.sh" \
+  --attention quiet) || fail 'attention edit with a delisted pin failed'
 seat_block "$PIN_REPO/swarm.config.toml" arch_1 | grep -q 'model = "zai-coding-plan/glm-4.6"' \
   || fail 'attention-only edit replaced a delisted model pin'
 seat_block "$PIN_REPO/swarm.config.toml" arch_2 | grep -q 'model = "zai-coding-plan/glm-5.3"' \
   || fail 'attention-only edit changed a second seat pin'
+grep -q 'architect: opencode / zai-coding-plan/glm-4.6' <<<"$pin_out" \
+  || fail 'summary replaced a kept pin with the catalog substitute'
+! grep -q 'architect: opencode / zai-coding-plan/glm-5.3$' <<<"$pin_out" \
+  && ! grep -q 'architect: opencode / zai-coding-plan/glm-5.3 ' <<<"$pin_out" \
+  || fail 'summary reported the substitute for an unedited architect'
+# Enter accepts the offered pin. The summary and the file stay on that pin.
+pin_edit=$(printf '%s\n' edit '' '' '' '' '' '' '' '' '' '' '' '' '' '' '' '' '' yes \
+  | "$ROOT/bin/stampede" setup "$PIN_REPO" --launcher "$TMP/pin-yeehaw.sh") \
+  || fail 'accepting the offered pin failed'
+grep -q 'architect: opencode / zai-coding-plan/glm-4.6' <<<"$pin_edit" \
+  || fail 'interactive summary offered a substitute and dropped the pin'
+seat_block "$PIN_REPO/swarm.config.toml" arch_1 | grep -q 'model = "zai-coding-plan/glm-4.6"' \
+  || fail 'pressing enter replaced a delisted model pin'
 
 printf 'test_setup: PASS\n'

@@ -148,6 +148,12 @@ exec {shlex.quote(str(stampede))} up {shlex.quote(str(target))} -m "$mode" -t "$
 '''
 
 
+# Roles whose key is the seat. Anything else with a long role is an architect
+# only when the config has no architect yet (a renamed builder). notes and
+# reviewer beside a real arch_* stay custom seats.
+_STANDING_KEYS = {"looper", "pm", "gh", "docs", "helper"}
+
+
 def seat_role(key, seat):
     # Shipped and init configs use descriptive roles, so the key decides then.
     if seat.get("role") in ROLE_NAMES:
@@ -157,6 +163,16 @@ def seat_role(key, seat):
     if re.fullmatch(r"pm(_\d+)?", key):
         return "pm"
     return key
+
+
+def seat_roles(existing_seats):
+    roles = {key: seat_role(key, seat) for key, seat in existing_seats.items()}
+    if any(role == "architect" for role in roles.values()):
+        return roles
+    for key, role in roles.items():
+        if role == key and key not in _STANDING_KEYS:
+            roles[key] = "architect"
+    return roles
 
 
 def fresh_key(role, taken):
@@ -232,9 +248,10 @@ def render_config(target, choices, counts, attention, existing=None,
         if key not in ("swarm", "attention", "seats") and isinstance(values, dict):
             append_table(lines, (key,), values)
     role_meta = {role: (brief, tab) for role, _, _, _, brief, tab in ROLES}
+    roles = seat_roles(existing_seats)
     by_role = {}
-    for key, seat in existing_seats.items():
-        by_role.setdefault(seat_role(key, seat), []).append(key)
+    for key in existing_seats:
+        by_role.setdefault(roles[key], []).append(key)
     generated_keys = set()
     for role, _, _, _, _, _ in ROLES:
         count = counts[role] if role in counts else 1
@@ -256,10 +273,10 @@ def render_config(target, choices, counts, attention, existing=None,
             append_table(lines, ("seats", key), seat)
     for key, seat in existing_seats.items():
         # A counted role's unused seats are surplus; other custom seats stay.
-        if key in generated_keys or seat_role(key, seat) in counts:
+        if key in generated_keys or roles[key] in counts:
             continue
         preserved = dict(seat)
-        if seat_role(key, seat) in ("pm", "architect") and "critical" not in preserved:
+        if roles[key] in ("pm", "architect") and "critical" not in preserved:
             preserved["critical"] = True
         append_table(lines, ("seats", key), preserved)
     return "\n".join(lines) + "\n"
@@ -306,8 +323,9 @@ def main():
             existing = tomllib.load(handle)
     old_choices = {}
     old_counts = {"pm": 0, "architect": 0}
+    role_of = seat_roles(existing.get("seats", {}))
     for key, seat in existing.get("seats", {}).items():
-        role = seat_role(key, seat)
+        role = role_of[key]
         if role in old_counts:
             old_counts[role] += 1
         if role not in old_choices and seat.get("default_kind") and seat.get("model"):
@@ -390,26 +408,38 @@ def main():
             "gemini-3.8-flash-medium" if kind == "agy" and role == "architect" else
             "gemini-3.8-flash-low" if kind == "agy" else
             "zai-coding-plan/glm-5.3-flash" if role == "helper" else "zai-coding-plan/glm-5.3")
-        if previous and kind == previous[0]:
-            default_model = previous[1]
+        # Same provider: offer the pin already on the seat. A catalog substitute
+        # is a hint for new seats, not a change the operator confirmed.
+        pinned = previous[1] if previous and kind == previous[0] else None
+        if pinned:
+            default_model = pinned
         available = catalogs[kind]
+        listed = default_model
         if kind != "claude":
-            default_model = best_listed_model(kind, role, available, default_model)
-        if default_model is None and role not in models:
+            listed = best_listed_model(kind, role, available, default_model)
+        if pinned:
+            offer = pinned
+        elif listed is None and role not in models:
             parser.error(f"{role}: no fitted model found in {kind} catalog; pass --model {role}=ID")
-        model = models.get(role, default_model)
+        else:
+            offer = listed
+        model = models.get(role, offer)
         if not args.non_interactive:
-            answer = ask(f"{role} model (recommended {default_model})", model)
-            explicit = explicit or answer != model
+            answer = ask(f"{role} model (recommended {listed or model})", model)
+            explicit = explicit or answer != (pinned if pinned is not None else model)
             model = answer
         if any(ch.isspace() for ch in model) or not model:
             parser.error(f"{role}: model ID must be one nonempty token")
-        if available and model not in available and kind != "claude":
+        keeping = pinned is not None and model == pinned and not explicit
+        if not keeping and available and model not in available and kind != "claude":
             parser.error(f"{role}: model {model} is not in {kind} models output")
-        choices[role] = (kind, model)
+        # New seats of an untouched role still need a listed model. Existing
+        # seats keep their own pins because the role is not in changed.
+        choices[role] = (kind, listed if keeping and listed else model)
         if explicit:
             changed.add(role)
-        print(f"  {role}: {kind} / {model} ({cost_tier(model)} cost tier; recommended {tier})")
+        shown = pinned if keeping else model
+        print(f"  {role}: {kind} / {shown} ({cost_tier(shown)} cost tier; recommended {tier})")
 
     attention = args.attention or existing.get("attention", {}).get("mode", "medium")
     if not args.non_interactive:

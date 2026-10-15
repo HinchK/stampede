@@ -205,6 +205,20 @@ class AttentionTests(unittest.TestCase):
         self.assertIn(("dispatch", "arch-1-test", "53"), self.calls)
         self.assertEqual(self.policy.event("red", "53", "gate", "arch-1-test")["status"], "paused")
 
+    def test_blocked_ping_does_not_spend_loud_approval(self):
+        self.policy.set_mode("loud")
+        self.assertEqual(self.policy.event("new", "54", "ready")["status"], "paused")
+        self.policy.resume("54")
+        noted = self.policy.event("blocked", "54", "Herdr reports arch-1-test blocked", "arch-1-test")
+        self.assertEqual(noted["status"], "noted")
+        self.assertFalse(self.policy.is_paused("54"))
+        again = self.policy.event("blocked", "54", "review blocked after 2 rounds", "arch-1-test")
+        self.assertEqual(again["status"], "noted")
+        self.assertFalse(self.policy.is_paused("54"))
+        self.assertEqual(self.policy.event("new", "54", "ready")["status"], "dispatched")
+        self.assertIn(("dispatch", "arch-1-test", "54"), self.calls)
+        self.assertEqual(self.policy.event("red", "54", "gate", "arch-1-test")["status"], "paused")
+
     def test_terminal_tickets_are_never_dispatched(self):
         closed = {"title": "Done", "body": "", "assignees": [], "state": "CLOSED",
                   "labels": [{"name": "loop:ready"}]}
@@ -228,6 +242,31 @@ class AttentionTests(unittest.TestCase):
         self.policy.issue = lambda ticket: {"title": ticket, "body": "", "assignees": [], "labels": [],
                                             "state": "CLOSED" if ticket == "201" else "OPEN"}
         self.assertEqual(self.policy.next_ready_ticket(), "202")
+
+    def test_finished_map_tickets_are_not_reread(self):
+        maps_dir = self.repo / "maps"
+        maps_dir.mkdir(exist_ok=True)
+        (maps_dir / "beta.md").write_text("- [ ] #201 Shipped but unchecked\n- [ ] #202 Next\n")
+        (self.repo / ".herdr-swarm/active-map").write_text("beta\n")
+        calls = []
+
+        def issue(ticket):
+            calls.append(str(ticket))
+            return {"title": ticket, "body": "", "assignees": [], "labels": [],
+                    "state": "CLOSED" if str(ticket) == "201" else "OPEN"}
+
+        self.policy.issue = issue
+        self.assertEqual(self.policy.next_ready_ticket(), "202")
+        self.assertEqual(calls.count("201"), 1)
+        self.assertEqual(calls.count("202"), 1)
+        calls.clear()
+        self.assertEqual(self.policy.next_ready_ticket(), "202")
+        self.assertNotIn("201", calls)
+        self.assertEqual(calls.count("202"), 1)
+        self.policy.resume("201")
+        calls.clear()
+        self.assertEqual(self.policy.next_ready_ticket(), "202")
+        self.assertIn("201", calls)
 
     def test_issue_read_requests_state(self):
         class Result:
