@@ -25,6 +25,14 @@ slugify() {
     return 0
   fi
   [[ "$s" =~ ^[a-z] ]] || s="s-${s}"
+  # Herdr caps agent names at 32 chars and seats prepend up to 15 ("looper_standby-"),
+  # so the slug must stay <= 17. Longer slugs truncate to 11 + "-" + 4-digit checksum
+  # (distinct long repos sharing a prefix must not collide on agent names).
+  if (( ${#s} > 16 )); then
+    local sum
+    sum=$(printf '%s' "$s" | cksum | cut -d' ' -f1)
+    s=$(printf '%s-%04d' "${s:0:11}" $(( sum % 10000 )))
+  fi
   printf '%s\n' "$s"
 }
 
