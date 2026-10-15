@@ -169,7 +169,17 @@ providers_healthy_chain() {
 # it stays out of status and out of `git add` when the worker commits.
 providers_opencode_model_matches() { # FILE MODEL
   [[ -f "$1" ]] || return 1
-  jq -e --arg m "$2" '.model == $m' "$1" >/dev/null 2>&1
+  # opencode.jsonc may hold comments and trailing commas. Strip both outside
+  # strings ("$schema" URLs contain "//"), then compare the model.
+  "${PYTHON_BIN:-python3}" - "$1" "$2" >/dev/null 2>&1 <<'PYJSONC'
+import json, re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+string = r'("(?:\\.|[^"\\])*")'
+keep = lambda m: m.group(1) or ""
+text = re.sub(string + r'|//[^\n]*|/\*.*?\*/', keep, text, flags=re.S)
+text = re.sub(string + r'|,(?=\s*[}\]])', keep, text)
+sys.exit(0 if json.loads(text).get("model") == sys.argv[2] else 1)
+PYJSONC
 }
 
 providers_opencode_tracked() { # DIR REL
