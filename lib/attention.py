@@ -25,6 +25,10 @@ SCHEMA = json.dumps({"type": "object", "properties": {
     "required": ["action", "summary"], "additionalProperties": False})
 
 
+# Ticket frontmatter statuses this repo uses for finished work.
+TERMINAL_STATUSES = {"done", "resolved", "closed", "superseded"}
+
+
 class Attention:
     def __init__(self, repo):
         self.repo = Path(repo).resolve()
@@ -43,12 +47,13 @@ class Attention:
 
     def _read(self):
         if not self.file.exists():
-            return {"seen": [], "paused": {}, "repairs": {}, "inflight": {}}
+            return {"seen": [], "paused": {}, "repairs": {}, "inflight": {}, "approved": {}}
         data = json.loads(self.file.read_text())
         if not isinstance(data, dict) or not isinstance(data.get("seen"), list) or not isinstance(data.get("paused"), dict):
             raise ValueError("invalid attention state; refusing to dispatch")
         data.setdefault("repairs", {})
         data.setdefault("inflight", {})
+        data.setdefault("approved", {})
         return data
 
     def _write(self, data):
@@ -90,6 +95,8 @@ class Attention:
         def change(data):
             data["paused"].pop(ticket, None)
             data["seen"] = [item for item in data["seen"] if item["ticket"] != ticket]
+            # Resuming is the human's approval: loud mode lets the next decision through.
+            data["approved"][ticket] = True
         self._locked(change)
 
     def _log(self, name, message):
@@ -152,7 +159,7 @@ class Attention:
             return None
         try:
             result = subprocess.run(["gh", "issue", "view", str(ticket), "-R", repo,
-                                     "--json", "title,body,assignees,labels"],
+                                     "--json", "title,body,assignees,labels,state"],
                                     cwd=self.repo, capture_output=True, text=True, timeout=20, check=True)
             return json.loads(result.stdout)
         except (subprocess.SubprocessError, ValueError, OSError) as exc:
@@ -160,6 +167,8 @@ class Attention:
 
     def issue_ready(self, issue, rule=""):
         if not issue:
+            return False
+        if str(issue.get("state", "OPEN")).upper() != "OPEN":
             return False
         labels = {item.get("name") for item in issue.get("labels", [])}
         if "loop:blocked" in labels or issue.get("assignees"):
@@ -171,19 +180,27 @@ class Attention:
     def local_ticket_path(self, ticket):
         return self.repo / "maps" / "tickets" / f"{ticket}.md"
 
-    def local_ticket_ready(self, text):
-        if not str(text).strip():
-            return False
-        lines = text.splitlines()
+    def local_ticket_status(self, text):
+        lines = str(text).splitlines()
         front = lines[1:] if lines and lines[0].strip() == "---" else lines
         for line in front:
             if line.strip() == "---":
                 break
             if line.lower().startswith("status:"):
-                status = line.split(":", 1)[1].strip().strip("\"'").lower()
-                if status in {"blocked", "paused"}:
-                    return False
-        return True
+                return line.split(":", 1)[1].strip().strip("\"'").lower()
+        return ""
+
+    def local_ticket_ready(self, text):
+        if not str(text).strip():
+            return False
+        return self.local_ticket_status(text) not in {"blocked", "paused", *TERMINAL_STATUSES}
+
+    def _ticket_finished(self, ticket):
+        issue = self.issue(ticket)
+        if issue is not None:
+            return str(issue.get("state", "OPEN")).upper() != "OPEN"
+        path = self.local_ticket_path(ticket)
+        return path.is_file() and self.local_ticket_status(path.read_text()) in TERMINAL_STATUSES
 
     def seat_has_outstanding_work(self, seat):
         lease_file = self.state_dir / "leases.json"
@@ -312,6 +329,12 @@ class Attention:
                     ticket_str = str(ticket)
                     if self._ticket_settled(ticket_str):
                         continue
+                    # A finished ticket left unchecked must not hold the map forever.
+                    try:
+                        if self._ticket_finished(ticket_str):
+                            continue
+                    except (OSError, ValueError, subprocess.SubprocessError):
+                        return ""
                     if ticket_str in data["paused"]:
                         return ""
                     latest = self._latest_new(data, ticket_str)
@@ -448,6 +471,7 @@ class Attention:
                     data["seen"].pop()
                 else:
                     data["seen"][-1]["status"] = result["status"]
+                    data["approved"].pop(ticket, None)  # one approval, one decision
                 return result
             finally:
                 data["inflight"].pop(key, None)
@@ -460,7 +484,7 @@ class Attention:
                 return {"status": "paused", "reason": data["paused"][ticket]}
             if kind == "blocked":
                 return self._pause(data, ticket, f"blocked: {evidence}")
-            if mode == "loud":
+            if mode == "loud" and not data["approved"].get(ticket):
                 return self._pause(data, ticket, f"{kind}: human review required")
             if kind == "green":
                 if mode == "medium":

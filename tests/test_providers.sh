@@ -328,5 +328,35 @@ out=$(providers_healthy_chain "brand-new-llm claude" | tr '\n' ' ')
 out=$(providers_healthy_chain "pi brand-new-llm" | tr '\n' ' ')
 [[ -z "$out" ]] && ok "empty chain when nothing is healthy" || bad "empty: '$out'"
 
+# A commented opencode.jsonc that already pins the model is a match: JSONC
+# comments must not refuse the seat. The $schema URL holds a "//" that a
+# naive comment strip would corrupt.
+JSONC_REPO="$SCRATCH/jsonc-pin"
+init_pin_repo "$JSONC_REPO"
+mkdir -p "$JSONC_REPO/.opencode"
+cat > "$JSONC_REPO/.opencode/opencode.jsonc" <<'JSONC'
+{
+  // project pin
+  "$schema": "https://opencode.ai/config.json",
+  /* block
+     comment */
+  "model": "zai-coding-plan/glm-5.3", // trailing note
+  "permission": {"edit": "allow",},
+}
+JSONC
+git -C "$JSONC_REPO" add -f .opencode/opencode.jsonc
+git -C "$JSONC_REPO" -c user.name=Test -c user.email=test@example.com commit -qm 'track commented jsonc'
+jsonc_sha=$(git -C "$JSONC_REPO" rev-parse HEAD)
+providers_write_opencode_model "$JSONC_REPO" zai-coding-plan/glm-5.3 2>/dev/null \
+  && pin_repo_clean "$JSONC_REPO" "$jsonc_sha" \
+  && ok "commented tracked jsonc with the pinned model is accepted untouched" \
+  || bad "commented jsonc refused: $(git -C "$JSONC_REPO" status --porcelain)"
+if providers_write_opencode_model "$JSONC_REPO" zai-coding-plan/glm-4.6 2>/dev/null; then
+  bad "commented tracked jsonc with a different model was edited"
+else
+  pin_repo_clean "$JSONC_REPO" "$jsonc_sha" && ok "commented tracked jsonc with another model is refused, untouched" \
+    || bad "refusal dirtied: $(git -C "$JSONC_REPO" status --porcelain)"
+fi
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

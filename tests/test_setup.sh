@@ -147,6 +147,34 @@ LIFECYCLE_TARGET="$TMP/test" bash -c '
   case " ${SWARM_MISSING_SEATS:-} " in *" arch-9-test "*) exit 0 ;; *) exit 1 ;; esac
 ' _ "$ROOT" || fail 'empty ledger with a configured critical seat must fail verify (D4)'
 
+# Configs written before the critical field (stampede init, older setups)
+# keep main's protected pair: the PM and the first architect. An explicit
+# critical = false still wins.
+printf '[seats.pm]\nname = "pm"\ndefault_kind = "claude"\n\n[seats.arch_1]\nname = "arch"\ndefault_kind = "opencode"\n\n[seats.docs]\nname = "docs"\ndefault_kind = "agy"\n' > "$TMP/test/swarm.config.toml"
+LIFECYCLE_TARGET="$TMP/test" bash -c '
+  source "$1/lib/lifecycle.sh"
+  BOLD= DIM= RESET= RED= GREEN= YELLOW=
+  find_workspace_by_cwd() { printf "w1\n"; }
+  herdr() { return 0; }
+  seat_wait_ready() { SEAT_WAIT_MODE=ready; return 0; }
+  swarm_verify_seats "$LIFECYCLE_TARGET" >/dev/null 2>&1 || true
+  case " ${SWARM_CRITICAL_SEATS:-} " in *" pm-test "*) ;; *) exit 1 ;; esac
+  case " ${SWARM_CRITICAL_SEATS:-} " in *" arch-test "*) ;; *) exit 1 ;; esac
+  case " ${SWARM_CRITICAL_SEATS:-} " in *" docs-test "*) exit 1 ;; esac
+  exit 0
+' _ "$ROOT" || fail 'legacy config without critical lost the PM/architect launch protection'
+printf '[seats.pm]\nname = "pm"\ndefault_kind = "claude"\ncritical = false\n\n[seats.arch_1]\nname = "arch"\ndefault_kind = "opencode"\n' > "$TMP/test/swarm.config.toml"
+LIFECYCLE_TARGET="$TMP/test" bash -c '
+  source "$1/lib/lifecycle.sh"
+  BOLD= DIM= RESET= RED= GREEN= YELLOW=
+  find_workspace_by_cwd() { printf "w1\n"; }
+  herdr() { return 0; }
+  seat_wait_ready() { SEAT_WAIT_MODE=ready; return 0; }
+  swarm_verify_seats "$LIFECYCLE_TARGET" >/dev/null 2>&1 || true
+  case " ${SWARM_CRITICAL_SEATS:-} " in *" pm-test "*) exit 1 ;; esac
+  exit 0
+' _ "$ROOT" || fail 'explicit critical = false was overridden'
+
 before=$(shasum "$REPO/swarm.config.toml" | cut -d' ' -f1)
 repeat_out=$("$ROOT/bin/stampede" setup "$REPO" --non-interactive --launcher "$TMP/yeehaw.sh") \
   || fail 'idempotent repeat setup failed'
@@ -264,5 +292,128 @@ git -C "$REPO" worktree add --detach -q "$LINKED"
   || fail 'setup failed in a linked Git worktree'
 git -C "$LINKED" check-ignore -q .herdr-swarm/test.log \
   || fail 'linked worktree runtime state is not excluded'
+
+fresh_repo() {
+  mkdir -p "$1"
+  git -C "$1" init -q
+  git -C "$1" -c user.name=Test -c user.email=test@example.com commit --allow-empty -qm initial
+}
+seat_block() { # FILE KEY — the [seats.KEY] table body
+  awk -v h="[seats.$2]" '$0 == h { on = 1; next } /^\[/ { on = 0 } on' "$1"
+}
+
+# A provider-only edit applies the provider's compatible model too, so an
+# OpenCode model is never left behind on a Claude seat.
+EDIT_REPO="$TMP/edit repo"
+fresh_repo "$EDIT_REPO"
+"$ROOT/bin/stampede" setup "$EDIT_REPO" --non-interactive --launcher "$TMP/edit-yeehaw.sh" >/dev/null \
+  || fail 'edit fixture setup failed'
+"$ROOT/bin/stampede" setup "$EDIT_REPO" --non-interactive --force --launcher "$TMP/edit-yeehaw.sh" \
+  --provider architect=claude >/dev/null || fail 'provider-only edit failed'
+seat_block "$EDIT_REPO/swarm.config.toml" arch_1 | grep -q 'default_kind = "claude"' \
+  || fail 'provider-only edit did not change the existing architect provider'
+seat_block "$EDIT_REPO/swarm.config.toml" arch_1 | grep -q 'model = "sonnet"' \
+  || fail 'provider-only edit kept an incompatible OpenCode model on a Claude seat'
+
+# Interactive answers reach existing seats, not only fresh ones.
+printf '%s\n' edit '' '' '' '' '' '' '' '' '' '' opencode zai-coding-plan/glm-5.3-flash '' '' '' '' yes \
+  | "$ROOT/bin/stampede" setup "$EDIT_REPO" --launcher "$TMP/edit-yeehaw.sh" >/dev/null 2>&1 \
+  || fail 'interactive edit failed'
+seat_block "$EDIT_REPO/swarm.config.toml" arch_1 | grep -q 'default_kind = "opencode"' \
+  || fail 'interactive provider answer was not saved to the existing architect'
+seat_block "$EDIT_REPO/swarm.config.toml" arch_1 | grep -q 'model = "zai-coding-plan/glm-5.3-flash"' \
+  || fail 'interactive model answer was not saved to the existing architect'
+
+# The launcher path answered interactively can never replace the config.
+SAME_REPO="$TMP/same file repo"
+fresh_repo "$SAME_REPO"
+if printf '%s\n' '' '' '' '' '' '' '' '' '' '' '' '' '' '' '' "$SAME_REPO/swarm.config.toml" yes \
+    | "$ROOT/bin/stampede" setup "$SAME_REPO" --launcher "$TMP/same-yeehaw.sh" >/dev/null 2>&1; then
+  fail 'setup accepted the config path as the launcher destination'
+fi
+[[ ! -e "$SAME_REPO/swarm.config.toml" ]] || python3 -c 'import sys, tomllib; tomllib.load(open(sys.argv[1], "rb"))' \
+  "$SAME_REPO/swarm.config.toml" || fail 'launcher overwrote the generated config'
+
+# An attention-only edit keeps the architect roster size when the existing
+# architect has a custom key or a descriptive role.
+ROLE_REPO="$TMP/role repo"
+fresh_repo "$ROLE_REPO"
+cat > "$ROLE_REPO/swarm.config.toml" <<'EOF'
+[seats.looper]
+name = "looper"
+role = "Autonomous Loop Orchestrator"
+default_kind = "agy"
+model = "gemini-3.8-flash-low"
+
+[seats.pm]
+name = "pm"
+role = "Product Manager & Overseer"
+default_kind = "claude"
+model = "sonnet"
+
+[seats.builder]
+name = "builder"
+role = "architect"
+default_kind = "opencode"
+model = "zai-coding-plan/glm-5.3"
+EOF
+"$ROOT/bin/stampede" setup "$ROLE_REPO" --non-interactive --force --launcher "$TMP/role-yeehaw.sh" \
+  --attention quiet >/dev/null || fail 'custom-key attention edit failed'
+grep -q '\[seats.builder\]' "$ROLE_REPO/swarm.config.toml" || fail 'custom architect key was dropped'
+! grep -q '\[seats.arch_' "$ROLE_REPO/swarm.config.toml" || fail 'attention-only edit added architects beside builder'
+grep -c '^\[seats.pm' "$ROLE_REPO/swarm.config.toml" | grep -qx 1 || fail 'descriptive PM role grew the PM roster'
+DESC_REPO="$TMP/descriptive repo"
+fresh_repo "$DESC_REPO"
+sed -e 's/^\[seats.builder\]/[seats.arch_1]/' -e 's/^name = "builder"/name = "arch-1"/' \
+  -e 's/^role = "architect"/role = "Implementation Engine (GLM-5.3)"/' \
+  "$ROLE_REPO/swarm.config.toml.bak" > "$DESC_REPO/swarm.config.toml"
+"$ROOT/bin/stampede" setup "$DESC_REPO" --non-interactive --force --launcher "$TMP/desc-yeehaw.sh" \
+  --attention quiet >/dev/null || fail 'descriptive-role attention edit failed'
+! grep -q '\[seats.arch_2\]' "$DESC_REPO/swarm.config.toml" || fail 'descriptive architect role grew the roster'
+seat_block "$DESC_REPO/swarm.config.toml" arch_1 | grep -q 'critical = true' \
+  || fail 'descriptive architect role lost its critical default'
+
+# A repurposed singleton key is not rendered twice: [seats.docs] serving as
+# the architect leaves the docs role a fresh, unused key.
+REUSE_REPO="$TMP/reuse repo"
+fresh_repo "$REUSE_REPO"
+sed -e 's/^\[seats.builder\]/[seats.docs]/' "$ROLE_REPO/swarm.config.toml.bak" > "$REUSE_REPO/swarm.config.toml"
+"$ROOT/bin/stampede" setup "$REUSE_REPO" --non-interactive --force --launcher "$TMP/reuse-yeehaw.sh" \
+  --attention quiet >/dev/null 2>&1 || fail 'repurposed docs key broke an attention-only edit'
+[[ "$(grep -c '^\[seats.docs\]$' "$REUSE_REPO/swarm.config.toml")" == 1 ]] || fail 'seat key rendered twice'
+seat_block "$REUSE_REPO/swarm.config.toml" docs | grep -q 'role = "architect"' || fail 'repurposed seat lost its role'
+
+# An automatic catalog substitute is not an edit: when a pinned model has
+# left the provider's listing, an attention-only edit keeps every seat's pin.
+PIN_REPO="$TMP/pin repo"
+fresh_repo "$PIN_REPO"
+cat > "$PIN_REPO/swarm.config.toml" <<'EOF'
+[seats.looper]
+name = "looper"
+default_kind = "agy"
+model = "gemini-3.8-flash-low"
+
+[seats.arch_1]
+name = "arch-1"
+default_kind = "opencode"
+model = "zai-coding-plan/glm-4.6"
+
+[seats.arch_2]
+name = "arch-2"
+default_kind = "opencode"
+model = "zai-coding-plan/glm-5.3"
+EOF
+cat > "$TMP/bin/opencode" <<'EOF'
+#!/bin/sh
+[ "$1" = models ] && printf '%s\n' zai-coding-plan/glm-5.3 zai-coding-plan/glm-5.3-flash
+exit 0
+EOF
+chmod +x "$TMP/bin/opencode"
+"$ROOT/bin/stampede" setup "$PIN_REPO" --non-interactive --force --launcher "$TMP/pin-yeehaw.sh" \
+  --attention quiet >/dev/null || fail 'attention edit with a delisted pin failed'
+seat_block "$PIN_REPO/swarm.config.toml" arch_1 | grep -q 'model = "zai-coding-plan/glm-4.6"' \
+  || fail 'attention-only edit replaced a delisted model pin'
+seat_block "$PIN_REPO/swarm.config.toml" arch_2 | grep -q 'model = "zai-coding-plan/glm-5.3"' \
+  || fail 'attention-only edit changed a second seat pin'
 
 printf 'test_setup: PASS\n'

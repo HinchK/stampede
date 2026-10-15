@@ -1206,9 +1206,35 @@ lease_release_integrated() {
 # cmd_dispatch — looper-driven PTY dispatch (interactive mode). HEADLESS-4
 # boundary: headless QUEUE intake (deterministic iteration over queued
 # tickets via headless_spawn) is a separate slice; this path is unchanged.
+# A ticket starts from integrated work: fast-forward an isolated seat's own
+# checkout to the integration tip from inside that worktree. A diverged branch
+# or conflicting local change is git's refusal, and the dispatch stops there.
+dispatch_sync_worker() { # WORKER
+  local worker="$1" wt ref
+  [[ "$(_headless_seat_field "$worker" isolated)" == true ]] || return 0
+  wt=$(_headless_seat_field "$worker" worktree_dir)
+  [[ -n "$wt" && -d "$wt" ]] || return 0
+  [[ "$(cd "$wt" && pwd -P)" != "$(cd "$REPO_DIR" && pwd -P)" ]] || return 0
+  # ARB-SLUG-1: the same slug expression the arbiter drain uses.
+  ref="refs/heads/swarm/${SWARM_CONFIG_NAME:-$PROJECT_SLUG}/integration"
+  git -C "$wt" rev-parse -q --verify "$ref" >/dev/null || return 0
+  git -C "$wt" merge-base --is-ancestor "$ref" HEAD && return 0
+  if ! git -C "$wt" merge --ff-only -q "$ref" >/dev/null 2>&1; then
+    bad "dispatch BLOCKED: $worker checkout cannot fast-forward to ${ref#refs/heads/} (diverged or local changes) — nothing was sent"
+    return 1
+  fi
+  ok "$worker checkout fast-forwarded to ${ref#refs/heads/}"
+}
+
 cmd_dispatch() { # dispatch WORKER BRIEF_FILE [TICKET]
   local worker="$1" brief="$2" ticket="${3:-}" nonce out
   [[ -f "$brief" ]] || { bad "brief file not found: $brief"; exit 1; }
+  # Before the guard: a refused sync must not leave a lease behind.
+  # A ticket arrives as the argument or as the brief's own frontmatter.
+  if { [[ -n "$ticket" ]] || _dispatch_resolve_ticket "$brief" >/dev/null; } \
+      && ! dispatch_sync_worker "$worker"; then
+    exit 1
+  fi
   if ! dispatch_partition_guard "$worker" "$brief" "$ticket"; then
     exit 1   # fail-closed: blocked before anything reached the worker
   fi

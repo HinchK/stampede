@@ -194,6 +194,48 @@ class AttentionTests(unittest.TestCase):
             self.assertFalse(actual.repair("arch-1-test", brief, "82"))
         self.assertEqual(run.call_count, 1)
 
+    def test_loud_resume_approves_one_decision(self):
+        self.policy.set_mode("loud")
+        self.assertEqual(self.policy.event("new", "53", "ready")["status"], "paused")
+        self.policy.resume("53")
+        self.policy.seat_ready = lambda seat: False
+        self.assertEqual(self.policy.event("new", "53", "ready")["status"], "deferred")
+        self.policy.seat_ready = lambda seat: True
+        self.assertEqual(self.policy.event("new", "53", "ready")["status"], "dispatched")
+        self.assertIn(("dispatch", "arch-1-test", "53"), self.calls)
+        self.assertEqual(self.policy.event("red", "53", "gate", "arch-1-test")["status"], "paused")
+
+    def test_terminal_tickets_are_never_dispatched(self):
+        closed = {"title": "Done", "body": "", "assignees": [], "state": "CLOSED",
+                  "labels": [{"name": "loop:ready"}]}
+        self.policy.issue = lambda ticket: closed
+        self.assertEqual(self.policy.event("new", "71", "map:alpha")["status"], "paused")
+        self.assertNotIn(("dispatch", "arch-1-test", "71"), self.calls)
+        self.policy.issue = lambda ticket: None
+        path = self.repo / "maps" / "tickets" / "LOCAL-9.md"
+        path.parent.mkdir(parents=True)
+        for status in ("done", "resolved", "closed", "superseded"):
+            self.policy.resume("LOCAL-9")
+            path.write_text(f"---\nid: LOCAL-9\nstatus: {status}\n---\n\nAlready shipped\n")
+            self.assertEqual(self.policy.event("new", "LOCAL-9", f"map:{status}")["status"], "paused")
+        self.assertNotIn(("dispatch", "arch-1-test", "LOCAL-9"), self.calls)
+
+    def test_map_skips_terminal_ticket_instead_of_stalling(self):
+        maps_dir = self.repo / "maps"
+        maps_dir.mkdir(exist_ok=True)
+        (maps_dir / "beta.md").write_text("- [ ] #201 Shipped but unchecked\n- [ ] #202 Next\n")
+        (self.repo / ".herdr-swarm/active-map").write_text("beta\n")
+        self.policy.issue = lambda ticket: {"title": ticket, "body": "", "assignees": [], "labels": [],
+                                            "state": "CLOSED" if ticket == "201" else "OPEN"}
+        self.assertEqual(self.policy.next_ready_ticket(), "202")
+
+    def test_issue_read_requests_state(self):
+        class Result:
+            stdout = '{"title": "t", "body": "", "assignees": [], "labels": [], "state": "OPEN"}'
+        with patch.object(module.subprocess, "run", return_value=Result()) as run:
+            module.Attention(self.repo).issue("5")
+        self.assertIn("state", run.call_args.args[0][-1].split(","))
+
     def test_github_reads_use_project_profile_not_git_default(self):
         class Result:
             stdout = "[]"

@@ -788,7 +788,8 @@ slug = sys.argv[2]
 for k, v in cfg.get('seats', {}).items():
     if not v.get('enabled', True):
         continue
-    critical = v.get('critical', False)
+    # Configs older than the field keep main's protected pair (PM + first architect).
+    critical = v.get('critical', k in ('pm', 'arch_1', 'arch'))
     if not isinstance(critical, bool):
         raise SystemExit(f'config error: seats.{k}.critical must be a boolean')
     name = v.get('name', k)

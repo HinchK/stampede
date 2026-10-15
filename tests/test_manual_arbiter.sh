@@ -85,4 +85,52 @@ frontier_drain() { :; }
 arbiter_auto_drain() { echo called >> "$TMP/drain-calls"; }
 cmd_once
 [[ ! -f "$TMP/drain-calls" ]] || { echo 'supervisor auto-drained an arbiter candidate' >&2; exit 1; }
+
+# A ticket dispatch starts the worker from integrated work: an isolated seat's
+# checkout is fast-forwarded to the integration tip, a diverged one is refused
+# before any lease or prompt, and a root anchor is never moved.
+G="$TMP/git"
+gcommit() { git -C "$1" -c user.name=Test -c user.email=test@example.com commit -qm "$2"; }
+git init -q -b main "$G"
+printf 'base\n' > "$G/base.txt"; git -C "$G" add base.txt; gcommit "$G" base
+W1="$TMP/w1" W2="$TMP/w2"
+git -C "$G" worktree add -q -b swarm/test/arch_1 "$W1"
+git -C "$G" worktree add -q -b swarm/test/arch_2 "$W2"
+printf 'mine\n' > "$W2/mine.txt"; git -C "$W2" add mine.txt; gcommit "$W2" 'unintegrated work'
+git -C "$G" checkout -q --detach
+printf 'predecessor\n' > "$G/pred.txt"; git -C "$G" add pred.txt; gcommit "$G" 'integrated predecessor'
+git -C "$G" branch swarm/test/integration
+git -C "$G" checkout -q main
+# shellcheck disable=SC2034  # read by the sourced dispatch_sync_worker function
+REPO_DIR="$G" STATE_DIR="$TMP/sync-state" CHANNEL_DIR="$TMP/sync-channel" SWARM_CONFIG_NAME=test
+mkdir -p "$STATE_DIR" "$CHANNEL_DIR"
+printf '{"seats":[{"name":"arch-1-test","isolated":true,"worktree_dir":"%s"},{"name":"arch-2-test","isolated":true,"worktree_dir":"%s"},{"name":"pm-test","isolated":false,"worktree_dir":"%s"}]}' \
+  "$W1" "$W2" "$G" > "$STATE_DIR/seats.json"
+printf 'brief\n' > "$TMP/sync-brief.md"
+dispatch_partition_guard() { echo "$1" >> "$TMP/sync-leases"; }
+herdr() { echo "$*" >> "$TMP/sync-prompts"; }
+main_before=$(git -C "$G" rev-parse main)
+( cmd_dispatch arch-1-test "$TMP/sync-brief.md" 18 ) >/dev/null 2>&1 \
+  || { echo 'dispatch to a stale-but-clean worker failed' >&2; exit 1; }
+[[ "$(git -C "$W1" rev-parse HEAD)" == "$(git -C "$G" rev-parse swarm/test/integration)" ]] \
+  || { echo 'worker checkout was not brought to the integration tip' >&2; exit 1; }
+if ( cmd_dispatch arch-2-test "$TMP/sync-brief.md" 19 ) >/dev/null 2>&1; then
+  echo 'dispatch to a diverged worker was not refused' >&2; exit 1
+fi
+! grep -qx arch-2-test "$TMP/sync-leases" || { echo 'refused dispatch still took a lease' >&2; exit 1; }
+! grep -q 'arch-2-test' "$TMP/sync-prompts" || { echo 'refused dispatch still prompted the worker' >&2; exit 1; }
+( cmd_dispatch pm-test "$TMP/sync-brief.md" 20 ) >/dev/null 2>&1 || { echo 'root anchor dispatch failed' >&2; exit 1; }
+[[ "$(git -C "$G" rev-parse main)" == "$main_before" ]] || { echo 'dispatch moved the base checkout' >&2; exit 1; }
+
+# A brief carrying ticket frontmatter is a ticket too: it syncs without the
+# optional ticket argument.
+W3="$TMP/w3"
+git -C "$G" worktree add -q -b swarm/test/arch_3 "$W3" main
+printf '{"seats":[{"name":"arch-3-test","isolated":true,"worktree_dir":"%s"}]}' "$W3" > "$STATE_DIR/seats.json"
+printf -- '---\nid: 21\nowns: src/next.py\n---\n\nNext task\n' > "$TMP/sync-ticket-brief.md"
+( cmd_dispatch arch-3-test "$TMP/sync-ticket-brief.md" ) >/dev/null 2>&1 \
+  || { echo 'frontmatter ticket dispatch failed' >&2; exit 1; }
+[[ "$(git -C "$W3" rev-parse HEAD)" == "$(git -C "$G" rev-parse swarm/test/integration)" ]] \
+  || { echo 'frontmatter ticket brief skipped the checkout sync' >&2; exit 1; }
+
 printf 'test_manual_arbiter: PASS\n'
