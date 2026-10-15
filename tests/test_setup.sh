@@ -147,6 +147,34 @@ LIFECYCLE_TARGET="$TMP/test" bash -c '
   case " ${SWARM_MISSING_SEATS:-} " in *" arch-9-test "*) exit 0 ;; *) exit 1 ;; esac
 ' _ "$ROOT" || fail 'empty ledger with a configured critical seat must fail verify (D4)'
 
+# Configs written before the critical field (stampede init, older setups)
+# keep main's protected pair: the PM and the first architect. An explicit
+# critical = false still wins.
+printf '[seats.pm]\nname = "pm"\ndefault_kind = "claude"\n\n[seats.arch_1]\nname = "arch"\ndefault_kind = "opencode"\n\n[seats.docs]\nname = "docs"\ndefault_kind = "agy"\n' > "$TMP/test/swarm.config.toml"
+LIFECYCLE_TARGET="$TMP/test" bash -c '
+  source "$1/lib/lifecycle.sh"
+  BOLD= DIM= RESET= RED= GREEN= YELLOW=
+  find_workspace_by_cwd() { printf "w1\n"; }
+  herdr() { return 0; }
+  seat_wait_ready() { SEAT_WAIT_MODE=ready; return 0; }
+  swarm_verify_seats "$LIFECYCLE_TARGET" >/dev/null 2>&1 || true
+  case " ${SWARM_CRITICAL_SEATS:-} " in *" pm-test "*) ;; *) exit 1 ;; esac
+  case " ${SWARM_CRITICAL_SEATS:-} " in *" arch-test "*) ;; *) exit 1 ;; esac
+  case " ${SWARM_CRITICAL_SEATS:-} " in *" docs-test "*) exit 1 ;; esac
+  exit 0
+' _ "$ROOT" || fail 'legacy config without critical lost the PM/architect launch protection'
+printf '[seats.pm]\nname = "pm"\ndefault_kind = "claude"\ncritical = false\n\n[seats.arch_1]\nname = "arch"\ndefault_kind = "opencode"\n' > "$TMP/test/swarm.config.toml"
+LIFECYCLE_TARGET="$TMP/test" bash -c '
+  source "$1/lib/lifecycle.sh"
+  BOLD= DIM= RESET= RED= GREEN= YELLOW=
+  find_workspace_by_cwd() { printf "w1\n"; }
+  herdr() { return 0; }
+  seat_wait_ready() { SEAT_WAIT_MODE=ready; return 0; }
+  swarm_verify_seats "$LIFECYCLE_TARGET" >/dev/null 2>&1 || true
+  case " ${SWARM_CRITICAL_SEATS:-} " in *" pm-test "*) exit 1 ;; esac
+  exit 0
+' _ "$ROOT" || fail 'explicit critical = false was overridden'
+
 before=$(shasum "$REPO/swarm.config.toml" | cut -d' ' -f1)
 repeat_out=$("$ROOT/bin/stampede" setup "$REPO" --non-interactive --launcher "$TMP/yeehaw.sh") \
   || fail 'idempotent repeat setup failed'
