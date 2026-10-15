@@ -490,6 +490,14 @@ class Attention:
                 if key in data["inflight"]:
                     data["inflight"].pop(key)
                     return self._pause(data, ticket, "interrupted decision: inspect seat, lease, and logs before resuming")
+                # The first blocked ping is noted and keeps the loud approval.
+                # Once a later decision spends that approval, the same health
+                # evidence has to be able to pause instead of staying duplicate.
+                if kind == "blocked" and not data["approved"].get(ticket):
+                    for item in data["seen"]:
+                        if item["key"] == key and item.get("status") == "noted":
+                            item["status"] = "paused"
+                            return self._pause(data, ticket, f"blocked: {evidence}")
                 return {"status": "duplicate"}
             data["seen"].append({"key": key, "ticket": ticket, "kind": kind})
             data["seen"] = data["seen"][-1000:]

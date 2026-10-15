@@ -215,8 +215,14 @@ class AttentionTests(unittest.TestCase):
         again = self.policy.event("blocked", "54", "review blocked after 2 rounds", "arch-1-test")
         self.assertEqual(again["status"], "noted")
         self.assertFalse(self.policy.is_paused("54"))
+        same = self.policy.event("blocked", "54", "Herdr reports arch-1-test blocked", "arch-1-test")
+        self.assertEqual(same["status"], "duplicate")
+        self.assertFalse(self.policy.is_paused("54"))
         self.assertEqual(self.policy.event("new", "54", "ready")["status"], "dispatched")
         self.assertIn(("dispatch", "arch-1-test", "54"), self.calls)
+        repeated = self.policy.event("blocked", "54", "Herdr reports arch-1-test blocked", "arch-1-test")
+        self.assertEqual(repeated["status"], "paused")
+        self.assertTrue(self.policy.is_paused("54"))
         self.assertEqual(self.policy.event("red", "54", "gate", "arch-1-test")["status"], "paused")
 
     def test_terminal_tickets_are_never_dispatched(self):
