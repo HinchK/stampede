@@ -373,4 +373,47 @@ sed -e 's/^\[seats.builder\]/[seats.arch_1]/' -e 's/^name = "builder"/name = "ar
 seat_block "$DESC_REPO/swarm.config.toml" arch_1 | grep -q 'critical = true' \
   || fail 'descriptive architect role lost its critical default'
 
+# A repurposed singleton key is not rendered twice: [seats.docs] serving as
+# the architect leaves the docs role a fresh, unused key.
+REUSE_REPO="$TMP/reuse repo"
+fresh_repo "$REUSE_REPO"
+sed -e 's/^\[seats.builder\]/[seats.docs]/' "$ROLE_REPO/swarm.config.toml.bak" > "$REUSE_REPO/swarm.config.toml"
+"$ROOT/bin/stampede" setup "$REUSE_REPO" --non-interactive --force --launcher "$TMP/reuse-yeehaw.sh" \
+  --attention quiet >/dev/null 2>&1 || fail 'repurposed docs key broke an attention-only edit'
+[[ "$(grep -c '^\[seats.docs\]$' "$REUSE_REPO/swarm.config.toml")" == 1 ]] || fail 'seat key rendered twice'
+seat_block "$REUSE_REPO/swarm.config.toml" docs | grep -q 'role = "architect"' || fail 'repurposed seat lost its role'
+
+# An automatic catalog substitute is not an edit: when a pinned model has
+# left the provider's listing, an attention-only edit keeps every seat's pin.
+PIN_REPO="$TMP/pin repo"
+fresh_repo "$PIN_REPO"
+cat > "$PIN_REPO/swarm.config.toml" <<'EOF'
+[seats.looper]
+name = "looper"
+default_kind = "agy"
+model = "gemini-3.8-flash-low"
+
+[seats.arch_1]
+name = "arch-1"
+default_kind = "opencode"
+model = "zai-coding-plan/glm-4.6"
+
+[seats.arch_2]
+name = "arch-2"
+default_kind = "opencode"
+model = "zai-coding-plan/glm-5.3"
+EOF
+cat > "$TMP/bin/opencode" <<'EOF'
+#!/bin/sh
+[ "$1" = models ] && printf '%s\n' zai-coding-plan/glm-5.3 zai-coding-plan/glm-5.3-flash
+exit 0
+EOF
+chmod +x "$TMP/bin/opencode"
+"$ROOT/bin/stampede" setup "$PIN_REPO" --non-interactive --force --launcher "$TMP/pin-yeehaw.sh" \
+  --attention quiet >/dev/null || fail 'attention edit with a delisted pin failed'
+seat_block "$PIN_REPO/swarm.config.toml" arch_1 | grep -q 'model = "zai-coding-plan/glm-4.6"' \
+  || fail 'attention-only edit replaced a delisted model pin'
+seat_block "$PIN_REPO/swarm.config.toml" arch_2 | grep -q 'model = "zai-coding-plan/glm-5.3"' \
+  || fail 'attention-only edit changed a second seat pin'
+
 printf 'test_setup: PASS\n'

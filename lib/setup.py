@@ -161,7 +161,13 @@ def seat_role(key, seat):
 
 def fresh_key(role, taken):
     index = 1
-    while seat_key_for(role, index) in taken and seat_key_for(role, index) != seat_key_for(role, index + 1):
+    while seat_key_for(role, index) in taken:
+        if seat_key_for(role, index) == seat_key_for(role, index + 1):
+            # A singleton key already serves another role: suffix it instead.
+            index = 2
+            while f"{role}_{index}" in taken:
+                index += 1
+            return f"{role}_{index}"
         index += 1
     return seat_key_for(role, index)
 
@@ -365,11 +371,15 @@ def main():
         if detected[kind] and not catalog and kind != "claude":
             print(f"  {kind} model list unavailable; recommendations will be checked again when seating")
     choices = {}
+    changed = set()  # roles the user edited; catalog substitutes never count
     for role, recommended_kind, recommended_model, tier, _, _ in ROLES:
         previous = old_choices.get(role)
+        explicit = role in providers or role in models
         kind = providers.get(role, previous[0] if previous else recommended_kind)
         if not args.non_interactive:
-            kind = ask(f"{role} harness ({tier} cost recommendation)", kind)
+            answer = ask(f"{role} harness ({tier} cost recommendation)", kind)
+            explicit = explicit or answer != kind
+            kind = answer
         if role == "looper" and kind != "agy":
             parser.error("the looper must use AGY in this release")
         if kind not in KINDS or not detected.get(kind):
@@ -389,12 +399,16 @@ def main():
             parser.error(f"{role}: no fitted model found in {kind} catalog; pass --model {role}=ID")
         model = models.get(role, default_model)
         if not args.non_interactive:
-            model = ask(f"{role} model (recommended {default_model})", model)
+            answer = ask(f"{role} model (recommended {default_model})", model)
+            explicit = explicit or answer != model
+            model = answer
         if any(ch.isspace() for ch in model) or not model:
             parser.error(f"{role}: model ID must be one nonempty token")
         if available and model not in available and kind != "claude":
             parser.error(f"{role}: model {model} is not in {kind} models output")
         choices[role] = (kind, model)
+        if explicit:
+            changed.add(role)
         print(f"  {role}: {kind} / {model} ({cost_tier(model)} cost tier; recommended {tier})")
 
     attention = args.attention or existing.get("attention", {}).get("mode", "medium")
@@ -414,9 +428,6 @@ def main():
         return
     # A changed role gets its provider and model together, from flags or
     # answers alike; unchanged roles keep each existing seat's own pins.
-    changed = {role for role, choice in choices.items()
-               if role in providers or role in models
-               or (role in old_choices and choice != old_choices[role])}
     content = render_config(target, choices, {"pm": args.pm_count, "architect": args.architect_count},
                             attention, existing, provider_overrides=changed, model_overrides=changed)
     staged_config = stage(config, content)
