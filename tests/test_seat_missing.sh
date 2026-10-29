@@ -108,7 +108,7 @@ PY
   "$ROOT/bin/stampede" setup "$target" --non-interactive --launcher "$ENV_DIR/yeehaw.sh" >/dev/null
   sed -i.bak 's/^default_kind = "opencode"$/kinds = ["opencode", "claude"]/' "$target/swarm.config.toml"
   mkdir -p "$target/.herdr-swarm"
-  printf 'REPO=none\nTEST_CMD=make test\n' > "$target/.herdr-swarm/profile.env"
+  printf 'REPO=""\nREPO_LOCAL_ONLY=1\nTEST_CMD=make test\n' > "$target/.herdr-swarm/profile.env"
 }
 
 traces_of() { # TARGET -> stdout: every telemetry event line
@@ -215,5 +215,90 @@ grep -q 'hold=False' "$ENV_DIR/watch-order.txt" \
   || { echo "F: watch started while intake was held" >&2; cat "$ENV_DIR/watch-order.txt" >&2; exit 1; }
 grep -q 'body=17' "$ENV_DIR/watch-order.txt" \
   || { echo "F: watch did not observe map 17" >&2; cat "$ENV_DIR/watch-order.txt" >&2; exit 1; }
+
+# LOOPER-1 D1: bounded_looper must not silently seat the orchestrator as a
+# log-tail shell pane — the configured agent kind launches or the launch
+# fails closed. setup.py writes bounded_looper = True into every target, so
+# these scenarios exercise the default configuration every herd gets.
+force_looper_agy() { # TARGET — rewrite [seats.looper] to default_kind = "agy"
+  sed -i.looperbak -E '/\[seats\.looper\]/,/^$/{ s/^kinds = .*/default_kind = "agy"/; s/^default_kind = ".*"$/default_kind = "agy"/; }' "$1/swarm.config.toml"
+}
+
+echo "==> G: bounded looper seats its configured agent (agy), never a shell tail"
+make_env
+force_looper_agy "$ENV_DIR/fresh project"
+"$ENV_DIR/yeehaw.sh" start --brainstorm --topic "looper launch" > "$ENV_DIR/up.log" 2>&1 \
+  || { echo "G: up failed with a healthy looper chain" >&2; tail -30 "$ENV_DIR/up.log" >&2; exit 1; }
+python3 - "$ENV_DIR/herdr-state.json" <<'PY' || { echo "G: looper agent is not agy in the registry" >&2; exit 1; }
+import json, sys
+state = json.loads(open(sys.argv[1]).read())
+looper = [a for a in state['agents'] if a['name'].startswith('looper-')]
+assert looper and looper[0]['agent'] == 'agy', f"looper agents: {looper}"
+PY
+jq -e '.seats[] | select(.name | startswith("looper-")) | .kind == "agy" and .agentless == false' \
+  "$ENV_DIR/fresh project/.herdr-swarm/seats.json" >/dev/null \
+  || { echo "G: ledger does not record the looper as an agy agent seat" >&2; exit 1; }
+grep -qi 'suite gate' "$ENV_DIR/up.log" \
+  && { echo "G: suite-gate warning printed with a runnable TEST_CMD and gate on" >&2; exit 1; } || true
+
+echo "==> H: refused looper launch fails closed and never reports healthy"
+make_env
+force_looper_agy "$ENV_DIR/fresh project"
+export FAKE_HERDR_REFUSE='looper-'
+set +e
+"$ENV_DIR/yeehaw.sh" start --brainstorm --topic "looper launch" > "$ENV_DIR/up.log" 2>&1
+rc=$?
+set -e
+[[ "$rc" -ne 0 ]] || { echo "H: up exited 0 with the orchestrator never seated" >&2; tail -30 "$ENV_DIR/up.log" >&2; exit 1; }
+grep -q "looper-" "$ENV_DIR/up.log" || { echo "H: failed-seat summary does not name the looper" >&2; tail -30 "$ENV_DIR/up.log" >&2; exit 1; }
+if traces_of "$ENV_DIR/fresh project" | grep -q '"swarm_ready"'; then
+  echo "H: swarm_ready emitted despite a missing orchestrator" >&2
+  exit 1
+fi
+if grep -q 'loop-bot-herd.sh' "$FAKE_HERDR_LOG"; then
+  echo "H: supervisor watch started despite the failed launch" >&2
+  exit 1
+fi
+
+echo "==> I: a stale ledger recording the looper as agentless fails verification"
+make_env
+unset FAKE_HERDR_REFUSE
+"$ENV_DIR/yeehaw.sh" start --brainstorm --topic "stale ledger" > "$ENV_DIR/up.log" 2>&1 \
+  || { echo "I: baseline launch failed" >&2; tail -30 "$ENV_DIR/up.log" >&2; exit 1; }
+python3 - "$ENV_DIR/fresh project/.herdr-swarm/seats.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+ledger = json.loads(open(p).read())
+for seat in ledger['seats']:
+    if seat['name'].startswith('looper-'):
+        seat['kind'] = 'shell'
+        seat['agentless'] = True
+open(p, 'w').write(json.dumps(ledger, indent=2))
+PY
+set +e
+"$ROOT/bin/stampede" verify "$ENV_DIR/fresh project" > "$ENV_DIR/verify.log" 2>&1
+v_rc=$?
+set -e
+[[ "$v_rc" -ne 0 ]] || { echo "I: verify passed a shell/agentless looper as healthy" >&2; exit 1; }
+grep -q "looper-" "$ENV_DIR/verify.log" || { echo "I: verify does not name the agentless looper" >&2; tail -20 "$ENV_DIR/verify.log" >&2; exit 1; }
+grep -qi "agentless" "$ENV_DIR/verify.log" || { echo "I: verify does not say the looper is agentless" >&2; tail -20 "$ENV_DIR/verify.log" >&2; exit 1; }
+
+echo "==> J: unset suite gate is a visible warning in status and the up summary"
+printf 'REPO=""\nREPO_LOCAL_ONLY=1\n' > "$ENV_DIR/fresh project/.herdr-swarm/profile.env"
+bash "$ROOT/lib/lifecycle.sh" status "$ENV_DIR/fresh project" > "$ENV_DIR/status.log" 2>&1 || true
+grep -qi 'suite gate' "$ENV_DIR/status.log" \
+  || { echo "J: status does not warn about the unset suite gate" >&2; cat "$ENV_DIR/status.log" >&2; exit 1; }
+grep -q '⚠' "$ENV_DIR/status.log" \
+  || { echo "J: status warning is not visually flagged" >&2; cat "$ENV_DIR/status.log" >&2; exit 1; }
+# Prove the up-summary warning on a fresh herd (keeps the scenario
+# independent of the seat-reuse path a re-up against a live swarm takes).
+make_env
+mkdir -p "$ENV_DIR/fresh project/.herdr-swarm"
+printf '{"paused": false, "frontier_drain": false, "suite_gate": false}\n' \
+  > "$ENV_DIR/fresh project/.herdr-swarm/control.json"
+"$ENV_DIR/yeehaw.sh" start --brainstorm --topic "gate warning" > "$ENV_DIR/up2.log" 2>&1 \
+  || { echo "J: gate-off up failed" >&2; tail -30 "$ENV_DIR/up2.log" >&2; exit 1; }
+grep -qi 'suite gate' "$ENV_DIR/up2.log" \
+  || { echo "J: up summary does not warn when the suite gate is off" >&2; tail -30 "$ENV_DIR/up2.log" >&2; exit 1; }
 
 printf 'test_seat_missing: PASS\n'

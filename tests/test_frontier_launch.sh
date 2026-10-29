@@ -78,7 +78,7 @@ export PATH="$TMP/bin:$PATH"
 export FAKE_HERDR_STATE="$TMP/herdr-state.json" FAKE_HERDR_LOG="$TMP/herdr-calls.jsonl"
 "$ROOT/bin/stampede" setup "$TARGET" --non-interactive --launcher "$TMP/yeehaw.sh" >/dev/null
 mkdir -p "$TARGET/.herdr-swarm"
-printf 'REPO=none\nTEST_CMD=make test\n' > "$TARGET/.herdr-swarm/profile.env"
+printf 'REPO=""\nREPO_LOCAL_ONLY=1\nTEST_CMD=make test\n' > "$TARGET/.herdr-swarm/profile.env"
 
 "$TMP/yeehaw.sh" start --seat-only > "$TMP/first.log" 2>&1 || { tail -40 "$TMP/first.log"; exit 1; }
 python3 - "$TARGET/.herdr-swarm/seats.json" "$FAKE_HERDR_LOG" <<'PY'
@@ -86,11 +86,15 @@ import json, sys
 ledger = json.load(open(sys.argv[1]))
 calls = [json.loads(line) for line in open(sys.argv[2])]
 seats = ledger['seats']
-assert len([s for s in seats if not s.get('agentless')]) == 6, seats
-assert all(s['isolated'] for s in seats if not s.get('agentless')), seats
-assert len([s for s in seats if s.get('agentless')]) >= 5, seats
+# LOOPER-1 D1: the looper is a real agent seat (bounded mode no longer
+# seats a shell log-tail), rooted in the target repo (not isolated).
+assert len([s for s in seats if not s.get('agentless')]) == 7, seats
+assert all(s['isolated'] for s in seats if not s.get('agentless') and not s['name'].startswith('looper-')), seats
+looper_seat = next(s for s in seats if s['name'].startswith('looper-'))
+assert not looper_seat.get('agentless') and not looper_seat['isolated'], looper_seat
+assert len([s for s in seats if s.get('agentless')]) >= 4, seats
 starts = [c for c in calls if c[:2] == ['agent', 'start']]
-assert len(starts) == 6, starts
+assert len(starts) == 7, starts
 oc_starts = [c for c in starts if c[c.index('--kind') + 1] == 'opencode']
 assert len(oc_starts) == 2, starts
 assert all('--model' not in c for c in oc_starts), starts
@@ -98,7 +102,7 @@ assert any('--model' in c and 'sonnet' in c for c in starts), starts
 arch = next(s for s in seats if s['name'].startswith('arch-1'))
 pin = open(arch['worktree_dir'] + '/.opencode/opencode.json').read()
 assert 'zai-coding-plan/glm-5.3' in pin, pin
-assert not any(c[:2] == ['agent', 'start'] and 'looper' in c[2] for c in calls), calls
+assert any(c[:2] == ['agent', 'start'] and c[2].startswith('looper-') for c in calls), calls
 assert not any('arbiter' in ' '.join(c) for c in calls), calls
 PY
 [[ -f "$TARGET/.herdr-swarm/seat-only" ]] || { echo 'seat-only intake marker absent' >&2; exit 1; }

@@ -68,7 +68,7 @@ if "$ROOT/bin/stampede" arbiter "$REPO" init-ref >/dev/null 2>&1; then
   fail 'arbiter ran without a project profile'
 fi
 mkdir -p "$REPO/.herdr-swarm"
-printf 'TEST_CMD=make test\nREPO=none\n' > "$REPO/.herdr-swarm/profile.env"
+printf 'TEST_CMD=make test\nREPO=""\nREPO_LOCAL_ONLY=1\n' > "$REPO/.herdr-swarm/profile.env"
 git -C "$REPO" -c user.name=Test -c user.email=test@example.com commit --allow-empty -qm initial
 "$ROOT/bin/stampede" arbiter "$REPO" init-ref >/dev/null || fail 'manual project-bound arbiter init failed'
 git -C "$REPO" show-ref --verify --quiet refs/heads/swarm/my-project/integration \
@@ -112,13 +112,15 @@ REPO_DIR="$REPO" STATE_DIR="$REPO/.herdr-swarm" bash -c 'source "$1"; lease_acqu
   || fail 'runtime ticket lease acquisition failed'
 jq -e '.leases[] | select(.ticket == "77" and .seat == "arch-test" and .exclusive == true)' \
   "$REPO/.herdr-swarm/leases.json" >/dev/null || fail 'runtime ticket lease was not recorded'
-printf '{"workspace_id":"w1","seats":[{"name":"looper-test","kind":"shell","pane":"w1:p1","agentless":true},{"name":"arch-test","kind":"opencode","pane":"w1:p2"}]}' > "$REPO/.herdr-swarm/seats.json"
+printf '{"workspace_id":"w1","seats":[{"name":"worklog-test","kind":"log","pane":"w1:p1","agentless":true},{"name":"arch-test","kind":"opencode","pane":"w1:p2"}]}' > "$REPO/.herdr-swarm/seats.json"
 # D4 fixture: swarm_verify_seats compares the configured, enabled roster
 # against the ledger, so the verify target needs a config whose namespaced
 # roster matches the seeded ledger exactly (dir name "test" is the slug:
-# looper-test / arch-test).
+# worklog-test / arch-test). LOOPER-1 D1: the looper is critical-by-default
+# and may never be agentless, so the pane-present path is exercised with a
+# log view instead.
 mkdir -p "$TMP/test/.herdr-swarm"
-printf '[seats.looper]\nname = "looper"\ndefault_kind = "agy"\n\n[seats.arch_1]\nname = "arch"\ndefault_kind = "opencode"\ncritical = true\n' > "$TMP/test/swarm.config.toml"
+printf '[seats.worklog]\nname = "worklog"\ndefault_kind = "agy"\n\n[seats.arch_1]\nname = "arch"\ndefault_kind = "opencode"\ncritical = true\n' > "$TMP/test/swarm.config.toml"
 cp "$REPO/.herdr-swarm/seats.json" "$TMP/test/.herdr-swarm/seats.json"
 LIFECYCLE_TARGET="$TMP/test" bash -c '
   source "$1/lib/lifecycle.sh"

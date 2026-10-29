@@ -395,9 +395,21 @@ swarm_status() {
   # 3. Profile Information
   local env_file="${abs_target}/.herdr-swarm/profile.env"
   if [[ -f "$env_file" ]]; then
+    local _repo_disp _test_cmd
+    _repo_disp=$(sed -nE 's/^REPO="?([^"]*)"?$/\1/p' "$env_file" | tail -n1)
+    [[ -n "$_repo_disp" ]] || _repo_disp="local-only"
+    _test_cmd=$(sed -nE 's/^TEST_CMD="?([^"]*)"?$/\1/p' "$env_file" | tail -n1)
     printf '  %s✓ Profile:%s\n' "$GREEN" "$RESET"
-    printf '      Repo:      %s\n' "$(grep -E '^REPO=' "$env_file" | cut -d'=' -f2- || echo "none")"
-    printf '      Test Cmd:  %s\n' "$(grep -E '^TEST_CMD=' "$env_file" | cut -d'=' -f2- || echo "none")"
+    printf '      Repo:      %s\n' "$_repo_disp"
+    # LOOPER-1 D3: an unset/non-runnable TEST_CMD stops ticket intake —
+    # surface it here, not only in worklog.log.
+    if [[ -n "$_test_cmd" && "$_test_cmd" != "none" && "$_test_cmd" != "true" ]]; then
+      printf '      Test Cmd:  %s\n' "$_test_cmd"
+    else
+      printf '      %s⚠ Test Cmd: %s — suite gate unavailable; ticket intake is STOPPED.%s\n' \
+        "$YELLOW" "${_test_cmd:-<unset>}" "$RESET"
+      printf '        %sSet a runnable TEST_CMD in %s%s\n' "$YELLOW" "$env_file" "$RESET"
+    fi
     printf '      Ecosystem: %s\n' "$(grep -E '^ECOSYSTEM=' "$env_file" | cut -d'=' -f2- || echo "generic")"
   else
     printf '  %s• Profile:%s uninitialized (.herdr-swarm/profile.env)\n' "$DIM" "$RESET"
@@ -788,8 +800,10 @@ slug = sys.argv[2]
 for k, v in cfg.get('seats', {}).items():
     if not v.get('enabled', True):
         continue
-    # Configs older than the field keep main's protected pair (PM + first architect).
-    critical = v.get('critical', k in ('pm', 'arch_1', 'arch'))
+    # Configs older than the field keep main's protected set: the
+    # orchestrator (looper), PM, and the first architect. A missing
+    # orchestrator means the herd cannot dispatch (LOOPER-1 D1).
+    critical = v.get('critical', k in ('looper', 'pm', 'arch_1', 'arch'))
     if not isinstance(critical, bool):
         raise SystemExit(f'config error: seats.{k}.critical must be a boolean')
     name = v.get('name', k)
@@ -830,6 +844,15 @@ PYROSTER
   while IFS=$'\t' read -r name kind pane agentless; do
     [[ -n "$name" ]] || continue
     if [[ "$agentless" == true ]]; then
+      # LOOPER-1 D1: a critical seat recorded agentless (a stale ledger from
+      # the old shell-looper seating, or a hand-edit) is a launch failure —
+      # the orchestrator cannot run as a bare pane.
+      if [[ " ${SWARM_CRITICAL_SEATS:-} " == *" $name "* ]]; then
+        printf '  %s✖ %s: critical seat recorded agentless (no agent attached — re-run up to re-seat)%s\n' \
+          "$RED" "$name" "$RESET"
+        failures=1
+        continue
+      fi
       if herdr pane list 2>/dev/null | jq -e --arg p "$pane" '.result.panes[]? | select(.pane_id == $p)' >/dev/null 2>&1; then
         printf '  %s✓ %s (%s in %s): pane present%s\n' "$GREEN" "$name" "$kind" "$pane" "$RESET"
       else
