@@ -16,7 +16,13 @@ resolve_python
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 BRIEFS_SRC_DIR="${SCRIPT_DIR}/briefs"
 
-# Substitute {{KEY}} variables in a template file using Python for safety
+# Substitute {{KEY}} variables in a template file using Python for safety.
+# LOOPER-1 D2 conditional rendering (flags travel via the environment,
+# never interpolated into the Python source):
+#   BRIEF_REPO_LOCAL_ONLY=1  a local-only repo renders no '-R local-only'
+#                            gh flags; prose says "local-only" plainly.
+#   BRIEF_PROXY_ENDPOINT     empty/absent drops the proxy endpoint line
+#                            instead of rendering empty backticks.
 substitute_template() {
   local template_in="$1"
   local output_out="$2"
@@ -25,13 +31,23 @@ substitute_template() {
   mkdir -p "$(dirname "$output_out")"
 
   "$PYTHON_BIN" - "$template_in" "$output_out" "$vars_json" <<'PYCODE'
-import json, sys
+import json, os, sys
 
 with open(sys.argv[1], 'r', encoding='utf-8') as f:
     content = f.read()
 
 for k, v in json.loads(sys.argv[3]).items():
     content = content.replace('{{' + k + '}}', str(v))
+
+if os.environ.get('BRIEF_REPO_LOCAL_ONLY') == '1':
+    content = content.replace(' -R local-only', '').replace('-R local-only ', '')
+    content = content.replace('`-R local-only`', 'the default remote')
+
+if not os.environ.get('BRIEF_PROXY_ENDPOINT'):
+    content = ''.join(
+        line + '\n' for line in content.splitlines()
+        if 'Local routing proxy endpoint: ``' not in line
+    )
 
 with open(sys.argv[2], 'w', encoding='utf-8') as f:
     f.write(content)
@@ -47,7 +63,15 @@ render_all_briefs() {
   # Load profile variables
   # shellcheck disable=SC1091  # dynamically resolved sibling lib
   source "${SCRIPT_DIR}/lib/profile.sh"
-  ensure_profile "$target_dir" 0 >/dev/null
+  # LOOPER-1 D2: a broken profile must abort the render, not fall back to
+  # placeholder defaults ('-R none', `run none`). errexit is suppressed for
+  # this whole function when a caller invokes it in a `||` list, so the
+  # failure is checked explicitly here.
+  if ! ensure_profile "$target_dir" 0 >/dev/null 2>&1; then
+    printf '  \033[31m✖ Brief render aborted: profile unresolvable for %s (set REPO/TEST_CMD, or mark local-only).\033[0m\n' \
+      "$target_dir" >&2
+    return 1
+  fi
 
   # Load config variables
   # shellcheck disable=SC1091  # dynamically resolved sibling lib
@@ -61,12 +85,22 @@ render_all_briefs() {
   # Travel via the environment — never interpolated into the Python source.
   export SCRIPT_DIR
   export ARBITER_BIN="${SCRIPT_DIR}/lib/arbiter.sh"
+  # LOOPER-1 D2 conditional values: an empty/none REPO renders as a plain
+  # 'local-only' statement (never '-R none'); 'none' means unset for the
+  # proxy endpoint too.
+  export BRIEF_REPO_LOCAL_ONLY=0
+  if [[ -z "${REPO:-}" ]]; then
+    export BRIEF_REPO_LOCAL_ONLY=1
+  fi
+  local proxy_endpoint="${PROXY_ENDPOINT:-}"
+  [[ "$proxy_endpoint" == "none" ]] && proxy_endpoint=""
+  export BRIEF_PROXY_ENDPOINT="$proxy_endpoint"
   local vars_json
   vars_json=$("$PYTHON_BIN" -c "
 import json, os
 
 vars_map = {
-    'REPO': os.environ.get('REPO', 'local/repo'),
+    'REPO': os.environ.get('REPO') or 'local-only',
     'TEST_CMD': os.environ.get('TEST_CMD', 'echo no-test-suite'),
     'ECOSYSTEM': os.environ.get('ECOSYSTEM', 'generic'),
     'DOCS_DIR': os.environ.get('DOCS_DIR', 'docs'),
@@ -80,7 +114,7 @@ vars_map = {
     'GH_NAME': os.environ.get('SEAT_NAME_gh', 'agy-gh-$slug'),
     'REVIEWER_NAME': os.environ.get('SEAT_NAME_reviewer', 'reviewer-$slug'),
     'TRACE_DIR': os.environ.get('SWARM_TRACE_DIR', '.herdr-swarm/traces'),
-    'PROXY_ENDPOINT': os.environ.get('PROXY_ENDPOINT', ''),
+    'PROXY_ENDPOINT': os.environ.get('BRIEF_PROXY_ENDPOINT', ''),
 }
 print(json.dumps(vars_map))
 ")

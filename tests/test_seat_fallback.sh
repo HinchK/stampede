@@ -93,7 +93,7 @@ export FAKE_HERDR_STATE="$TMP/herdr-state.json" FAKE_HERDR_LOG="$TMP/herdr-calls
 # behind it (mirrors [seats.arch_*] kinds in the repo's swarm.config.toml).
 sed -i.bak 's/^default_kind = "opencode"$/kinds = ["opencode", "claude"]/' "$TARGET/swarm.config.toml"
 mkdir -p "$TARGET/.herdr-swarm"
-printf 'REPO=none\nTEST_CMD=make test\n' > "$TARGET/.herdr-swarm/profile.env"
+printf 'REPO=""\nREPO_LOCAL_ONLY=1\nTEST_CMD=make test\n' > "$TARGET/.herdr-swarm/profile.env"
 
 "$TMP/yeehaw.sh" start --seat-only > "$TMP/up.log" 2>&1 || { tail -40 "$TMP/up.log"; exit 1; }
 

@@ -55,14 +55,22 @@ detect_repo() {
   local env_file="${target_dir}/.herdr-swarm/profile.env"
   local repo=""
 
-  # 1. Check cached profile.env first
+  # 1. Check cached profile.env first — but only a well-formed owner/repo
+  # slug is honored (LOOPER-1 D2): a legacy 'none' or empty cache must not
+  # pose as a repo and leak '-R none' into rendered briefs.
   repo=$(read_profile_var "REPO" "$env_file")
-  if [[ -n "$repo" ]]; then
+  if [[ "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
     printf '%s\n' "$repo"
     return 0
   fi
 
-  # 2. Check git remotes
+  # 2. Explicit local-only marker: a deliberate "no GitHub remote" choice,
+  # recorded interactively. Succeeds with empty output.
+  if [[ "$(read_profile_var "REPO_LOCAL_ONLY" "$env_file")" == "1" ]]; then
+    return 0
+  fi
+
+  # 3. Check git remotes
   if git -C "$target_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     local upstream_url origin_url remote_url
     upstream_url=$(git -C "$target_dir" config --get remote.upstream.url 2>/dev/null || true)
@@ -79,7 +87,7 @@ detect_repo() {
     return 0
   fi
 
-  # 3. Fail-closed: Never default to hardcoded kultivait!
+  # 4. Fail-closed: Never default to hardcoded kultivait!
   return 1
 }
 
@@ -115,7 +123,9 @@ detect_test_cmd() {
   local env_file="${target_dir}/.herdr-swarm/profile.env"
   local cached
   cached=$(read_profile_var "TEST_CMD" "$env_file")
-  if [[ -n "$cached" ]]; then
+  # LOOPER-1 D2: a cached command is honored only when runnable — 'none'
+  # (and 'true') must fall through to detection, never render `run none`.
+  if test_cmd_is_runnable "$cached"; then
     printf '%s\n' "$cached"
     return 0
   fi
@@ -196,14 +206,19 @@ test_cmd_is_runnable() {
   [[ -n "$cmd" && "$cmd" != "none" && "$cmd" != "true" ]]
 }
 
-# Prompt for the test validation command. Empty input re-prompts forever —
-# "none" is honored only when explicitly typed, never silently substituted.
+# Prompt for the test validation command. Empty input re-prompts forever;
+# "none" and "true" are refused too — there is no suite-less herd (LOOPER-1 D2).
 prompt_test_cmd() { # PROMPT
   local input=""
-  while [[ -z "$input" ]]; do
+  while :; do
     printf '%s' "$1" >&2
     read -r input || return 1
-    [[ -n "$input" ]] || printf '  \033[33m!\033[0m Empty command not allowed — enter a command, or "none" to skip suite gates.\n' >&2
+    if ! test_cmd_is_runnable "$input"; then
+      printf '  \033[33m!\033[0m %s is not a runnable test command — enter a real command (e.g. make test).\n' "${input:-<empty>}" >&2
+      input=""
+      continue
+    fi
+    break
   done
   printf '%s\n' "$input"
 }
@@ -222,13 +237,27 @@ ensure_profile() {
   if ! repo=$(detect_repo "$target_dir"); then
     if (( interactive )) && [[ -t 0 ]]; then
       printf '  \033[33m?\033[0m No GitHub remote detected for %s.\n' "$(basename "$target_dir")"
-      printf '    Enter canonical GitHub repository (owner/repo) or "none" for local-only: '
-      read -r repo || true
-      [[ -z "$repo" ]] && repo="none"
-      save_profile_var "REPO" "$repo" "$env_file"
+      while :; do
+        printf '    Enter canonical GitHub repository (owner/repo), or press Enter for local-only: '
+        read -r repo || return 1
+        if [[ -z "$repo" ]]; then
+          # LOOPER-1 D2: local-only is an explicit marker, never 'none'.
+          save_profile_var "REPO" "" "$env_file"
+          save_profile_var "REPO_LOCAL_ONLY" "1" "$env_file"
+          repo=""
+          break
+        fi
+        if [[ "$repo" == "none" ]] || ! [[ "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+          printf '  \033[33m!\033[0m %s is not an owner/repo slug — try again, or press Enter for local-only.\n' "$repo" >&2
+          continue
+        fi
+        save_profile_var "REPO" "$repo" "$env_file"
+        break
+      done
     else
       printf '  \033[31m✖ FATAL: No GitHub remote detected and REPO is not configured.\033[0m\n' >&2
-      printf '    Fix: Run git remote add origin <url> OR set REPO in %s\n' "$env_file" >&2
+      printf '    Fix: Run git remote add origin <url>, or set REPO="<owner/repo>" in %s\n' "$env_file" >&2
+      printf '    A stored REPO="none" is rejected (LOOPER-1): re-run interactive setup to choose a repo or local-only.\n' >&2
       return 1
     fi
   else
@@ -239,11 +268,11 @@ ensure_profile() {
   if ! test_cmd=$(detect_test_cmd "$target_dir"); then
     if (( interactive )) && [[ -t 0 ]]; then
       printf '  \033[33m?\033[0m No test framework auto-detected for %s (%s).\n' "$(basename "$target_dir")" "$eco"
-      test_cmd=$(prompt_test_cmd '    Enter test validation command or "none" to skip suite gates: ')
+      test_cmd=$(prompt_test_cmd '    Enter test validation command: ')
       save_profile_var "TEST_CMD" "$test_cmd" "$env_file"
     else
       printf '  \033[31m✖ FATAL: Could not auto-detect test command for %s.\033[0m\n' "$eco" >&2
-      printf '    Fix: Set TEST_CMD in %s (e.g. TEST_CMD="make test")\n' "$env_file" >&2
+      printf '    Fix: set a runnable TEST_CMD in %s (e.g. TEST_CMD="make test") — "none"/"true" are refused.\n' "$env_file" >&2
       return 1
     fi
   else
@@ -267,10 +296,10 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   cmd="${1:-dump}"
   case "$cmd" in
     detect-repo)
-      detect_repo "${2:-$PWD}" || { echo "none"; exit 1; }
+      detect_repo "${2:-$PWD}" || exit 1
       ;;
     detect-test)
-      detect_test_cmd "${2:-$PWD}" || { echo "none"; exit 1; }
+      detect_test_cmd "${2:-$PWD}" || exit 1
       ;;
     detect-ecosystem)
       detect_ecosystem "${2:-$PWD}"

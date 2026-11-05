@@ -229,7 +229,7 @@ fi
 # required fact cannot be established (never defaults to a fake repo or a
 # fake-green test command).
 ensure_profile "$PWD" 1
-good "Profile — repo: ${REPO:-none} · test: ${TEST_CMD} · ecosystem: ${ECOSYSTEM} · docs: ${DOCS_DIR}"
+good "Profile — repo: ${REPO:-local-only} · test: ${TEST_CMD} · ecosystem: ${ECOSYSTEM} · docs: ${DOCS_DIR}"
 
 # Project slug: namespaces every agent name (Herdr's registry is server-global;
 # grammar ^[a-z][a-z0-9_-]*$ per docs/findings/herdr-semantics.md). Falls back
@@ -276,11 +276,10 @@ fi
 # carries the architect role; roster is config-driven, seats may be many)
 ARCH_AGENT="${SEAT_NAME_arch_1:-${SEAT_NAME_arch:-arch}}"
 LOOPER_AGENT="${SEAT_NAME_looper:-looper}"
-if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]] && herdr agent get "$LOOPER_AGENT" >/dev/null 2>&1; then
-  printf '  %s✖ FATAL: persistent looper %s is still live. Stop the old swarm with stampede down, then retry bounded setup.%s\n' \
-    "$RED" "$LOOPER_AGENT" "$RESET" >&2
-  exit 1
-fi
+# LOOPER-1 D1: the old "persistent looper still live" FATAL is gone — the
+# seat loop's agent_alive branch reuses a live looper instead of starting a
+# second one, so re-attach (`stampede up` on a running swarm) is safe and a
+# duplicate orchestrator cannot be created.
 
 # Stable telemetry session (shared with loop-bot so the Ops stream sees all)
 SESSION_ID=$(telemetry_session_id "${PWD}/.herdr-swarm")
@@ -516,12 +515,7 @@ for tab_name in herd ops; do
     fi
 
     seat_pane=""
-    if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 && "$seat_key" == looper ]] \
-       && pane_present "$(recorded_pane "$seat_name")"; then
-      seat_pane=$(recorded_pane "$seat_name")
-      resolved_kind=shell
-      note "Looper status pane '${seat_name}' is already seated"
-    elif agent_alive "$seat_name"; then
+    if agent_alive "$seat_name"; then
       note "Agent '${seat_name}' is already seated"
       seat_pane=$(pane_of_agent "$seat_name")
       # Carry forward the recorded worktree for an already-live isolated seat
@@ -541,14 +535,10 @@ for tab_name in herd ops; do
         seat_pane="$tab_anchor"
       fi
 
-      if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 && "$seat_key" == looper ]]; then
-        resolved_kind=shell
-        mkdir -p "${PWD}/.herdr-swarm"
-        touch "${PWD}/.herdr-swarm/worklog.log"
-        herdr pane rename "$seat_pane" "looper" >/dev/null 2>&1 || true
-        printf -v looper_cmd 'tail -n 30 -F %q' "${PWD}/.herdr-swarm/worklog.log"
-        herdr pane run "$seat_pane" "$looper_cmd" >/dev/null 2>&1 || warn "Looper pane log view failed"
-      else
+      # LOOPER-1 D1: bounded_looper no longer silently seats the orchestrator
+      # as a log-tail shell pane — the seat launches its configured agent
+      # kind like every other seat (the worklog view pane still tails the
+      # log), or the launch fails closed on the critical-seat check.
       # Provider chain resolution + launch retries (PUB-6, D3): binary
       # health orders the chain, then each candidate must actually START —
       # herdr agent start blocks until interactive readiness, so a failed
@@ -601,7 +591,6 @@ for tab_name in herd ops; do
         deliver_brief_nonce "$seat_name" "$rendered_brief" \
           || warn "Brief delivery failed for '${seat_name}'"
       fi
-      fi
     fi
 
     if [[ -n "$seat_pane" ]]; then
@@ -612,8 +601,9 @@ for tab_name in herd ops; do
       root_branch=$(git -C "$PWD" rev-parse --abbrev-ref HEAD 2>/dev/null || printf '')
       seat_isolated_bool=false
       (( seat_isolated )) && seat_isolated_bool=true
+      # LOOPER-1 D1: every herded seat is an agent seat; only the durable
+      # views (worklog/supervisor/proxy) below record agentless entries.
       seat_agentless_bool=false
-      [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 && "$seat_key" == looper ]] && seat_agentless_bool=true
       SEAT_LEDGER+=$(jq -cn \
         --arg name "$seat_name" --arg kind "${resolved_kind:-$seat_kind}" --arg pane "$seat_pane" \
         --arg wt_dir "${seat_cwd:-$PWD}" --arg branch "${wt_branch:-$root_branch}" \
@@ -857,6 +847,17 @@ esac
 # ──────────────────────────────────────────────────────────────────────────
 
 printf '\n%s%s✓ Swarm Setup Complete%s\n' "$BOLD" "$GREEN" "$RESET"
+
+# LOOPER-1 D3: the intake-stop notice lives in worklog.log where nobody
+# looks — surface the suite-gate state in the up summary itself (mirrors
+# the loop-bot-herd.sh frontier_drain gate condition).
+_suite_gate_state=$(jq -r 'if has("suite_gate") then (.suite_gate | tostring) else "true" end' \
+  "${PWD}/.herdr-swarm/control.json" 2>/dev/null || printf 'true')
+if [[ "$_suite_gate_state" != "true" ]] || ! test_cmd_is_runnable "${TEST_CMD:-}"; then
+  printf '\n%s%s⚠ SUITE GATE UNAVAILABLE — ticket intake is STOPPED.%s\n' "$BOLD" "$YELLOW" "$RESET"
+  printf '  %sTest Cmd: %s · gate: %s%s\n' "$YELLOW" "${TEST_CMD:-<unset>}" "$_suite_gate_state" "$RESET"
+  printf '  %sFix: set a runnable TEST_CMD in %s/.herdr-swarm/profile.env and re-run stampede gate-on.%s\n' "$YELLOW" "$PWD" "$RESET"
+fi
 if (( EXTERNAL )); then
   say "Attach to the swarm session via:"
   printf '  %s%sherdr%s\n\n' "$BOLD" "$CYAN" "$RESET"

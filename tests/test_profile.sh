@@ -116,5 +116,42 @@ check "7a" "self-dogfood: swarm repo -> make" '[[ $(detect_ecosystem "$R7") == m
 check "7b" "self-dogfood: swarm repo -> make test (clean clone, no profile.env)" \
   '[[ $(detect_test_cmd "$R7") == "make test" ]]'
 
+# ── 8. LOOPER-1 D2: 'none' never survives profile setup ────────────────────
+# A cached TEST_CMD/REPO is honored only when valid; 'none' (and empty) fail
+# ensure_profile closed instead of rendering `run none` / `-R none` briefs.
+# Local-only is an explicit marker, never the literal 'none'.
+
+R8="$TEST_DIR/none-cache"; mkdir -p "$R8/.herdr-swarm"
+printf 'test:\n\techo hi\n' > "$R8/Makefile"
+printf 'TEST_CMD="none"\n' > "$R8/.herdr-swarm/profile.env"
+check "8a" "cached TEST_CMD=none is ignored; detection re-runs" \
+  '[[ $(detect_test_cmd "$R8") == "make test" ]]'
+
+R8b="$TEST_DIR/none-ensure"; mkdir -p "$R8b/.herdr-swarm"
+printf 'REPO="acme/widget"\nTEST_CMD="none"\n' > "$R8b/.herdr-swarm/profile.env"
+check "8b" "valid REPO + cached TEST_CMD=none fails ensure_profile on TEST_CMD" \
+  '! ensure_profile "$R8b" 0 >/dev/null 2>&1'
+
+R8c="$TEST_DIR/none-repo"; mkdir -p "$R8c/.herdr-swarm"
+git -C "$R8c" init -q
+printf 'test:\n\techo hi\n' > "$R8c/Makefile"
+printf 'REPO="none"\nTEST_CMD="make test"\n' > "$R8c/.herdr-swarm/profile.env"
+check "8c" "cached REPO=none (no remote) fails ensure_profile" \
+  '! ensure_profile "$R8c" 0 >/dev/null 2>&1'
+
+R8d="$TEST_DIR/local-only"; mkdir -p "$R8d/.herdr-swarm"
+git -C "$R8d" init -q
+printf 'test:\n\techo hi\n' > "$R8d/Makefile"
+printf 'REPO=""\nREPO_LOCAL_ONLY=1\nTEST_CMD="make test"\n' > "$R8d/.herdr-swarm/profile.env"
+check "8d" "explicit local-only marker passes without a remote" \
+  'ensure_profile "$R8d" 0 >/dev/null 2>&1 && [[ -z "${REPO:-}" ]]'
+
+R8e="$TEST_DIR/slug-cache"; mkdir -p "$R8e/.herdr-swarm"
+git -C "$R8e" init -q
+printf 'test:\n\techo hi\n' > "$R8e/Makefile"
+printf 'REPO="acme/widget"\nTEST_CMD="make test"\n' > "$R8e/.herdr-swarm/profile.env"
+check "8e" "valid cached slug honored without a remote" \
+  'ensure_profile "$R8e" 0 >/dev/null 2>&1 && [[ "$REPO" == "acme/widget" ]]'
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))

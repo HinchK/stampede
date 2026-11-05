@@ -145,6 +145,51 @@ substitute_template "$SCRATCH/o'dir/t.in.md" "$SCRATCH/o'dir/t.md" \
 [[ "$(cat "$SCRATCH/o'dir/t.md" 2>/dev/null)" == 'run: pytest -k "not slow"' ]] \
   && ok "quoted test command + apostrophe path render verbatim" || bad "render: $(cat "$SCRATCH/o'dir/t.md" 2>&1)"
 
+# [10] LOOPER-1 D2: render_all_briefs never emits 'none' placeholders —
+# a local-only repo (no GitHub remote) renders no `-R none`/`-R local-only`
+# and says so plainly; an unset proxy endpoint drops its line entirely.
+RENDER_TGT="$SCRATCH/render-target"
+mkdir -p "$RENDER_TGT/.herdr-swarm"
+printf 'test:\n\techo hi\n' > "$RENDER_TGT/Makefile"
+printf 'REPO=""\nREPO_LOCAL_ONLY=1\nTEST_CMD="make test"\n' > "$RENDER_TGT/.herdr-swarm/profile.env"
+render_all_briefs "$RENDER_TGT" "dev" >/dev/null 2>&1 || true
+RB="$RENDER_TGT/.herdr-swarm/briefs"
+
+if [[ -f "$RB/looper.md" ]]; then
+  ok "local-only: looper.md rendered"
+else
+  bad "local-only: looper.md not rendered"
+fi
+grep -q -- '-R none' "$RB"/*.md 2>/dev/null \
+  && bad "local-only: '-R none' leaked into a brief" || ok "local-only: no '-R none' anywhere"
+grep -rq -- '-R local-only' "$RB" 2>/dev/null \
+  && bad "local-only: '-R local-only' leaked into a brief" || ok "local-only: no '-R local-only' anywhere"
+grep -q 'local-only' "$RB/looper.md" 2>/dev/null \
+  && ok "local-only: looper.md says so plainly" || bad "local-only: no plain local-only statement"
+grep -rq 'Local routing proxy endpoint: ``' "$RB" 2>/dev/null \
+  && bad "unset proxy: empty-backtick endpoint line rendered" || ok "unset proxy: endpoint line dropped"
+
+# [11] a real repo keeps -R <slug>; a configured endpoint keeps its line.
+printf 'REPO="acme/widget"\nTEST_CMD="make test"\n' > "$RENDER_TGT/.herdr-swarm/profile.env"
+cat > "$SCRATCH/proxied.config.toml" <<'EOF'
+[swarm]
+name = "proxied-dev"
+[proxy]
+enabled = true
+endpoint = "http://127.0.0.1:8787"
+EOF
+STAMPEDE_CONFIG_FILE="$SCRATCH/proxied.config.toml" render_all_briefs "$RENDER_TGT" "dev" >/dev/null 2>&1 || true
+grep -q -- '-R acme/widget' "$RB/worker-gh.md" 2>/dev/null \
+  && ok "repo set: '-R acme/widget' present" || bad "repo set: -R slug missing"
+grep -q 'Local routing proxy endpoint: `http://127.0.0.1:8787`' "$RB/looper.md" 2>/dev/null \
+  && ok "proxy set: endpoint line rendered with value" || bad "proxy set: endpoint line missing"
+
+# [12] PROXY_ENDPOINT='none' is treated as unset, not rendered.
+sed 's|http://127.0.0.1:8787|none|' "$SCRATCH/proxied.config.toml" > "$SCRATCH/none-proxy.config.toml"
+STAMPEDE_CONFIG_FILE="$SCRATCH/none-proxy.config.toml" render_all_briefs "$RENDER_TGT" "dev" >/dev/null 2>&1 || true
+grep -rq 'Local routing proxy endpoint' "$RB" 2>/dev/null \
+  && bad "proxy=none: endpoint line still rendered" || ok "proxy=none: endpoint line dropped"
+
 unset -f herdr
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

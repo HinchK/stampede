@@ -32,9 +32,9 @@ frontier_drain
 [[ ! -f "$TMP/attention-calls" ]] || { echo 'seat-only mode inspected and dispatched tickets' >&2; exit 1; }
 
 rm -f "$STATE_DIR/seat-only"
-printf 'REPO=none\nTEST_CMD=make test\n' > "$STATE_DIR/profile.env"
+printf 'REPO=""\nREPO_LOCAL_ONLY=1\nTEST_CMD=make test\n' > "$STATE_DIR/profile.env"
 # shellcheck disable=SC2034  # read by the sourced frontier_drain function
-REPO=none
+REPO=""
 printf '17\n' > "$STATE_DIR/active-map"
 printf '{"paused": false, "frontier_drain": false, "suite_gate": true}\n' > "$STATE_DIR/control.json"
 cat > "$PYTHON_BIN" <<EOF
@@ -47,7 +47,7 @@ esac
 EOF
 chmod +x "$PYTHON_BIN"
 frontier_drain
-grep -q next "$TMP/attention-calls" || { echo 'local map intake never ran when REPO=none' >&2; exit 1; }
+grep -q next "$TMP/attention-calls" || { echo 'local map intake never ran when local-only' >&2; exit 1; }
 grep -qx 'new 18 map:17' "$TMP/health-attention" || { echo 'local map intake did not dispatch' >&2; exit 1; }
 held_lines=$(wc -l < "$TMP/health-attention")
 touch "$STATE_DIR/intake-hold"
