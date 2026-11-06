@@ -8,6 +8,19 @@ pre-1.0: the public surface is not frozen.
 `make version-check` fails when the top entry below disagrees with
 `VERSION`. Tagging is a human act — nothing in this repository pushes.
 
+## [Unreleased]
+
+### Changed
+- **Bounded looper is a critical seated agent** (LOOPER-1): setup's default
+  `attention.bounded_looper = true` launches the configured looper kind
+  (AGY this release) like every other seat, or fails closed. A stale
+  agentless/shell looper ledger fails `verify`. Worklog, troubleshooting,
+  and handoff panes stay model-free.
+- **Profile placeholders rejected:** cached `REPO="none"` is invalid;
+  local-only uses `REPO_LOCAL_ONLY=1`. `TEST_CMD` of `""`, `none`, or
+  `true` is not runnable. `up` and `status` warn when the suite gate is
+  unavailable.
+
 ## [0.5.0] — 2026-10-05 (multi-provider UX, review loop, and headless batch drain)
 
 ### Added

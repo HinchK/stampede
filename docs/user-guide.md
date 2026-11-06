@@ -44,12 +44,13 @@ Use the path chosen during setup:
 /path/to/yeehaw.sh start --seat-only
 ```
 
-The first launch builds the Herdr layout, seats the chosen model agents,
-starts the supervisor, and opens model-free worklog, troubleshooting, and
-handoff panes in Ops. The looper pane displays the durable worklog. Each
-needed looper decision uses one fresh, bounded AGY call; the CLI's token
-usage is recorded in `.herdr-swarm/looper-usage.jsonl`. A repeated launch
-reuses managed panes and live seats.
+The first launch builds the Herdr layout, seats the chosen model agents
+(including the bounded looper), starts the supervisor, and opens model-free
+worklog, troubleshooting, and handoff panes in Ops. Each looper decision
+uses one fresh, bounded AGY call from durable state; the Herdr agent seat
+persists while the swarm is up. Usage is recorded in
+`.herdr-swarm/looper-usage.jsonl`. A repeated launch reuses managed panes
+and live seats.
 `--seat-only` keeps automatic issue intake idle; a later brainstorm or
 wayfinder launch enables it.
 The `stampede up <repo> -m r -n <MAP_NUM>` Resume Map mode is bounded-looper
@@ -127,9 +128,10 @@ that separate command.
 
 After a Herdr server restart, eligible native agent conversations resume only
 if current Herdr integrations supplied session references. Check them with
-`herdr integration status`. The transient looper always starts fresh from
-durable state on its next event. A teardown snapshot records evidence; it is
-not a live conversation restore.
+`herdr integration status`. Each bounded looper decision starts from durable
+state on its next event; the looper agent seat persists while the swarm is
+up. A teardown snapshot records evidence; it is not a live conversation
+restore.
 
 For the older `stampede init` flow and its historical seat layout, see the
 [legacy user guide](legacy-user-guide.md).
