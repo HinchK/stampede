@@ -90,15 +90,15 @@ _arb_queue_write() (
     enqueue)
       row="$1"
       if jq -e -s --argjson row "$row" \
-        'any(.[]; .ticket == $row.ticket and .sha == $row.sha and .status == "queued")' "$input" >/dev/null; then
+        'any(.[]; (.ticket | tostring) == $row.ticket and .sha == $row.sha and .status == "queued")' "$input" >/dev/null; then
         printf 'duplicate\n'
         return 0
       fi
       report=$(jq -rs --argjson row "$row" \
-        '"queued", (.[] | select(.ticket == $row.ticket and .status == "queued") | .sha)' "$input") || return 1
+        '"queued", (.[] | select((.ticket | tostring) == $row.ticket and .status == "queued") | .sha)' "$input") || return 1
       jq -sc --argjson row "$row" '
-        if any(.[]; .ticket == $row.ticket and .sha == $row.sha and .status == "queued") then .
-        else map(if .ticket == $row.ticket and .status == "queued"
+        if any(.[]; (.ticket | tostring) == $row.ticket and .sha == $row.sha and .status == "queued") then .
+        else map(if (.ticket | tostring) == $row.ticket and .status == "queued"
                  then . + {status:"superseded", superseded_by:$row.sha} else . end) + [$row]
         end | .[]' "$input" > "$tmp" || return 1
       ;;
@@ -107,7 +107,7 @@ _arb_queue_write() (
       if [[ "$op" == integrate ]]; then
         candidate="$3"; i0="$4"
         if ! jq -e -s --arg t "$t" --arg s "$s" \
-          'any(.[]; .ticket == $t and .sha == $s and .status == "queued")' "$input" >/dev/null; then
+          'any(.[]; (.ticket | tostring) == $t and .sha == $s and .status == "queued")' "$input" >/dev/null; then
           printf 'arbiter: #%s candidate superseded during gate — ref unchanged\n' "$t" >&2
           return 1
         fi
@@ -117,14 +117,18 @@ _arb_queue_write() (
         st="$3"; extra="${4:-}"
       fi
   # Ticket ids are STRINGS (repo vocabulary: frontmatter id like "P3-4-spec");
-  # numeric ids still work — they just round-trip as strings now.
-      filter="if (.ticket == \$t and .sha == \$s and .status == \"queued\") then . + {status: \$st}"
+  # numeric ids still work — they just round-trip as strings now. Every
+  # comparison tostring's the RECORD side (ARB-NUM): pre-ARB-STR enqueues wrote
+  # numeric ids via --argjson, and jq's == is type-strict, so a raw comparison
+  # could never match those rows — their status writes silently no-opped and a
+  # drain re-processed them forever (one empty merge commit per pass).
+      filter="if ((.ticket | tostring) == \$t and .sha == \$s and .status == \"queued\") then . + {status: \$st}"
       [[ -n "$extra" ]] && filter+=" + ($extra)"
       filter+=" else . end"
       jq -sc --arg t "$t" --arg s "$s" --arg st "$st" "map($filter) | .[]" "$input" > "$tmp" || return 1
       if [[ "$op" == integrate ]] && ! git -C "$ARB_REPO" update-ref "$ARB_REF" "$candidate" "$i0" 2>/dev/null; then
         jq -sc --arg t "$t" --arg s "$s" --arg old "$i0" \
-          'map(if .ticket == $t and .sha == $s and .status == "queued"
+          'map(if (.ticket | tostring) == $t and .sha == $s and .status == "queued"
                then . + {status:"retry", integration_before:$old} else . end) | .[]' \
           "$input" > "$tmp" || return 1
         printf 'arbiter: #%s CAS failed (integration tip moved) — retry from new tip\n' "$t" >&2

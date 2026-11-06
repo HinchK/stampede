@@ -10,6 +10,13 @@ pre-1.0: the public surface is not frozen.
 
 ## [Unreleased]
 
+### Fixed
+- Legacy numeric ticket rows can leave the integration queue again (#ARB-NUM):
+  pre-ARB-STR enqueues wrote numeric ids, and the queue's own type-strict
+  comparisons never matched them — status writes silently no-opped and every
+  drain re-processed the record, adding an empty merge commit per pass. All
+  queue-write comparisons now compare ticket ids as strings.
+
 ## [0.6.0] — 2026-11-05 (orchestration safety and bounded looper)
 
 ### Fixed

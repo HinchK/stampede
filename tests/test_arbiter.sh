@@ -652,9 +652,31 @@ else
 fi
 # the seed's drain overwrote the racer's tip; nothing follows that reads it
 
-# ── summary ────────────────────────────────────────────────────────────────
-printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
-(( FAIL == 0 ))
+# ── ARB-NUM: legacy numeric-ticket rows must transition (found 2026-11-06) ──
+# Pre-ARB-STR enqueues wrote numeric ids via --argjson (auto-queue mode uses
+# GitHub issue numbers). jq's == is type-strict, so the queue's raw
+# `.ticket == $t` comparisons could never match those rows: status writes
+# silently no-opped and every drain re-processed the record — one empty merge
+# commit per pass. Seed the exact bytes --argjson wrote and prove all three
+# transitions now match across the type gap.
+num_seed() { # TICKET SHA — append a raw numeric queued record
+  jq -cn --argjson ts "$(date +%s)" --argjson t "$1" --arg seat seat-num --arg sha "$2" \
+    '{ts:$ts, ticket:$t, seat:$seat, sha:$sha, status:"queued"}' >> "$Q"
+}
+num_seed 77 "$SHA_A"
+ck 77 queued "legacy numeric row seeded queued"
+_arb_set_status 77 "$SHA_A" conflict >/dev/null 2>&1
+ck 77 conflict "status write lands on a numeric row (pre-fix: silent no-op)"
+num_seed 78 "$SHA_A"
+arbiter_enqueue 78 seat-num "$SHA_B" >/dev/null 2>&1
+check "numeric row superseded by string re-verdict" \
+  '[[ $(jq -s "[.[] | select((.ticket|tostring) == \"78\" and .status == \"superseded\")] | length" "$Q") == 1 ]]'
+check "exactly one queued row remains for 78" \
+  '[[ $(jq -s "[.[] | select((.ticket|tostring) == \"78\" and .status == \"queued\")] | length" "$Q") == 1 ]]'
+num_seed 79 "$SHA_A"
+arbiter_enqueue 79 seat-num "$SHA_A" >/dev/null 2>&1
+check "string enqueue at the same (ticket, sha) is a duplicate, not an append" \
+  '[[ $(jq -s "[.[] | select((.ticket|tostring) == \"79\")] | length" "$Q") == 1 ]]'
 
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
