@@ -60,22 +60,95 @@ _arb_cmd_runnable() {
 }
 
 _arb_record() { # JSON (single line) — append to queue
-  mkdir -p "$ARB_STATE"
-  printf '%s\n' "$1" >> "$ARB_QUEUE"
+  _arb_queue_write record "$1"
 }
 
 # Rewrite the status (+extra fields) of the first queued record matching
 # (ticket, sha). Atomic via tmp+mv; output stays JSONL (one record per line).
 _arb_set_status() { # TICKET SHA STATUS [EXTRA_JQ]
-  local t="$1" s="$2" st="$3" extra="${4:-}"
+  _arb_queue_write status "$@"
+}
+
+# Every queue mutation holds this short lock; project suites use the separate
+# drain lock. A subshell owns cleanup without replacing the caller's traps.
+_arb_queue_write() (
+  _arb_cfg
+  local op="$1" tmp="" input="$ARB_QUEUE" t s st extra filter row candidate i0 report="" rc=0
+  shift
+  mkdir -p "$ARB_STATE"
+  arbiter_lock "$ARB_STATE" queue.lock || return 1
+  trap '[[ -z "$tmp" ]] || rm -f "$tmp"; arbiter_unlock "$ARB_STATE" queue.lock' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  [[ -f "$input" ]] || input=/dev/null
+  jq -e -s 'all(.[]; type == "object")' "$input" >/dev/null || return 1
+  tmp=$(mktemp "${ARB_QUEUE}.tmp.XXXXXX") || return 1
+  case "$op" in
+    record)
+      jq -sc --argjson row "$1" '. + [$row] | .[]' "$input" > "$tmp" || return 1
+      ;;
+    enqueue)
+      row="$1"
+      if jq -e -s --argjson row "$row" \
+        'any(.[]; .ticket == $row.ticket and .sha == $row.sha and .status == "queued")' "$input" >/dev/null; then
+        printf 'duplicate\n'
+        return 0
+      fi
+      report=$(jq -rs --argjson row "$row" \
+        '"queued", (.[] | select(.ticket == $row.ticket and .status == "queued") | .sha)' "$input") || return 1
+      jq -sc --argjson row "$row" '
+        if any(.[]; .ticket == $row.ticket and .sha == $row.sha and .status == "queued") then .
+        else map(if .ticket == $row.ticket and .status == "queued"
+                 then . + {status:"superseded", superseded_by:$row.sha} else . end) + [$row]
+        end | .[]' "$input" > "$tmp" || return 1
+      ;;
+    status|integrate)
+      t="$1"; s="$2"
+      if [[ "$op" == integrate ]]; then
+        candidate="$3"; i0="$4"
+        if ! jq -e -s --arg t "$t" --arg s "$s" \
+          'any(.[]; .ticket == $t and .sha == $s and .status == "queued")' "$input" >/dev/null; then
+          printf 'arbiter: #%s candidate superseded during gate — ref unchanged\n' "$t" >&2
+          return 1
+        fi
+        st=integrated
+        extra="{integration_before: \"${i0}\", merge_sha: \"${candidate}\"}"
+      else
+        st="$3"; extra="${4:-}"
+      fi
   # Ticket ids are STRINGS (repo vocabulary: frontmatter id like "P3-4-spec");
   # numeric ids still work — they just round-trip as strings now.
-  local filter="if (.ticket == \$t and .sha == \$s and .status == \"queued\") then . + {status: \$st}"
-  [[ -n "$extra" ]] && filter+=" + ($extra)"
-  filter+=" else . end"
-  jq -s --arg t "$t" --arg s "$s" --arg st "$st" "map($filter) | .[]" "$ARB_QUEUE" \
-    > "${ARB_QUEUE}.tmp" && mv "${ARB_QUEUE}.tmp" "$ARB_QUEUE"
-}
+      filter="if (.ticket == \$t and .sha == \$s and .status == \"queued\") then . + {status: \$st}"
+      [[ -n "$extra" ]] && filter+=" + ($extra)"
+      filter+=" else . end"
+      jq -sc --arg t "$t" --arg s "$s" --arg st "$st" "map($filter) | .[]" "$input" > "$tmp" || return 1
+      if [[ "$op" == integrate ]] && ! git -C "$ARB_REPO" update-ref "$ARB_REF" "$candidate" "$i0" 2>/dev/null; then
+        jq -sc --arg t "$t" --arg s "$s" --arg old "$i0" \
+          'map(if .ticket == $t and .sha == $s and .status == "queued"
+               then . + {status:"retry", integration_before:$old} else . end) | .[]' \
+          "$input" > "$tmp" || return 1
+        printf 'arbiter: #%s CAS failed (integration tip moved) — retry from new tip\n' "$t" >&2
+        rc=1
+      fi
+      ;;
+    promote)
+      local promoted="$1" covered="" merge_sha
+      while IFS= read -r merge_sha; do
+        if git -C "$ARB_REPO" merge-base --is-ancestor "$merge_sha" "$promoted"; then
+          covered+="${merge_sha}"$'\n'
+        fi
+      done < <(jq -r 'select(.status == "integrated") | (.merge_sha // .sha)' "$input")
+      jq -sc --arg covered "$covered" '($covered | split("\n")) as $commits |
+        map(. as $row | if .status == "integrated" and (($commits | index($row.merge_sha // $row.sha)) != null)
+            then . + {status:"promoted", promoted_to:"base"} else . end) | .[]' \
+        "$input" > "$tmp" || return 1
+      ;;
+    *) return 1 ;;
+  esac
+  mv "$tmp" "$ARB_QUEUE" || return 1
+  [[ -z "$report" ]] || printf '%s\n' "$report"
+  return "$rc"
+)
 
 _arb_telemetry() { # EVENT_TYPE TICKET SEAT SHA PAYLOAD_JSON
   "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log \
@@ -113,8 +186,8 @@ _arb_verdict_record() { # TICKET SEAT SHA [GATE_LOG]
 }
 
 # ── lock: atomic mkdir, pid-stamped, stale after process death ────────────
-arbiter_lock() { # STATE_DIR
-  local lk="$1/arbiter.lock" tries=0 pid
+arbiter_lock() { # STATE_DIR [LOCK_NAME]
+  local lk="$1/${2:-arbiter.lock}" tries=0 pid
   while ! mkdir "$lk" 2>/dev/null; do
     pid=""
     [[ -f "$lk/pid" ]] && pid=$(cat "$lk/pid" 2>/dev/null || true)
@@ -126,11 +199,16 @@ arbiter_lock() { # STATE_DIR
     (( tries >= 50 )) && return 1
     sleep "$ARBITER_TMP_SLEEP"
   done
-  printf '%s\n' "$$" > "$lk/pid"
+  # sh's parent is the actual holder, including a Bash 3.2 subshell where
+  # $$ would still name its long-lived caller.
+  if ! sh -c 'printf "%s\n" "$PPID" > "$1"' lock-owner "$lk/pid"; then
+    rm -rf "$lk"
+    return 1
+  fi
 }
 
-arbiter_unlock() { # STATE_DIR
-  rm -rf "${1}/arbiter.lock" 2>/dev/null || true
+arbiter_unlock() { # STATE_DIR [LOCK_NAME]
+  rm -rf "${1}/${2:-arbiter.lock}" 2>/dev/null || true
 }
 
 # ── enqueue ────────────────────────────────────────────────────────────────
@@ -138,33 +216,18 @@ arbiter_unlock() { # STATE_DIR
 arbiter_enqueue() {
   _arb_cfg
   local ticket="$1" seat="$2" sha="$3"
-  local now
+  local now changes older
   now=$(date +%s)
 
-  # Idempotent enqueue: an identical queued (ticket, sha) is a no-op
-  if [[ -f "$ARB_QUEUE" ]]; then
-    local dup
-    dup=$(jq -r -c -s --arg t "$ticket" --arg s "$sha" \
-      'any(.[]; .ticket == $t and .sha == $s and .status == "queued")' "$ARB_QUEUE" 2>/dev/null || true)
-    [[ "$dup" == "true" ]] && return 0
-  fi
-
-  # Supersession: a newer green verdict for the same ticket supersedes any
-  # still-queued older sha for it.
-  if [[ -f "$ARB_QUEUE" ]]; then
-    local older
-    older=$(jq -r -c -s --arg t "$ticket" \
-      'map(select(.ticket == $t and .status == "queued")) | .[0].sha // empty' "$ARB_QUEUE" 2>/dev/null || true)
-    if [[ -n "$older" && "$older" != "$sha" ]]; then
-      _arb_set_status "$ticket" "$older" "superseded" "{superseded_by: \"${sha}\"}"
-      _arb_telemetry arbiter.superseded "$ticket" "$seat" "$older" \
-        "$(jq -cn --arg s "$sha" '{summary:("superseded by " + $s)}')"
-    fi
-  fi
-
-  _arb_record "$(jq -cn --argjson ts "$now" --arg t "$ticket" \
+  changes=$(_arb_queue_write enqueue "$(jq -cn --argjson ts "$now" --arg t "$ticket" \
     --arg seat "$seat" --arg sha "$sha" \
-    '{ts: $ts, ticket: $t, seat: $seat, sha: $sha, status: "queued"}')"
+    '{ts: $ts, ticket: $t, seat: $seat, sha: $sha, status: "queued"}')") || return 1
+  [[ "$changes" == duplicate ]] && return 0
+  while IFS= read -r older; do
+    [[ -n "$older" && "$older" != queued ]] || continue
+    _arb_telemetry arbiter.superseded "$ticket" "$seat" "$older" \
+      "$(jq -cn --arg s "$sha" '{summary:("superseded by " + $s)}')"
+  done <<<"$changes"
   _arb_telemetry arbiter.queued "$ticket" "$seat" "$sha" \
     "$(jq -cn '{summary:"queued for integration"}')"
 }
@@ -287,6 +350,11 @@ _arb_integrate() { # TICKET SEAT SHA I0
 
   # 2. pre-gate the combined tree (arbiter TMPDIR; log kept for diagnosis)
   local gate_log=""   # HASH-1: bound to the verdict record when a gate ran
+  if ! gate_tree_matches "$ARB_WT" "$candidate"; then
+    _arb_set_status "$ticket" "$sha" integration_red \
+      '{gate:{reason:"tree drift before integration gate"}}' || return 1
+    return 1
+  fi
   if _arb_cmd_runnable; then
     # The bound resolves BEFORE the gate runs. Without a timeout(1) the gate
     # exits 127, which this function used to record as integration_red —
@@ -302,8 +370,17 @@ _arb_integrate() { # TICKET SEAT SHA I0
     local gate_dir="${ARB_STATE}/gate-logs"
     gate_log="${gate_dir}/arbiter-${ticket}-${sha:0:7}.log"
     mkdir -p "$gate_dir" "${ARB_STATE}/arbiter-tmp"
-    if ! (cd "$ARB_WT" && TMPDIR="${ARB_STATE}/arbiter-tmp" \
-          "$TIMEOUT_BIN" "${SUITE_TIMEOUT_S:-300}" sh -c "$TEST_CMD") >"$gate_log" 2>&1; then
+    local gate_rc=0
+    (cd "$ARB_WT" && TMPDIR="${ARB_STATE}/arbiter-tmp" \
+      "$TIMEOUT_BIN" "${SUITE_TIMEOUT_S:-300}" sh -c "$TEST_CMD") >"$gate_log" 2>&1 || gate_rc=$?
+    if ! gate_tree_matches "$ARB_WT" "$candidate"; then
+      _arb_set_status "$ticket" "$sha" integration_red \
+        "$(jq -cn --arg old "$i0" --arg log "$gate_log" \
+          '{integration_before:$old, gate:{log:$log, reason:"tree drift during integration gate"}}')" || return 1
+      printf 'arbiter: #%s tree drift during integration gate — ref unchanged (log: %s)\n' "$ticket" "$gate_log" >&2
+      return 1
+    fi
+    if (( gate_rc != 0 )); then
       _arb_set_status "$ticket" "$sha" "integration_red" \
         "{integration_before: \"${i0}\", gate: {log: \"${gate_log}\"}}"
       _arb_telemetry arbiter.red "$ticket" "$seat" "$sha" \
@@ -319,17 +396,11 @@ _arb_integrate() { # TICKET SEAT SHA I0
   # ARB-SLUG-1: no create-if-missing here — the silent update-ref below is
   # the second half of the phantom-branch mechanism. The drain guarantees
   # the ref exists; if it vanished mid-pass, the CAS against $i0 fails loud.
-  if ! git -C "$ARB_REPO" update-ref "$ARB_REF" "$candidate" "$i0" 2>/dev/null; then
-    _arb_set_status "$ticket" "$sha" "retry" "{integration_before: \"${i0}\"}"
-    _arb_telemetry arbiter.retry "$ticket" "$seat" "$sha" \
-      "$(jq -cn '{summary:"CAS failed — integration tip moved concurrently"}')"
-    printf 'arbiter: #%s CAS failed (integration tip moved) — retry from new tip\n' "$ticket" >&2
+  if ! _arb_queue_write integrate "$ticket" "$sha" "$candidate" "$i0"; then
     return 1
   fi
 
   # 4. success
-  _arb_set_status "$ticket" "$sha" "integrated" \
-    "{integration_before: \"${i0}\", merge_sha: \"${candidate}\"}"
   # INTEG-REC-1: the passing gate must be visible to the ROUTE-5 docs sweep
   # even when no supervisor harvest ever ran for this (ticket, sha).
   _arb_verdict_record "$ticket" "$seat" "$sha" "$gate_log"
@@ -529,11 +600,11 @@ arbiter_promote() {
     return 1
   fi
   git -C "$ARB_REPO" merge --ff-only "swarm/${ARB_SLUG}/integration" >/dev/null
+  integ=$(git -C "$ARB_REPO" rev-parse HEAD)
 
   # mark every integrated record promoted
   if [[ -f "$ARB_QUEUE" ]]; then
-    jq -s -c 'map(if .status == "integrated" then (.status = "promoted") + {promoted_to: "base"} else . end) | .[]' \
-      "$ARB_QUEUE" > "${ARB_QUEUE}.tmp" && mv "${ARB_QUEUE}.tmp" "$ARB_QUEUE"
+    _arb_queue_write promote "$integ" || return 1
   fi
   _arb_telemetry arbiter.promoted 0 human "$integ" \
     "$(jq -cn --arg b "$ARB_BASE" '{summary:("promoted to " + $b)}')"
