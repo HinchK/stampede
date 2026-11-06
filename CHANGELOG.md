@@ -10,6 +10,8 @@ pre-1.0: the public surface is not frozen.
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-11-05 (orchestration safety and bounded looper)
+
 ### Fixed
 - Review verdicts require the assigned independent sender; self-reviewing
   quota failover stays deferred, and legacy pending reviews are redispatched.
