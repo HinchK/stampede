@@ -81,8 +81,15 @@ check "5c" "degraded failure prints nothing to stdout" \
 
 # ── 6. newest-first probing over a mixed PATH ───────────────────────────────
 mkdir -p "$TEST_DIR/mixed/bin"
-printf '#!/bin/sh\nexit 1\n' > "$TEST_DIR/mixed/bin/python3"
-chmod +x "$TEST_DIR/mixed/bin/python3"
+# Shadow every probe name that must not leak from a later PATH entry.
+# ubuntu-latest ships /usr/bin/python3.13; without these stubs, command -v
+# finds that capable interpreter before mixed/bin's python3.12. Only 3.11
+# and 3.12 stay capable (symlinks to a real interpreter). python3 stays
+# incapable so the probe must skip it.
+for _pyname in python3.14 python3.13 python3; do
+  printf '#!/bin/sh\nexit 1\n' > "$TEST_DIR/mixed/bin/$_pyname"
+  chmod +x "$TEST_DIR/mixed/bin/$_pyname"
+done
 REAL=$(unset PYTHON_BIN; resolve_python; printf '%s' "${PYTHON_BIN:-}")
 ln -s "$REAL" "$TEST_DIR/mixed/bin/python3.11"
 ln -s "$REAL" "$TEST_DIR/mixed/bin/python3.12"
