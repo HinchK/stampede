@@ -442,6 +442,48 @@ read -r OpsTab OpsAnchor   <<< "$(tab_by_label "$WS_ID" "ops")"
 
 agent_alive() { herdr agent list 2>/dev/null | grep -q "\"$1\""; }
 pane_of_agent() { herdr agent get "$1" 2>/dev/null | jq -r '.result.agent.pane_id // empty'; }
+# A previous `agent start` can exit non-zero and still leave the agent
+# registered, blocked on a prompt, with launch_pending set. That is not seated.
+agent_launch_pending() { # NAME
+  local pending=""
+  pending=$(herdr agent get "$1" 2>/dev/null | jq -r '.result.agent.launch_pending // false' 2>/dev/null) || return 1
+  [[ "$pending" == "true" ]]
+}
+# A skipped seat used to warn and keep going. The completion banner then said
+# the swarm was ready. Stop on the first seat that does not start, and show
+# the pane — that is where a blocked launch is actually waiting.
+abort_skipped_seat() { # SEAT REASON [PANE] [LOGFILE]
+  local seat="$1" reason="$2" pane="${3:-}" logf="${4:-}"
+  local excerpt="" line=""
+  printf '  %s✖ FATAL: %s was not seated (%s). Startup stopped.%s\n' \
+    "$RED" "$seat" "$reason" "$RESET" >&2
+  if [[ -n "$pane" ]]; then
+    excerpt=$(herdr pane read "$pane" --source recent --lines 24 --format text 2>/dev/null | head -n 24 || true)
+  fi
+  if [[ "$excerpt" == '{"result":'* ]]; then
+    excerpt=""
+  fi
+  if [[ -z "${excerpt//[[:space:]]/}" && -n "$logf" && -s "$logf" ]]; then
+    excerpt=$(head -n 24 "$logf" 2>/dev/null || true)
+  fi
+  if [[ -n "${excerpt//[[:space:]]/}" ]]; then
+    printf '  %sWhat the pane is showing:%s\n' "$BOLD" "$RESET" >&2
+    while IFS= read -r line; do
+      printf '    %s\n' "$line" >&2
+    done <<<"$excerpt"
+  fi
+  if printf '%s\n' "$excerpt" | grep -q 'Do you trust the contents'; then
+    printf '  %sFix: in pane %s choose "Yes, I trust this folder", then re-run startup.%s\n' \
+      "$YELLOW" "${pane:-the seat pane}" "$RESET" >&2
+  else
+    printf '  %sFix: resolve this seat (stampede doctor lists provider remedies), then re-run startup.%s\n' \
+      "$YELLOW" "$RESET" >&2
+  fi
+  printf '  %sAlready-seated agents stay up. This run will not mark the swarm ready.%s\n' \
+    "$DIM" "$RESET" >&2
+  [[ -n "$logf" ]] && rm -f "$logf"
+  exit 1
+}
 recorded_pane() { # NAME — reuse only this workspace's previously managed pane
   local ledger="${PWD}/.herdr-swarm/seats.json"
   [[ -f "$ledger" ]] || return 0
@@ -460,10 +502,8 @@ render_all_briefs "$PWD" "$PROJECT_SLUG"
 
 printf '\n%s▸ Seating Agents & Delivering Standing Briefs%s\n' "$BOLD" "$RESET"
 
-# Seat ledger lines ("name|kind|pane") + per-tab pane collections
+# Seat ledger lines ("name|kind|pane")
 SEAT_LEDGER=""
-SEATED_HERD_PANES=""
-SEATED_OPS_PANES=""
 
 # Dynamic seating: iterate config seats grouped by tab. Topology per tab:
 # seat 0 splits right of the tab anchor, seat 1 below seat 0, rest below the
@@ -497,7 +537,7 @@ for tab_name in herd ops; do
 
     # Worktree isolation (ADR 0006): provision BEFORE split_pane — a pane's
     # cwd is fixed at split time, so the worktree must exist first. Failure
-    # skips this seat, not the herd.
+    # stops startup; a missing worktree is not a seat to skip.
     seat_cwd="$PWD"
     wt_branch=""
     if (( seat_isolated )) && ! agent_alive "$seat_name"; then
@@ -507,17 +547,17 @@ for tab_name in herd ops; do
         wt_branch=$(sed -n 2p <<<"$prov_out")
         good "Worktree ready: ${seat_cwd} (${wt_branch})"
       else
-        warn "Worktree provisioning failed for '${seat_name}' — seat skipped"
-        [[ -n "$prev_pane" ]] || prev_pane="$tab_anchor"
-        seat_idx=$((seat_idx + 1))
-        continue
+        abort_skipped_seat "$seat_name" "worktree provisioning failed"
       fi
     fi
 
     seat_pane=""
     if agent_alive "$seat_name"; then
-      note "Agent '${seat_name}' is already seated"
       seat_pane=$(pane_of_agent "$seat_name")
+      if agent_launch_pending "$seat_name"; then
+        abort_skipped_seat "$seat_name" "its previous launch never became ready" "$seat_pane"
+      fi
+      note "Agent '${seat_name}' is already seated"
       # Carry forward the recorded worktree for an already-live isolated seat
       if (( seat_isolated )); then
         seat_cwd=$(git -C "$PWD" worktree list --porcelain 2>/dev/null \
@@ -545,25 +585,28 @@ for tab_name in herd ops; do
       # launch (rc ≠ 0) or an agent that never registers falls through to
       # the next kind. The configured model travels only with the primary
       # kind: a fallback provider cannot honor another provider's model id.
-      # A chain with no healthy kind skips the seat — every mode then fails
-      # closed on the missing-seat roster check (swarm_verify_seats, D4).
+      # A chain with no healthy kind, or a kind that never reaches
+      # interactive readiness, stops startup. The missing-seat roster check
+      # still runs for a ledger written by an older launch (swarm_verify_seats).
       resolve_timeout >/dev/null 2>&1 || true
       chain_kinds=$(providers_healthy_chain "$seat_kinds")
       if [[ -z "$chain_kinds" ]]; then
-        warn "No healthy provider in chain for '${seat_name}' [${seat_kinds}] — seat skipped (stampede doctor lists remedies)"
-        [[ -n "$prev_pane" ]] || prev_pane="$tab_anchor"
-        seat_idx=$((seat_idx + 1))
-        continue
+        abort_skipped_seat "$seat_name" "no healthy provider in [${seat_kinds}]"
       fi
       primary_kind="${seat_kinds%% *}"
       launched_kind=""
       fallback_reason=""
+      start_log=""
       for try_kind in $chain_kinds; do
         try_model="$seat_model"
         [[ "$try_kind" != "$primary_kind" ]] && try_model=""
         step "Starting agent '${seat_name}' (${try_kind})..."
-        if providers_start_agent "$seat_name" "$try_kind" "$seat_pane" "$try_model" "$seat_cwd" >/dev/null 2>&1 \
+        [[ -n "$start_log" ]] && rm -f "$start_log"
+        start_log=$(mktemp)
+        if providers_start_agent "$seat_name" "$try_kind" "$seat_pane" "$try_model" "$seat_cwd" >"$start_log" 2>&1 \
            && herdr agent get "$seat_name" >/dev/null 2>&1; then
+          rm -f "$start_log"
+          start_log=""
           launched_kind="$try_kind"
           break
         fi
@@ -573,8 +616,7 @@ for tab_name in herd ops; do
         fi
       done
       if [[ -z "$launched_kind" ]]; then
-        warn "No provider in chain could seat '${seat_name}' [${seat_kinds}] — seat skipped"
-        seat_pane=""
+        abort_skipped_seat "$seat_name" "no provider in [${seat_kinds}] could start it" "$seat_pane" "$start_log"
       else
         resolved_kind="$launched_kind"
         if [[ "$resolved_kind" != "$primary_kind" ]]; then
@@ -609,11 +651,6 @@ for tab_name in herd ops; do
         --arg wt_dir "${seat_cwd:-$PWD}" --arg branch "${wt_branch:-$root_branch}" \
         --argjson isolated "$seat_isolated_bool" --argjson agentless "$seat_agentless_bool" \
         '{name: $name, kind: $kind, pane: $pane, worktree_dir: $wt_dir, branch: $branch, isolated: $isolated, agentless: $agentless}')$'\n'
-      if [[ "$tab_name" == "ops" ]]; then
-        SEATED_OPS_PANES+=" ${seat_pane}"
-      else
-        SEATED_HERD_PANES+=" ${seat_pane}"
-      fi
       prev_pane="$seat_pane"
     else
       [[ -n "$prev_pane" ]] || prev_pane="$tab_anchor"
@@ -641,7 +678,6 @@ if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; then
     if [[ -n "$view_pane" ]]; then
       SEAT_LEDGER+=$(jq -cn --arg n "$view_name" --arg p "$view_pane" --arg d "$PWD" \
         '{name:$n,kind:"log",pane:$p,worktree_dir:$d,isolated:false,agentless:true}')$'\n'
-      SEATED_OPS_PANES+=" ${view_pane}"
     fi
   done
   supervisor_name="supervisor-${PROJECT_SLUG}"
@@ -655,7 +691,6 @@ if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; then
     herdr pane rename "$SRV_PANE" supervisor >/dev/null 2>&1 || true
     SEAT_LEDGER+=$(jq -cn --arg n "$supervisor_name" --arg p "$SRV_PANE" --arg d "$PWD" \
       '{name:$n,kind:"shell",pane:$p,worktree_dir:$d,isolated:false,agentless:true}')$'\n'
-    SEATED_OPS_PANES+=" ${SRV_PANE}"
   fi
   if [[ "${PROXY_ENABLED:-false}" == true ]]; then
     PROXY_PANE=$(recorded_pane "proxy-${PROJECT_SLUG}")
@@ -665,7 +700,6 @@ if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; then
     if [[ -n "$PROXY_PANE" ]]; then
       SEAT_LEDGER+=$(jq -cn --arg n "proxy-${PROJECT_SLUG}" --arg p "$PROXY_PANE" --arg d "$PWD" \
         '{name:$n,kind:"shell",pane:$p,worktree_dir:$d,isolated:false,agentless:true}')$'\n'
-      SEATED_OPS_PANES+=" ${PROXY_PANE}"
     fi
   fi
 else
@@ -676,12 +710,6 @@ fi
 # Live telemetry stream occupies the Ops anchor pane (replaces raw log tail)
 herdr pane rename "$OpsAnchor" "telemetry-stream" >/dev/null 2>&1 || true
 herdr pane run "$OpsAnchor" "${PYTHON_BIN} -u '$LIB_DIR/telemetry.py' stream '$SESSION_ID' '${PWD}/.herdr-swarm/traces'" >/dev/null 2>&1 || true
-
-# Geometry Guard Floor
-# shellcheck disable=SC2086  # intentional word splitting over collected pane ids
-check_and_relocate_geometry "$WS_ID" "$HerdAnchor" ${SEATED_HERD_PANES:-}
-# shellcheck disable=SC2086  # intentional word splitting over collected pane ids
-check_and_relocate_geometry "$WS_ID" "$OpsAnchor" ${SEATED_OPS_PANES:-}
 
 good "Layout established: Herd Tab (${HerdTab}) & Ops Tab (${OpsTab})"
 

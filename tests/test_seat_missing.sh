@@ -6,12 +6,13 @@ set -euo pipefail
 # and a verify that only checks ledger seats cannot see it. Two scenarios:
 #   A. a broken ARCH seat (critical) — up -m b must fail closed with a
 #      failed-seat summary and must NOT emit a healthy swarm_ready event.
-#   B. a broken docs seat (non-critical) — up succeeds, warns loudly, and
-#      the swarm_ready payload names the missing seat.
+#   B. a broken docs seat (non-critical) — up stops before the swarm is
+#      marked ready and tells the operator how to fix it. A skipped seat
+#      is a stopped launch in every mode.
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
 make_env() { # REFUSE_PREFIX -> sets ENV_DIR (bin stubs + fresh target)
-  unset FAKE_HERDR_REFUSE
+  unset FAKE_HERDR_REFUSE FAKE_HERDR_PEND FAKE_HERDR_PANE_TEXT
   ENV_DIR=$(mktemp -d)
   local target="$ENV_DIR/fresh project"
   mkdir -p "$target" "$ENV_DIR/bin"
@@ -66,16 +67,28 @@ elif a[:2] == ['agent', 'get']:
     agent = next((v for v in state['agents'] if v['name'] == a[2]), None)
     if agent is None: sys.exit(1)
     emit({'agent': agent})
+elif a[:2] == ['pane', 'read']:
+    text = os.environ.get('FAKE_HERDR_PANE_TEXT', '')
+    if text:
+        print(text)
+    else:
+        emit({})
 elif a[:2] == ['agent', 'start']:
     refuse = os.environ.get('FAKE_HERDR_REFUSE', '')
+    pend = os.environ.get('FAKE_HERDR_PEND', '')
     if refuse and a[2].startswith(refuse):
         sys.exit(1)
     seat_pane = option('--pane')
     seat = {'name': a[2], 'agent': option('--kind'), 'pane_id': seat_pane,
             'agent_status': 'idle', 'workspace_id': 'w1',
             'cwd': next(p['cwd'] for p in state['panes'] if p['pane_id'] == seat_pane)}
+    if pend and a[2].startswith(pend):
+        seat['agent_status'] = 'blocked'
+        seat['launch_pending'] = True
     state['agents'].append(seat)
     emit({'agent': seat})
+    if seat.get('launch_pending'):
+        sys.exit(1)
 elif a[:2] == ['pane', 'run']:
     cmd = a[3] if len(a) > 3 else ''
     note = os.environ.get('FAKE_HERDR_WATCH_NOTE', '')
@@ -141,23 +154,56 @@ fi
 [[ -f "$ENV_DIR/fresh project/.herdr-swarm/intake-hold" ]] \
   || { echo "A: failed launch released ticket intake" >&2; exit 1; }
 
-echo "==> B: broken docs seat is loud but non-fatal"
+echo "==> B: a skipped non-critical seat stops startup"
 make_env
 export FAKE_HERDR_REFUSE='docs-'
 set +e
 "$ENV_DIR/yeehaw.sh" start --brainstorm --topic "launch check" > "$ENV_DIR/up.log" 2>&1
 rc=$?
 set -e
-[[ "$rc" -eq 0 ]] || { echo "B: up -m b failed on a non-critical seat" >&2; tail -20 "$ENV_DIR/up.log" >&2; exit 1; }
-grep -q "docs-" "$ENV_DIR/up.log" || { echo "B: missing docs seat not named in output" >&2; tail -20 "$ENV_DIR/up.log" >&2; exit 1; }
-traces_of "$ENV_DIR/fresh project" | grep '"swarm_ready"' | grep -q '"missing_seats"' \
-  || { echo "B: swarm_ready payload does not carry missing_seats" >&2; traces_of "$ENV_DIR/fresh project" >&2; exit 1; }
-traces_of "$ENV_DIR/fresh project" | grep '"swarm_ready"' | grep -q 'docs-' \
-  || { echo "B: swarm_ready does not name the docs seat" >&2; exit 1; }
-[[ ! -f "$ENV_DIR/fresh project/.herdr-swarm/intake-hold" ]] \
-  || { echo "B: successful launch left ticket intake held" >&2; exit 1; }
-grep -q 'loop-bot-herd.sh' "$FAKE_HERDR_LOG" \
-  || { echo "B: supervisor watch did not start after verification" >&2; exit 1; }
+[[ "$rc" -ne 0 ]] || { echo "B: up -m b exited 0 with a skipped docs seat" >&2; tail -20 "$ENV_DIR/up.log" >&2; exit 1; }
+grep -q "docs-" "$ENV_DIR/up.log" || { echo "B: stopped launch does not name the docs seat" >&2; tail -30 "$ENV_DIR/up.log" >&2; exit 1; }
+grep -q "Startup stopped" "$ENV_DIR/up.log" || { echo "B: stopped launch does not say startup stopped" >&2; tail -30 "$ENV_DIR/up.log" >&2; exit 1; }
+grep -q "re-run" "$ENV_DIR/up.log" || { echo "B: stopped launch does not say how to retry" >&2; tail -30 "$ENV_DIR/up.log" >&2; exit 1; }
+if grep -q 'Swarm Setup Complete' "$ENV_DIR/up.log"; then
+  echo "B: setup was marked complete after a skipped seat" >&2
+  exit 1
+fi
+if traces_of "$ENV_DIR/fresh project" | grep -q '"swarm_ready"'; then
+  echo "B: swarm_ready emitted after a skipped seat" >&2
+  exit 1
+fi
+[[ -f "$ENV_DIR/fresh project/.herdr-swarm/intake-hold" ]] \
+  || { echo "B: skipped seat released ticket intake" >&2; exit 1; }
+if grep -q 'loop-bot-herd.sh' "$FAKE_HERDR_LOG"; then
+  echo "B: supervisor watch started after a skipped seat" >&2
+  exit 1
+fi
+
+echo "==> B2: a seat left blocked on its launch prompt stops the next start too"
+make_env
+export FAKE_HERDR_PEND='helper-'
+export FAKE_HERDR_PANE_TEXT='Do you trust the contents of this project?
+> Yes, I trust this folder'
+set +e
+"$ENV_DIR/yeehaw.sh" start --brainstorm --topic "launch check" > "$ENV_DIR/up.log" 2>&1
+rc=$?
+set -e
+[[ "$rc" -ne 0 ]] || { echo "B2: first start exited 0 while helper was launch-pending" >&2; tail -30 "$ENV_DIR/up.log" >&2; exit 1; }
+grep -q "helper-" "$ENV_DIR/up.log" || { echo "B2: first start does not name helper" >&2; tail -30 "$ENV_DIR/up.log" >&2; exit 1; }
+grep -q "Yes, I trust this folder" "$ENV_DIR/up.log" || { echo "B2: first start does not show the pane prompt" >&2; tail -40 "$ENV_DIR/up.log" >&2; exit 1; }
+unset FAKE_HERDR_PEND
+set +e
+"$ENV_DIR/yeehaw.sh" start --brainstorm --topic "launch check" > "$ENV_DIR/up2.log" 2>&1
+rc=$?
+set -e
+[[ "$rc" -ne 0 ]] || { echo "B2: rerun treated a launch-pending helper as already seated" >&2; tail -30 "$ENV_DIR/up2.log" >&2; exit 1; }
+grep -q "Startup stopped" "$ENV_DIR/up2.log" || { echo "B2: rerun did not stop" >&2; tail -30 "$ENV_DIR/up2.log" >&2; exit 1; }
+grep -q "Yes, I trust this folder" "$ENV_DIR/up2.log" || { echo "B2: rerun hid the pane prompt" >&2; tail -40 "$ENV_DIR/up2.log" >&2; exit 1; }
+if traces_of "$ENV_DIR/fresh project" | grep -q '"swarm_ready"'; then
+  echo "B2: swarm_ready emitted while helper was still launch-pending" >&2
+  exit 1
+fi
 
 echo "==> C: config-less universal target fails closed on broken arch seat (F-A)"
 make_env
