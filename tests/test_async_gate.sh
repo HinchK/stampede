@@ -66,6 +66,12 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/worktree.sh"
 # here: the suite must stay hermetic against the shipping default in either
 # direction (off before PROVE-2, on after).
 export CONFIG_REVIEW_LOOP=0
+# Same leak, second knob (found 2026-11-06): setup.py always writes
+# attention.bounded_looper = true, and looper_notice routes to worklog.log
+# instead of a herdr prompt under bounded mode — §13b5 asserts the prompt.
+# This suite exercises the UNBOUNDED supervisor lane; pin it like the
+# sibling suites do (test_review_authorization.sh, test_manual_arbiter.sh).
+export CONFIG_BOUNDED_LOOPER=0
 
 # Every gate this suite exercises bounds its run with timeout(1), which macOS
 # does not ship. Fail once with the remedy rather than cascading into a dozen
