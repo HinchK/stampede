@@ -643,7 +643,7 @@ ck sd1 retry "healthy half: concurrent ref move during gate → CAS retry"
 SHA_SD2=$(commit_at "$TEST_DIR/wc" "sd racer 2")
 arbiter_enqueue sd2 seat-sd "$SHA_SD2"
 sd2_last() { jq -r -s --arg t sd2 '[.[] | select((.ticket|tostring) == $t)] | .[-1].status // "none"' "$Q" 2>/dev/null; }
-if with_seeded_defect _arb_integrate \
+if with_seeded_defect _arb_queue_write \
   's/update-ref "\$ARB_REF" "\$candidate" "\$i0"/update-ref "$ARB_REF" "$candidate"/' \
   'arbiter_drain >/dev/null 2>&1; [[ "$(sd2_last)" == "retry" ]]'; then
   ok "seeded half: retry assertion FAILS when expected-old is dropped (teeth proven)"

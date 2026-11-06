@@ -25,6 +25,18 @@ source "$REPO_ROOT/lib/lifecycle.sh"
 
 unset CONFIG_REVIEW_LOOP CONFIG_REVIEW_MAX_ROUNDS SEAT_NAME_reviewer
 export SEAT_NAME_reviewer="reviewer-test"
+
+# These pure state-machine fixtures stand in for an actual primary dispatch.
+# Sender rejection is exercised separately through the supervisor scanner.
+review_verdict() {
+  local sd="$4" cur round
+  if [[ -f "$sd/reviews.json" ]]; then
+    cur=$(jq -r --arg t "$1" '.reviews[$t].sha // ""' "$sd/reviews.json" 2>/dev/null || true)
+    round=$(jq -r --arg t "$1" '.reviews[$t].round // 0' "$sd/reviews.json" 2>/dev/null || true)
+    review_loop_assign_reviewer "$1" "$cur" "$round" reviewer-test "$sd" || true
+  fi
+  review_loop_on_review_verdict "$@" reviewer-test
+}
 T="TICKET-9"
 A1="aaaaaaa1111111111111111111111111111111111111111111111111111aa"
 A2="bbbbbbb2222222222222222222222222222222222222222222222222222bb"
@@ -50,14 +62,14 @@ directive "$out" "reviewer dispatched with round/max" "DISPATCH_REVIEWER reviewe
   && ok "state: awaiting_review round 1" || bad "state: $(state_of) r$(round_of)"
 
 # ── 3. direct PASS -> review_passed + enqueue ─────────────────────────────
-out=$(review_loop_on_review_verdict "$T" "$A1" PASS "$SD") && rc=0 || rc=$?
+out=$(review_verdict "$T" "$A1" PASS "$SD") && rc=0 || rc=$?
 [[ "$rc" == 0 ]] && ok "PASS rc 0" || bad "PASS rc=$rc"
 directive "$out" "PASS enqueues gated sha" "ENQUEUE $T $seat $A1"
 [[ "$(state_of)" == "review_passed" ]] && ok "state: review_passed" || bad "state: $(state_of)"
 
 # ── 4. full cycle: BLOCK r1 -> critique -> refine -> re-verdict -> PASS ───
 out=$(review_loop_on_gate_green "$T" "$seat" "$A1" "$SD")
-out=$(review_loop_on_review_verdict "$T" "$A1" BLOCK "$SD") && rc=0 || rc=$?
+out=$(review_verdict "$T" "$A1" BLOCK "$SD") && rc=0 || rc=$?
 [[ "$rc" == 0 ]] && ok "BLOCK r1 rc 0" || bad "BLOCK rc=$rc"
 directive "$out" "critique dispatched round 2/2" "DISPATCH_CRITIQUE $seat $T 2 2"
 [[ "$(state_of)" == "critique_dispatched" && "$(round_of)" == 2 ]] \
@@ -67,7 +79,7 @@ if printf '%s\n' "$out" | grep -qF "$SD/reviews/$T-$A1.md"; then
 else
   bad "findings path missing: $out"
 fi
-out=$(review_loop_on_review_verdict "$T" "$A1" BLOCK "$SD")   # duplicate BLOCK: idempotent
+out=$(review_verdict "$T" "$A1" BLOCK "$SD")   # duplicate BLOCK: idempotent
 directive "$out" "duplicate BLOCK re-delivers same round (no increment)" "DISPATCH_CRITIQUE $seat $T 2 2"
 [[ "$(round_of)" == 2 ]] && ok "round not double-incremented" || bad "round drifted: $(round_of)"
 
@@ -75,15 +87,15 @@ out=$(review_loop_on_gate_green "$T" "$seat" "$A2" "$SD")      # refinement at n
 directive "$out" "re-review dispatched at new sha, round carried" "DISPATCH_REVIEWER reviewer-test $T $A2 2 2"
 [[ "$(state_of)" == "awaiting_review" && "$(round_of)" == 2 ]] \
   && ok "refinement: awaiting_review round 2" || bad "refine: $(state_of) r$(round_of)"
-out=$(review_loop_on_review_verdict "$T" "$A2" PASS "$SD")
+out=$(review_verdict "$T" "$A2" PASS "$SD")
 directive "$out" "round-2 PASS enqueues refined sha" "ENQUEUE $T $seat $A2"
 [[ "$(state_of)" == "review_passed" ]] && ok "cycle complete: review_passed" || bad "cycle: $(state_of)"
 
 # ── 5. persistent BLOCK: budget exhausted -> review_blocked, no enqueue ──
 review_loop_on_gate_green "$T" "$seat" "$A1" "$SD" >/dev/null
-review_loop_on_review_verdict "$T" "$A1" BLOCK "$SD" >/dev/null     # r1 -> critique r2
+review_verdict "$T" "$A1" BLOCK "$SD" >/dev/null     # r1 -> critique r2
 review_loop_on_gate_green "$T" "$seat" "$A2" "$SD" >/dev/null       # refine at sha2
-out=$(review_loop_on_review_verdict "$T" "$A2" BLOCK "$SD") && rc=0 || rc=$?
+out=$(review_verdict "$T" "$A2" BLOCK "$SD") && rc=0 || rc=$?
 [[ "$rc" == 0 ]] && ok "budget-exhausted BLOCK rc 0 (designed answer)" || bad "rc=$rc"
 directive "$out" "ALERT_BLOCKED with budget" "ALERT_BLOCKED $T $A2 2 2"
 if printf '%s\n' "$out" | grep -q "ENQUEUE"; then bad "blocked review must NOT enqueue"; else ok "no enqueue on blocked"; fi
@@ -91,21 +103,21 @@ if printf '%s\n' "$out" | grep -q "ENQUEUE"; then bad "blocked review must NOT e
 
 # ── 6. corrupt / invalid verdicts fail closed ─────────────────────────────
 review_loop_on_gate_green "$T" "$seat" "$A1" "$SD" >/dev/null
-out=$(review_loop_on_review_verdict "$T" "$A1" MAYBE "$SD" 2>/dev/null) && rc=0 || rc=$?
+out=$(review_verdict "$T" "$A1" MAYBE "$SD" 2>/dev/null) && rc=0 || rc=$?
 [[ "$rc" == 1 ]] && ok "unknown verdict rc 1" || bad "unknown verdict rc=$rc"
 directive "$out" "unknown verdict alerts" "ALERT_INVALID $T unknown-verdict:MAYBE"
 [[ "$(state_of)" == "review_blocked" ]] && ok "unknown verdict blocks review" || bad "state: $(state_of)"
 
-out=$(review_loop_on_review_verdict "$T" "$(printf 'c%.0s' {1..40})" PASS "$SD" 2>/dev/null) && rc=0 || rc=$?
+out=$(review_verdict "$T" "$(printf 'c%.0s' {1..40})" PASS "$SD" 2>/dev/null) && rc=0 || rc=$?
 [[ "$rc" == 1 ]] && ok "sha mismatch rc 1" || bad "mismatch rc=$rc"
 directive "$out" "sha mismatch alerts with expected sha" "ALERT_INVALID $T sha-mismatch"
 
-out=$(review_loop_on_review_verdict "GHOST-1" "$A1" PASS "$SD" 2>/dev/null) && rc=0 || rc=$?
+out=$(review_verdict "GHOST-1" "$A1" PASS "$SD" 2>/dev/null) && rc=0 || rc=$?
 [[ "$rc" == 1 ]] && ok "verdict for unknown ticket rc 1" || bad "ghost rc=$rc"
 
 # ── 6b. missing state file: directive on STDOUT per the line-15 contract ──
 rm -rf "$SCRATCH/fresh"
-out=$(review_loop_on_review_verdict "$T" "$A1" PASS "$SCRATCH/fresh/.herdr-swarm" 2>/dev/null) && rc=0 || rc=$?
+out=$(review_verdict "$T" "$A1" PASS "$SCRATCH/fresh/.herdr-swarm" 2>/dev/null) && rc=0 || rc=$?
 [[ "$rc" == 1 ]] && ok "no state file: rc 1" || bad "no-state rc=$rc"
 directive "$out" "no-review-state alert flows through stdout" "ALERT_INVALID $T no-review-state"
 [[ ! -f "$SCRATCH/fresh/.herdr-swarm/reviews.json" ]] \
@@ -114,7 +126,7 @@ directive "$out" "no-review-state alert flows through stdout" "ALERT_INVALID $T 
 # corrupt state file: reads fail, writes refuse, nothing enqueues
 cp "$SD/reviews.json" "$SD/reviews.json.good"
 printf '{"version":1,"reviews":{"BROKEN"' > "$SD/reviews.json"
-out=$(review_loop_on_review_verdict "$T" "$A1" PASS "$SD" 2>/dev/null) && rc=0 || rc=$?
+out=$(review_verdict "$T" "$A1" PASS "$SD" 2>/dev/null) && rc=0 || rc=$?
 [[ "$rc" -ne 0 ]] && ok "corrupt state: non-zero exit" || bad "corrupt rc=$rc"
 if printf '%s\n' "$out" | grep -q "ENQUEUE"; then bad "corrupt state must not enqueue"; else ok "corrupt state: no enqueue"; fi
 mv "$SD/reviews.json.good" "$SD/reviews.json"
@@ -212,21 +224,21 @@ T="RS1"
 # [12a] short anchor + full verdict (the live CI-FIX-2 shape) → PASS, and
 # the ENQUEUE directive carries the CANONICAL full sha
 review_loop_on_gate_green "$T" "$seat" "${C1:0:7}" "$RSSD" >/dev/null
-out=$(review_loop_on_review_verdict "$T" "$C1" PASS "$RSSD") && rc=0 || rc=$?
+out=$(review_verdict "$T" "$C1" PASS "$RSSD") && rc=0 || rc=$?
 [[ "$rc" == 0 ]] && ok "12a short anchor + full verdict → PASS rc 0" || bad "12a rc=$rc out=$out"
 directive "$out" "12a enqueue carries canonical full sha" "ENQUEUE $T $seat $C1"
 
 # [12b] full anchor + short verdict → PASS
 T="RS2"
 review_loop_on_gate_green "$T" "$seat" "$C1" "$RSSD" >/dev/null
-out=$(review_loop_on_review_verdict "$T" "${C1:0:7}" PASS "$RSSD") && rc=0 || rc=$?
+out=$(review_verdict "$T" "${C1:0:7}" PASS "$RSSD") && rc=0 || rc=$?
 [[ "$rc" == 0 ]] && ok "12b full anchor + short verdict → PASS rc 0" || bad "12b rc=$rc out=$out"
 directive "$out" "12b enqueue still canonical" "ENQUEUE $T $seat $C1"
 
 # [12c] different commit (both resolve) → fail closed on sha-mismatch
 T="RS3"
 review_loop_on_gate_green "$T" "$seat" "$C1" "$RSSD" >/dev/null
-out=$(review_loop_on_review_verdict "$T" "$C2" PASS "$RSSD" 2>/dev/null) && rc=0 || rc=$?
+out=$(review_verdict "$T" "$C2" PASS "$RSSD" 2>/dev/null) && rc=0 || rc=$?
 [[ "$rc" -ne 0 ]] && directive "$out" "12c differing commits fail closed (mismatch)" "ALERT_INVALID RS3 sha-mismatch" \
   || bad "12c differing commits wrongly accepted: $out"
 [[ "$(jq -r '.reviews.RS3.state' "$RSSD/reviews.json")" == "review_blocked" ]] \
@@ -235,7 +247,7 @@ out=$(review_loop_on_review_verdict "$T" "$C2" PASS "$RSSD" 2>/dev/null) && rc=0
 # [12d] unknown sha (resolvable repo, nonexistent object) → fail closed
 T="RS4"
 review_loop_on_gate_green "$T" "$seat" "$C1" "$RSSD" >/dev/null
-out=$(review_loop_on_review_verdict "$T" "ffffffffffffffffffffffffffffffffffffffff" PASS "$RSSD" 2>/dev/null) && rc=0 || rc=$?
+out=$(review_verdict "$T" "ffffffffffffffffffffffffffffffffffffffff" PASS "$RSSD" 2>/dev/null) && rc=0 || rc=$?
 [[ "$rc" -ne 0 ]] && directive "$out" "12d unknown sha fails closed (unresolvable)" "ALERT_INVALID RS4 sha-unresolvable" \
   || bad "12d unknown sha wrongly accepted: $out"
 
@@ -256,7 +268,7 @@ done
 T="RS5"
 review_loop_on_gate_green "$T" "$seat" "$C1" "$RSSD" >/dev/null
 if [[ -n "$AMBSHA" ]]; then
-  out=$(review_loop_on_review_verdict "$T" "$AMBSHA" PASS "$RSSD" 2>/dev/null) && rc=0 || rc=$?
+  out=$(review_verdict "$T" "$AMBSHA" PASS "$RSSD" 2>/dev/null) && rc=0 || rc=$?
   [[ "$rc" -ne 0 ]] && directive "$out" "12e ambiguous short sha fails closed" "ALERT_INVALID RS5 sha-unresolvable" \
     || bad "12e ambiguous sha wrongly accepted: $out"
 else
@@ -268,7 +280,7 @@ fi
 T="RS6"
 mkdir -p "$SCRATCH/norepo/.herdr-swarm"
 review_loop_on_gate_green "$T" "$seat" "$A1" "$SCRATCH/norepo/.herdr-swarm" >/dev/null
-out=$(review_loop_on_review_verdict "$T" "$A1" PASS "$SCRATCH/norepo/.herdr-swarm") && rc=0 || rc=$?
+out=$(review_verdict "$T" "$A1" PASS "$SCRATCH/norepo/.herdr-swarm") && rc=0 || rc=$?
 [[ "$rc" == 0 ]] && ok "12f no-repo fake-sha path unchanged (raw equality)" || bad "12f rc=$rc out=$out"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"

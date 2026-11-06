@@ -11,6 +11,16 @@
 
 set -euo pipefail
 
+# A gate describes this commit only while HEAD and visible files match it.
+gate_tree_matches() { # DIR SHA
+  local dir="$1" want_sha="$2" head_full sha_full dirt
+  head_full=$(git -C "$dir" rev-parse HEAD 2>/dev/null) || return 1
+  sha_full=$(git -C "$dir" rev-parse "${want_sha}^{commit}" 2>/dev/null) || return 1
+  [[ -n "$head_full" && "$head_full" == "$sha_full" ]] || return 1
+  dirt=$(git -C "$dir" status --porcelain 2>/dev/null) || return 1
+  [[ -z "$dirt" ]]
+}
+
 # Convert an arbitrary project name into a Herdr-legal slug:
 #   - lowercase everything
 #   - any character outside [a-z0-9_-] becomes "-"

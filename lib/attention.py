@@ -15,6 +15,8 @@ import tempfile
 import time
 import tomllib
 
+from roles import seat_roles
+
 
 VALID_MODES = ("quiet", "medium", "loud")
 VALID_EVENTS = ("green", "new", "red", "blocked")
@@ -115,8 +117,10 @@ class Attention:
 
     def _candidates(self, architect_only=True):
         ledger = json.loads((self.state_dir / "seats.json").read_text())
-        configured = [v.get("name", k).replace("_", "-") for k, v in self.config.get("seats", {}).items()
-                      if (not architect_only and k != "looper") or v.get("role") == "architect"]
+        seats = self.config.get("seats", {})
+        roles = seat_roles(seats)
+        configured = [v.get("name", k).replace("_", "-") for k, v in seats.items()
+                      if (not architect_only and k != "looper") or roles[k] == "architect"]
         return [seat for seat in ledger.get("seats", []) if seat.get("isolated") is True
                 and seat.get("agentless") is not True
                 and any(seat.get("name", "") == base or seat.get("name", "").startswith(base + "-")
