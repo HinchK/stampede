@@ -5,15 +5,65 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import subprocess
+import sys
+import tomllib
 
 
 SOURCE = Path(__file__).resolve().parents[1] / "lib/attention.py"
+sys.path.insert(0, str(SOURCE.parent))
 spec = importlib.util.spec_from_file_location("stampede_attention", SOURCE)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 
 class AttentionTests(unittest.TestCase):
+    def test_upgraded_roles_reach_attention_without_losing_pins(self):
+        import setup
+        choices = {role: (kind, model) for role, kind, model, *_ in setup.ROLES}
+        shipped = tomllib.loads((SOURCE.parent.parent / "swarm.config.toml").read_text())
+        descriptive = {"name": "builder", "role": "Implementation Engine (GLM-5.3)",
+                       "default_kind": "opencode", "model": "pinned-model", "worktree": True}
+        cases = [shipped, {"seats": {"arch_1": descriptive}},
+                 {"seats": {"builder": descriptive, "notes": {
+                     "name": "notes", "role": "notes", "default_kind": "agy",
+                     "model": "pinned-notes", "worktree": True}}}]
+        for old in cases:
+            with self.subTest(keys=list(old["seats"])):
+                roles = setup.seat_roles(old["seats"])
+                expected = [v.get("name", k) + "-test" for k, v in old["seats"].items()
+                            if roles[k] == "architect"]
+                rendered = setup.render_config(self.repo, choices, {
+                    "pm": 1, "architect": len(expected)}, "medium", old)
+                (self.repo / "swarm.config.toml").write_text(rendered)
+                (self.repo / ".herdr-swarm/seats.json").write_text(json.dumps({"seats": [
+                    {"name": v.get("name", k) + "-test", "isolated": True}
+                    for k, v in old["seats"].items()]}))
+                policy = module.Attention(self.repo)
+                self.assertEqual([seat["name"] for seat in policy._candidates()], expected)
+                new = tomllib.loads(rendered)
+                for key, seat in old["seats"].items():
+                    if roles[key] == "architect" or key == "notes":
+                        for field in ("name", "role", "model"):
+                            self.assertEqual(new["seats"][key][field], seat[field])
+
+    def test_queue_writer_round_trip_reaches_real_readers(self):
+        state = self.repo / ".herdr-swarm"
+        root = SOURCE.parent.parent
+        script = '''source "$1/lib/arbiter.sh"
+REPO_DIR="$2"; STATE_DIR="$2/.herdr-swarm"
+arbiter_enqueue A worker aaaaaaa
+arbiter_enqueue B worker bbbbbbb
+_arb_set_status A aaaaaaa integrated
+source "$1/lib/cli/stampede-status.sh"
+_status_read_jsonl "$STATE_DIR/integration.jsonl"
+'''
+        result = subprocess.run(["/bin/bash", "-c", script, "reader-test", str(root), str(self.repo)],
+                                text=True, capture_output=True, check=True)
+        rows = json.loads(result.stdout)
+        self.assertEqual([row["ticket"] for row in rows if row["status"] == "queued"], ["B"])
+        self.assertTrue(self.policy._ticket_settled("A"))
+        self.assertFalse(self.policy._ticket_settled("B"))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
