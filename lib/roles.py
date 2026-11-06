@@ -38,4 +38,3 @@ def seat_roles(existing_seats):
 def _descriptive_role(seat, key):
     role = seat.get("role")
     return isinstance(role, str) and bool(role) and role != key
-
