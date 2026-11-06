@@ -185,17 +185,17 @@ review_loop_on_gate_green() { # TICKET SEAT SHA [STATE_DIR]
   # state record + log marker so it is visibly distinguishable from the
   # loop-off ENQUEUE when reading traces/state later.
   if _review_commit_is_docs_only "$sha"; then
-    printf 'ENQUEUE %s %s %s\n' "$ticket" "$seat" "$sha"
-    review_loop_init "$sd"
+    review_loop_init "$sd" || return 1
     # shellcheck disable=SC2016  # jq program, not shell
     _review_write "$sd" \
       '.reviews[$t] = {seat:$s, sha:$h, state:"docs_fast_path", updated:$now, history:((.reviews[$t].history // []) + [{event:"docs_fast_path", sha:$h, at:$now}])}' \
-      --arg t "$ticket" --arg s "$seat" --arg h "$sha" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      --arg t "$ticket" --arg s "$seat" --arg h "$sha" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" || return 1
+    printf 'ENQUEUE %s %s %s\n' "$ticket" "$seat" "$sha"
     printf 'review loop: #%s @ %s is docs/maps-only — fast-path ENQUEUE, no review round\n' "$ticket" "$sha" >&2
     return 0
   fi
 
-  review_loop_init "$sd"
+  review_loop_init "$sd" || return 1
   local round max state
   max=$(review_loop_max_rounds "$sd")
   state=$(jq -r --arg t "$ticket" '.reviews[$t].state // "none"' "$f")
@@ -207,7 +207,7 @@ review_loop_on_gate_green() { # TICKET SEAT SHA [STATE_DIR]
   # shellcheck disable=SC2016  # jq program, not shell
   _review_write "$sd" \
     '.reviews[$t] = {seat:$s, sha:$h, round:($r|tonumber), state:"awaiting_review", max_rounds:($m|tonumber), updated:$now, history:((.reviews[$t].history // []) + [{event:"gate_green", sha:$h, round:($r|tonumber), at:$now}])}' \
-    --arg t "$ticket" --arg s "$seat" --arg h "$sha" --arg r "$round" --arg m "$max" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    --arg t "$ticket" --arg s "$seat" --arg h "$sha" --arg r "$round" --arg m "$max" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" || return 1
 
   local reviewer_seat="${SEAT_NAME_reviewer:-reviewer}"
   printf 'DISPATCH_REVIEWER %s %s %s %s %s\n' "$reviewer_seat" "$ticket" "$sha" "$round" "$max"
@@ -322,7 +322,7 @@ review_loop_on_review_verdict() { # TICKET SHA VERDICT STATE_DIR REVIEWER
     # shellcheck disable=SC2016  # jq program, not shell
     _review_write "$sd" \
       '.reviews[$t].state = "review_passed" | .reviews[$t].updated = $now | .reviews[$t].history += [{event:"verdict", verdict:"PASS", sha:$h, at:$now}]' \
-      --arg t "$ticket" --arg h "$sha" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      --arg t "$ticket" --arg h "$sha" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" || return 1
     printf 'ENQUEUE %s %s %s\n' "$ticket" "$seat" "$sha"
     return 0
   fi
@@ -339,13 +339,13 @@ review_loop_on_review_verdict() { # TICKET SHA VERDICT STATE_DIR REVIEWER
     # shellcheck disable=SC2016  # jq program, not shell
     _review_write "$sd" \
       '.reviews[$t].round = ($r|tonumber) | .reviews[$t].state = "critique_dispatched" | .reviews[$t].updated = $now | .reviews[$t].history += [{event:"verdict", verdict:"BLOCK", sha:$h, round:($r|tonumber), at:$now}]' \
-      --arg t "$ticket" --arg h "$sha" --arg r "$next" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      --arg t "$ticket" --arg h "$sha" --arg r "$next" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" || return 1
     printf 'DISPATCH_CRITIQUE %s %s %s %s %s\n' "$seat" "$ticket" "$next" "$max" "$(review_loop_findings_path "$ticket" "$sha" "$sd")"
   else
     # shellcheck disable=SC2016  # jq program, not shell
     _review_write "$sd" \
       '.reviews[$t].state = "review_blocked" | .reviews[$t].updated = $now | .reviews[$t].history += [{event:"verdict", verdict:"BLOCK", sha:$h, round:($r|tonumber), budget_exhausted:true, at:$now}]' \
-      --arg t "$ticket" --arg h "$sha" --arg r "$round" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      --arg t "$ticket" --arg h "$sha" --arg r "$round" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" || return 1
     printf 'ALERT_BLOCKED %s %s %s %s\n' "$ticket" "$sha" "$round" "$max"
     return 0   # the loop worked as designed; the BLOCK is the answer, not an error
   fi

@@ -1314,7 +1314,7 @@ arbiter_auto_drain() {
     # this pass can spawn a replacement immediately (arbiter_lock would
     # evict it too, but only after its full bounded wait).
     warn "arbiter lock held by dead pid ${pid} — evicting stale lock and draining"
-    rm -rf "$lk"
+    _arb_reap_lock "$lk" || return 1
   fi
   mkdir -p "${STATE_DIR}/gate-logs"
   printf '\n[%s] auto-drain pass (supervisor pid %s)\n' "$(date '+%H:%M:%S')" "$$" \

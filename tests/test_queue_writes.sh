@@ -70,6 +70,63 @@ _arb_set_status A aaaaaaa integrated
     assert {r['ticket'] for r in rows()} == {'A', 'B'}, rows()
     print('PASS: an arrival during replacement survives')
 
+    # Both contenders observe the same dead owner before either reaps it.
+    # B resumes only after A holds the replacement lock; B must see A alive.
+    lock = state/'queue.lock'
+    lock.mkdir()
+    (lock/'pid').write_text('99999999\n')
+    contenders = []
+    lock_code = '''
+kill() {
+  local rc=0
+  command kill "$@" 2>/dev/null || rc=$?
+  if [[ "${2:-}" == 99999999 ]]; then
+    printf observed > "$OBSERVED"
+    read -r _ < "$RESUME"
+  elif [[ "$rc" == 0 && ! -f "$REPORTED" ]]; then
+    touch "$REPORTED"
+    printf blocked > "$EVENT"
+  fi
+  return "$rc"
+}
+arbiter_lock "$STATE_DIR" queue.lock || exit 1
+printf acquired > "$EVENT"
+read -r _ < "$UNLOCK"
+arbiter_unlock "$STATE_DIR" queue.lock
+'''
+    for name in ('a', 'b'):
+        paths = {key: Path(tmp)/(name+'-'+key) for key in ('OBSERVED','RESUME','EVENT','UNLOCK')}
+        for path in paths.values():
+            os.mkfifo(path)
+        proc = subprocess.Popen(['/bin/bash','-c','source "$1/lib/arbiter.sh"\n'+lock_code,
+                                 'reap-test',str(root)], env={**env, **{k:str(v) for k,v in paths.items()},
+                                                           'REPORTED': str(Path(tmp)/(name+'-reported'))},
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        contenders.append((proc, paths))
+    def receive(path):
+        with path.open() as handle:
+            return handle.read()
+    def send(path):
+        with path.open('w') as handle:
+            handle.write('continue\n')
+    a, ap = contenders[0]
+    b, bp = contenders[1]
+    assert receive(ap['OBSERVED']) == 'observed'
+    assert receive(bp['OBSERVED']) == 'observed'
+    send(ap['RESUME'])
+    assert receive(ap['EVENT']) == 'acquired'
+    send(bp['RESUME'])
+    event = receive(bp['EVENT'])
+    send(ap['UNLOCK'])
+    if event == 'blocked':
+        assert receive(bp['EVENT']) == 'acquired'
+    send(bp['UNLOCK'])
+    for proc, _ in contenders:
+        out, err = proc.communicate(timeout=15)
+        assert proc.returncode == 0, (out, err)
+    assert event == 'blocked', 'two live holders acquired the recovered lock'
+    print('PASS: concurrent stale recovery cannot remove a replacement live holder')
+
     queue.write_text('{broken\n')
     original = queue.read_bytes()
     result = run('arbiter_enqueue BAD worker abcdef0', check=False)

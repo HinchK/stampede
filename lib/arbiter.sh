@@ -186,13 +186,47 @@ _arb_verdict_record() { # TICKET SEAT SHA [GATE_LOG]
 }
 
 # ── lock: atomic mkdir, pid-stamped, stale after process death ────────────
+# Serialize reclamation and release so a stale observer cannot remove a new
+# live owner. The OS releases this guard automatically if a reaper crashes.
+_arb_reap_lock() { # LOCK_DIR [release]
+  "$PYTHON_BIN" - "$1" "${2:-reap}" <<'PY'
+import fcntl
+import os
+from pathlib import Path
+import shutil
+import sys
+
+lock = Path(sys.argv[1])
+with Path(str(lock) + ".reap").open("a") as guard:
+    fcntl.flock(guard, fcntl.LOCK_EX)
+    try:
+        owner = int((lock / "pid").read_text().strip())
+    except (FileNotFoundError, ValueError):
+        sys.exit(0)
+    if owner <= 0:
+        sys.exit(0)
+    if sys.argv[2] == "release":
+        remove = owner == os.getppid()
+    else:
+        try:
+            os.kill(owner, 0)
+            remove = False
+        except ProcessLookupError:
+            remove = True
+        except PermissionError:
+            remove = False
+    if remove:
+        shutil.rmtree(lock)
+PY
+}
+
 arbiter_lock() { # STATE_DIR [LOCK_NAME]
   local lk="$1/${2:-arbiter.lock}" tries=0 pid
   while ! mkdir "$lk" 2>/dev/null; do
     pid=""
     [[ -f "$lk/pid" ]] && pid=$(cat "$lk/pid" 2>/dev/null || true)
     if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then
-      rm -rf "$lk"   # holder is dead: stale lock
+      _arb_reap_lock "$lk" || return 1
       continue
     fi
     tries=$((tries + 1))
@@ -208,7 +242,7 @@ arbiter_lock() { # STATE_DIR [LOCK_NAME]
 }
 
 arbiter_unlock() { # STATE_DIR [LOCK_NAME]
-  rm -rf "${1}/${2:-arbiter.lock}" 2>/dev/null || true
+  _arb_reap_lock "${1}/${2:-arbiter.lock}" release
 }
 
 # ── enqueue ────────────────────────────────────────────────────────────────

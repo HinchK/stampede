@@ -292,6 +292,28 @@ harvest_verdicts >/dev/null 2>&1
 [[ $(jq -s '[.[] | select(.ticket == "INLINE-CORRUPT")] | length' "$Q") == 0 ]] \
   && assert_ok 3g "gc=0: corrupt review state cannot bypass review" || assert_bad 3g "corrupt review enqueued"
 rm -f "$STATE/reviews.json"
+for concurrency in 0 2; do
+  GATE_CONCURRENCY=$concurrency
+  printf 'docs %s\n' "$concurrency" > "$WTB/README.md"
+  git -C "$WTB" add README.md
+  git -C "$WTB" -c user.email=t@t -c user.name=t commit -qm "docs corrupt $concurrency"
+  SHA_DC=$(git -C "$WTB" rev-parse HEAD)
+  VERDICT_B="ARCH DONE #DOC-CORRUPT-$concurrency $SHA_DC"
+  printf '{broken\n' > "$STATE/reviews.json"
+  harvest_verdicts >/dev/null 2>&1
+  if (( concurrency > 0 )); then sleep 0.6; gate_reap >/dev/null 2>&1; fi
+  [[ $(jq -s --arg t "DOC-CORRUPT-$concurrency" '[.[] | select(.ticket == $t)] | length' "$Q") == 0 ]] \
+    && assert_ok "3h-$concurrency" "docs-only state failure cannot enqueue" \
+    || assert_bad "3h-$concurrency" "docs-only bypassed failed persistence"
+done
+rm -f "$STATE/reviews.json"
+if ( _review_write() { return 1; }; review_loop_on_gate_green DOC-WRITE seat-b "$SHA_DC" "$STATE" ) > "$TEST_DIR/failed-doc-write" 2>/dev/null; then
+  assert_bad 3i "docs-only write failure returned success"
+else
+  ! grep -q ENQUEUE "$TEST_DIR/failed-doc-write" \
+    && assert_ok 3i "docs-only write failure emits no enqueue" || assert_bad 3i "failed docs write emitted enqueue"
+fi
+rm -f "$STATE/reviews.json"
 export CONFIG_REVIEW_LOOP=0
 GATE_CONCURRENCY=2
 
