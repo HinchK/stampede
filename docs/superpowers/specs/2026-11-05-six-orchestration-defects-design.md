@@ -1,6 +1,6 @@
 # Repair the six orchestration defects
 
-Status: proposed; implementation awaits the user's approval.
+Status: approved by the user on 2026-11-05; implementation authorized.
 
 ## Intent and scope
 
@@ -29,8 +29,7 @@ outside this repair.
    supported paths but breaks existing documented workflows. Preserve these
    workflows and repair their integration instead.
 
-The user has authorized fixing the six defects; the in-place approach and the
-specific choices below remain proposed until this design is approved.
+The user approved the in-place approach and the specific choices below.
 
 ## 1. Authorize the assigned reviewer
 
