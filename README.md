@@ -31,8 +31,9 @@ agents or run the arbiter. Local models are deferred to a future release.
 | Coding architect | OpenCode GLM-5.3 | 2, scalable |
 | Helper | AGY Flash Low | 1 |
 
-Every standing model seat uses an isolated Git worktree. The bounded looper
-is a seated AGY agent (critical: launch it or fail closed). Ops worklog,
+The project manager, GitHub, docs, architect, and helper seats each use an
+isolated Git worktree. The bounded looper is a seated AGY agent in the repo
+root (critical: launch it or fail closed). Ops worklog,
 troubleshooting, and handoff panes run without model sessions. Each looper
 decision is one fresh AGY turn; usage is recorded in
 `.herdr-swarm/looper-usage.jsonl`.
