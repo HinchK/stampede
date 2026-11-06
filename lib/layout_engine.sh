@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 # Layout Engine for Herdr Swarm
-# Manages multi-tab pane topologies and enforces the 80x20 floor
+# Tab lookup and pane splits for the herd and ops topology.
 
 set -euo pipefail
-
-MIN_COLS=80
-MIN_ROWS=20
 
 # split_pane PANE_ID DIRECTION [RATIO]
 split_pane() {
@@ -45,28 +42,11 @@ tab_by_label() {
 }
 
 # check_and_relocate_geometry WS_ID ANCHOR_PANE PANE...
+# No-op. A rescue tab per cramped pane always left an empty shell behind:
+# `herdr tab create` inserts a pane, and `herdr pane move --tab` without
+# `--split` exits 2 on current Herdr, so the agent never moved. A 50/50
+# split of a ~120-column window is 60 columns, under the old 80-column
+# floor, so every seated pane tripped this on every launch.
 check_and_relocate_geometry() {
-  local ws_id="$1"
-  local anchor="$2"
-  shift 2
-  local layout rects
-  layout=$(herdr pane layout --pane "$anchor" 2>/dev/null) || return 0
-  rects=$(jq -r '.result.layout.panes[]? | "\(.pane_id) \(.rect.width)x\(.rect.height)"' <<<"$layout" 2>/dev/null) || return 0
-  [[ -z "$rects" ]] && return 0
-
-  local p line geom w h rescue_tab
-  for p in "$@"; do
-    line=$(grep -E "^${p} " <<<"$rects" || true)
-    [[ -z "$line" ]] && continue
-    geom=${line#* }; w=${geom%x*}; h=${geom#*x}
-    if (( w > 0 && h > 0 && (w < MIN_COLS || h < MIN_ROWS) )); then
-      printf '  \033[33m⚠ Pane %s is %sx%s (below %sx%s floor); relocating to dedicated tab\033[0m\n' \
-        "$p" "$w" "$h" "$MIN_COLS" "$MIN_ROWS"
-      rescue_tab=$(herdr tab create --workspace "$ws_id" --label "seat-${p##*:}" 2>/dev/null \
-        | jq -r '.result.tab.tab_id // empty')
-      if [[ -n "$rescue_tab" ]]; then
-        herdr pane move "$p" --tab "$rescue_tab" >/dev/null 2>&1 || true
-      fi
-    fi
-  done
+  return 0
 }
