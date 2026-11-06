@@ -17,3 +17,8 @@ __pycache__/
 /.playwright-mcp
 /.specify/scripts
 /.specify
+/.agents
+/.codex
+/.cursor
+/.github
+yeehaw.sh

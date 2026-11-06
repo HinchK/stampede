@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stampede · operator walkthrough</title>
+<link rel="icon" href="data:,">
+<style>
+:root{font:16px/1.55 system-ui;color:#20332f;background:#f5f5ef}body{max-width:1100px;margin:36px auto;padding:0 22px}h1{font-size:2.2rem;letter-spacing:-.04em;margin:.2em 0}h2{font-size:1.15rem}p{max-width:85ch}.tag{color:#246451;font-weight:700;font-size:.8rem;text-transform:uppercase;letter-spacing:.12em}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}section{background:white;border:1px solid #d8e0da;border-radius:12px;padding:20px;margin:18px 0}button,select{font:inherit;border:1px solid #b8c8be;border-radius:6px;background:#fff;padding:8px 12px;margin:4px 4px 4px 0;color:inherit}button{cursor:pointer}button:hover,button[aria-selected=true]{background:#e1eee5}button:focus-visible,select:focus-visible{outline:3px solid #308465}button:disabled{opacity:.5;cursor:default}dt{font-size:.8rem;color:#536b61;margin-top:10px}dd{margin:0;font-weight:600}ol{padding-left:22px}li{margin:8px 0}.notice{border-left:4px solid #308465;padding:8px 14px;background:#edf5ee}.muted{color:#536b61;font-size:.9rem}#actions{display:flex;flex-wrap:wrap}label{display:block;margin:12px 0}#steps button{display:block;text-align:left}pre{white-space:pre-wrap;font-size:.85rem} @media(max-width:700px){.grid{grid-template-columns:1fr}}
+</style>
+<p class="tag">Throwaway design prototype · no agents connected</p>
+<h1>Set the outcome. Follow the work.</h1>
+<p>Do separate setup and launch steps, with one operator summary, make the swarm understandable without requiring you to manage every worker? Click through setup, mediation, and stopping. This browser simulation proposes terminal behavior; it is not a proposed web dashboard.</p>
+<p class="notice">Everything here is illustrative. No provider discovery, model calls, credentials, file changes, or deployment occur. Reloading discards the session. Simulated grants and readiness checks confer no real authority.</p>
+<div class="grid"><section><h2>Setup first; launch separately</h2><p class="muted">Setup prepares and saves the team and draft brief. It ends without starting delivery workers. Launch is a separate action that rechecks readiness and the agreed limits. Requested kickoff research is separately bounded.</p>
+<label>Starter task <select id="task"><option>Fix a bounded Stampede bug</option><option>Containerize a development service</option><option>Prepare for open-source release (no publishing)</option><option>Custom sprint agreed during kickoff</option></select></label>
+<label>Delivery boundary <select id="boundary"><option>Milestone</option><option>Sprint</option><option>Epic</option></select></label>
+<label>Break interval <select id="interval"><option>2 hours</option><option>4 hours</option><option>8 hours</option><option>20 hours</option></select></label>
+<p class="muted">Pilot horizon: 4 hours total. A later break cannot extend that horizon. Time buttons simulate events; no clock is running.</p>
+<label><input id="allowance" type="checkbox"> Allow a separate improvement phase (illustrative: up to 30 minutes, inside the overall limit)</label>
+<p class="muted">Production and service registration remain stop boundaries in this example. Credential handling requires an outside human session.</p>
+</section><section aria-live="polite"><h2>Operator view</h2><dl id="state"></dl></section></div>
+<section><h2>Guided walkthroughs</h2><div id="tabs" role="tablist" aria-label="Scenarios"></div><div id="scenario" role="tabpanel"><p id="description"></p><div id="steps"></div></div></section>
+<section><h2>Try an event</h2><p class="muted">Try events out of order to see why a transition is unavailable. “Restart” clears the simulated run.</p><div id="actions"></div><p id="message" class="notice" aria-live="polite"></p></section>
+<div class="grid"><section><h2>Handoffs and decisions</h2><ol id="log"></ol></section><section><h2>What you would inspect</h2><p><strong>Team:</strong> recommended planner, generalist workers, independent reviewer, and one contract-lawyer; workers start for useful work. A research kickoff uses a small provisional team before the final roster is agreed.</p><p><strong>Usage:</strong> per-model token velocity, available quota, worker time, tool waits, and mediation cost. This demo has no measurements; unknown usage stays unknown.</p><p><strong>Herdr:</strong> terminal workspace, panes, agent processes, and their controls.</p><p><strong>Stampede:</strong> goal, configuration, assignments, stop policy, evidence, checkpoints, and decision history. Enforcement stays outside model judgment.</p><p class="muted">Boundary accepted by HinchK; this remains a throwaway simulation. Exact proxy grants, accounting, and recovery guarantees belong to later decisions.</p></section></div>
+<script>
+// Pure, in-memory sketch. No runtime integration or persistence.
+const initial=()=>({stage:'Not started',task:'Fix a bounded Stampede bug',boundary:'Milestone',interval:'2 hours',allowance:false,providers:'Not checked',kickoff:'Not requested',traffic:'Off',grant:'None',resumeStage:null,accepted:0,attempt:1,mediation:'None',log:[],message:'Start with terminal discovery or choose a walkthrough.'});
+function transition(state,action){
+ const s={...state,log:[...state.log]};
+ const note=text=>{s.message=text;s.log.push(text);return s;};
+ const refuse=text=>({...state,message:text});
+ if(action.type==='reset')return initial();
+ if(action.type==='configure'){
+  if(!['Not started','Preparing','Ready'].includes(s.stage))return refuse('Run settings are locked for this sketch. A changed agreement requires a new run.');
+  return {...s,[action.key]:action.value};
+ }
+ switch(action.type){
+ case 'discover':if(s.stage!=='Not started')return refuse('Discovery is already recorded.');s.stage='Preparing';s.providers='Example: two eligible routes; one unavailable; quota unknown';return note('Setup: found illustrative tools. Installation, authentication, model access, and remaining usage are separate checks.');
+ case 'explore':if(s.stage!=='Preparing')return refuse('Discover eligible routes first.');s.kickoff='Research and contrasting opinions collected';return note('Kickoff: user requested bounded research with provisional agents. Feature, cleanup, and conservative-review perspectives inform the interview. No final team is assumed.');
+ case 'agree':if(s.stage!=='Preparing')return refuse('Prepare the run first.');s.stage='Ready';return note('Human: agreed goal, acceptance outcomes, boundaries, team recommendation, and run allowance. Routine subtasks need no separate approval.');
+ case 'save':if(s.stage!=='Ready')return refuse('Agree the brief before saving setup.');s.stage='Configured';return note('Setup complete: team and draft brief saved in this simulation. No delivery workers started; launch remains separate.');
+ case 'launch':if(s.stage!=='Configured')return refuse('Complete setup first; setup never launches delivery automatically.');s.stage='Delivery';return note('Separate launch: rechecked access, saved brief, and limits, then started on-demand workers. Existing configuration is preserved.');
+ case 'observe':if(s.stage!=='Delivery')return refuse('Launch a run first.');s.traffic='Observing';return note('Traffic control: observer panel enabled (the proposed --yolo behavior). This alone grants no takeover authority.');
+ case 'type':if(s.traffic!=='Observing')return refuse('Open the observing panel first.');s.traffic='Grant requested';return note('Traffic control: human typed into the panel. Request a scoped grant and stopping condition; typing itself does not grant control.');
+ case 'grant':if(s.traffic!=='Grant requested'||s.stage!=='Delivery')return refuse('A human grant request during delivery is required.');s.traffic='Supervising';s.grant='Example: coordinate this milestone; expires at delivery stop';return note('Human: simulated explicit grant. Exact delegable actions remain a later design decision.');
+ case 'friction':if(s.stage!=='Delivery')return refuse('Mediation applies to active delivery.');s.stage='Mediating';s.mediation='Open: worker and reviewer disagree about a check';return note('Friction event: handoff disputed. Contract-lawyer gathers context and evidence; no human interruption yet.');
+ case 'mediate':if(s.stage!=='Mediating')return refuse('No mediation is open.');s.stage='Verifying';s.mediation='Decision: equivalent check ordered; outcome unchanged';return note('Contract-lawyer: a faulty check was replaced with an equivalent check. Rationale recorded; supporting evidence is still required.');
+ case 'verify':if(s.stage!=='Verifying')return refuse('This example needs a verification request.');s.stage='Delivery';s.mediation='Resolved: equivalent check passed';return note('Verification: evidence supports the mediated decision. The result can now be considered for acceptance.');
+ case 'escalate':if(s.stage!=='Mediating')return refuse('No mediation is open.');s.resumeStage='Mediating';s.stage='Human handoff';return note('Contract-lawyer: context is insufficient or security/stability implications need a human. Preserve the decision record and ask one concrete question.');
+ case 'answer':if(s.stage!=='Human handoff')return refuse('No human question is pending.');s.stage=s.resumeStage;s.resumeStage=null;return note('Human: supplied missing context. Mediation resumes; this is not evidence of completion.');
+ case 'switch':if(s.stage!=='Delivery')return refuse('Switch workers during delivery in this example.');s.attempt++;return note('Handoff: same work item, new attempt. Successor rechecks checkpoint, unfinished changes, evidence, and next action.');
+ case 'duplicate':return note('Duplicate receipt: ignored for counting and integration. Late conflicting results would require reconciliation.');
+ case 'credential':if(!['Delivery','Improvement'].includes(s.stage))return refuse('Credential handoff applies to an active phase.');s.resumeStage=s.stage;s.stage='Credential handoff';return note('Hard stop: complete login or named .env setup outside agent conversations. No secret value is requested or logged here.');
+ case 'ready':if(s.stage!=='Credential handoff')return refuse('No credential handoff is pending.');s.stage='Paused';return note('Readiness check: simulated non-secret ready signal. Explicit resume still required.');
+ case 'break':if(!['Delivery','Improvement'].includes(s.stage))return refuse('A break applies to active work.');s.resumeStage=s.stage;s.stage='Paused';return note('Timed break: checkpoint saved in this simulation; unfinished work is not complete.');
+ case 'resume':if(s.stage!=='Paused'||!s.resumeStage)return refuse('This stop needs a new allowance or agreement; resume cannot bypass it.');s.stage=s.resumeStage;s.resumeStage=null;return note('Resume: revalidate context, access, limits, and unfinished work before proceeding.');
+ case 'finish':if(s.stage!=='Delivery')return refuse('Resolve pending verification or handoffs first.');s.accepted=1;if(s.grant!=='None')s.grant='Expired at delivery boundary';if(s.traffic!=='Off')s.traffic='Observing';s.stage=s.allowance?'Improvement':'Paused';s.resumeStage=null;return note(s.allowance?'Evidence accepted: selected delivery boundary reached. Delivery stops; the separate improvement allowance starts.':'Evidence accepted: selected delivery boundary reached. No improvement allowance; all work pauses.');
+ case 'improve':if(s.stage!=='Improvement')return refuse('No improvement phase is active.');s.stage='Paused';return note('Improvement phase ended: proposed directive/check changes recorded for evaluation. Adoption is a separate policy, not automatic.');
+ case 'limit':if(['Not started','Preparing','Ready','Configured','Stopped'].includes(s.stage))return refuse('No active run remains to stop.');s.stage='Stopped';if(s.grant!=='None')s.grant='Expired';s.resumeStage=null;if(s.traffic!=='Off')s.traffic='Observing';return note('Overall time/budget limit: delivery and improvement stop. No agent can extend this allowance. A new agreement is needed.');
+ default:return refuse('Unknown demo event.');
+ }
+}
+</script>
+<script>
+const labels={discover:'Discover terminal providers',explore:'Help engineer my goal',agree:'Agree run brief',save:'Save setup and exit',launch:'Launch saved team separately',observe:'Open traffic-control observer',type:'Type in observer panel',grant:'Grant scoped control',friction:'Disputed handoff',mediate:'Mediate autonomously',verify:'Supply verification evidence',escalate:'Context or security concern',answer:'Human supplies context',switch:'Switch worker/model',duplicate:'Duplicate result arrives',credential:'Credential needed',ready:'Outside login complete',break:'Reach timed break',resume:'Resume from checkpoint',finish:'Accept delivery result',improve:'End improvement phase',limit:'Reach overall limit',reset:'Restart'};
+const start=['discover','agree','save','launch'];
+const scenarios=[
+ ['Setup only','Finish setup and leave without starting delivery workers.',['discover','agree','save']],
+ ['First run','Discover access, request bounded research-assisted grilling, save setup, then separately launch the starter task.',['discover','explore','agree','save','launch','finish']],
+ ['Friction','A disputed check is mediated and reverified without asking the human.',[...start,'friction','mediate','verify','finish']],
+ ['Context gap','The mediator escalates only when context or security/stability requires it.',[...start,'friction','escalate','answer','mediate','verify','finish']],
+ ['Secret & resume','Login outside the swarm; check readiness without exposing values, then resume.',[...start,'credential','ready','resume','finish']],
+ ['Human proxy','The observer asks for a scoped grant. The flag and typing are not grants.',[...start,'observe','type','grant','finish']],
+ ['Break & handoff','Preserve identity and progress across a break and model switch.',[...start,'break','resume','switch','duplicate','finish']],
+ ['Improvement stop','Separate improvement work may follow delivery, but cannot evade the overall limit.',[...start,'finish','limit','resume'],true]
+];
+let state=initial(),scenarioIndex=0,step=0;
+const el=id=>document.getElementById(id);
+function dispatch(type){state=transition(state,{type});render();}
+function render(){
+ const fields={'Phase':state.stage,'Starter task':state.task,'Stop policy':`${state.boundary}; break every ${state.interval}; 4-hour overall horizon`,'Improvement allowance':state.allowance?'Separate allowance enabled':'None','Available providers':state.providers,'Assisted kickoff':state.kickoff,'Traffic control':state.traffic,'Proxy grant':state.grant,'Current work':`Starter task · attempt ${state.attempt} · accepted results ${state.accepted}`,'Mediation':state.mediation,'Resume target':state.resumeStage||'None','Usage / elapsed time':'Unknown — no live run'};
+ el('state').replaceChildren();for(const [k,v]of Object.entries(fields)){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=k;dd.textContent=v;el('state').append(dt,dd);}
+ el('message').textContent=state.message;el('log').replaceChildren();state.log.forEach((text,i)=>{const li=document.createElement('li');li.textContent=`Event ${i+1}: ${text}`;el('log').append(li);});
+ for(const key of ['task','boundary','interval','allowance']){el(key).disabled=!['Not started','Preparing','Ready'].includes(state.stage);if(key==='allowance')el(key).checked=state.allowance;else el(key).value=state[key];}
+ el('description').textContent=scenarios[scenarioIndex][1];el('steps').replaceChildren();scenarios[scenarioIndex][2].forEach((action,i)=>{const b=document.createElement('button');b.textContent=`${i+1}. ${labels[action]}`;b.disabled=i!==step;b.onclick=()=>{step++;dispatch(action);};el('steps').append(b);});
+ [...el('tabs').children].forEach((b,i)=>b.setAttribute('aria-selected',i===scenarioIndex?'true':'false'));
+}
+scenarios.forEach(([name],i)=>{const b=document.createElement('button');b.textContent=name;b.setAttribute('role','tab');b.setAttribute('aria-controls','scenario');b.onclick=()=>{scenarioIndex=i;step=0;state=initial();state.allowance=!!scenarios[i][3];render();};el('tabs').append(b);});
+for(const [type,label]of Object.entries(labels)){const b=document.createElement('button');b.textContent=label;b.onclick=()=>{step=0;dispatch(type);};el('actions').append(b);}
+for(const key of ['task','boundary','interval','allowance'])el(key).onchange=()=>{state=transition(state,{type:'configure',key,value:key==='allowance'?el(key).checked:el(key).value});render();};
+render();
+</script>
+</html>
