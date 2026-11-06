@@ -31,11 +31,11 @@
 
 **Interfaces:** Preserve `arbiter_enqueue`, `_arb_record`, `_arb_set_status` and CLI entry points. Introduce `_arb_queue_write OP ARGS...` as the one locked writer; internal operations cover append, enqueue, status, promotion and integration finalization. Keep the existing drain lock separate.
 
-- [ ] Add failing tests for line-by-line queue readers after status replacement, deterministic enqueue/rewrite overlap, concurrent duplicate enqueue, supersession during a drain, enqueue while a gate waits, malformed input, and writer cleanup.
-- [ ] Run the queue regressions and observe the reproduced failures.
-- [ ] Implement short portable writer locking with unique temporary files, compact JSON, original-data preservation, candidate revalidation before CAS, and all promotion writes participating. Preserve the existing `_arb_integrate` CAS expression for seeded-regression compatibility.
-- [ ] Run `/bin/bash tests/test_queue_writes.sh` and `/bin/bash tests/test_arbiter.sh`; expect zero failures.
-- [ ] Commit the queue repair and regression tests.
+- [x] Add failing tests for line-by-line queue readers after status replacement, deterministic enqueue/rewrite overlap, concurrent duplicate enqueue, supersession during a drain, enqueue while a gate waits, malformed input, and writer cleanup.
+- [x] Run the queue regressions and observe the reproduced failures.
+- [x] Implement short portable writer locking with unique temporary files, compact JSON, original-data preservation, candidate revalidation before CAS, and all promotion writes participating. Preserve the existing `_arb_integrate` CAS expression for seeded-regression compatibility.
+- [x] Run `/bin/bash tests/test_queue_writes.sh` and `/bin/bash tests/test_arbiter.sh`; expect zero failures.
+- [x] Commit the queue repair and regression tests.
 
 ### Task 2: Integration tree consistency (defect 3)
 
@@ -43,11 +43,11 @@
 
 **Interfaces:** Move `gate_tree_matches DIR SHA` to `lib/common.sh`; all callers require successful Git inspection, matching canonical HEAD, and clean tracked/untracked files. Use `integration_red` plus `gate.reason` for drift.
 
-- [ ] Add failing tests for a passing suite modifying tracked files, creating untracked files, moving HEAD, and a normal clean run; assert ref/queue/verdict effects.
-- [ ] Run the focused suite; observe drift being accepted before the repair.
-- [ ] Use the shared check before/after the arbiter suite; drift keeps the integration ref unchanged and creates no GREEN receipt.
-- [ ] Run the drift and arbiter suites; expect zero failures.
-- [ ] Commit the shared check and integration repair.
+- [x] Add failing tests for a passing suite modifying tracked files, creating untracked files, moving HEAD, and a normal clean run; assert ref/queue/verdict effects.
+- [x] Run the focused suite; observe drift being accepted before the repair.
+- [x] Use the shared check before/after the arbiter suite; drift keeps the integration ref unchanged and creates no GREEN receipt.
+- [x] Run the drift and arbiter suites; expect zero failures.
+- [x] Commit the shared check and integration repair.
 
 ### Task 3: Role compatibility (defect 5)
 
@@ -55,11 +55,11 @@
 
 **Interfaces:** `seat_roles(seats: dict) -> dict[str, str]` keeps the existing setup behavior. Both setup and attention consume it; existing setup exports remain available.
 
-- [ ] Add a failing setup-render-to-attention regression using the shipped config, plus descriptive standard-key, renamed, and neighboring custom-seat cases. Preserve role labels and model/provider values.
-- [ ] Run `/bin/bash tests/test_attention.sh`; observe empty candidate selection.
-- [ ] Extract the existing resolver and use it in both consumers; include the shared module in Python compilation and test import paths.
-- [ ] Run `/bin/bash tests/test_attention.sh` and `/bin/bash tests/test_setup.sh`; expect zero failures.
-- [ ] Commit role compatibility.
+- [x] Add a failing setup-render-to-attention regression using the shipped config, plus descriptive standard-key, renamed, and neighboring custom-seat cases. Preserve role labels and model/provider values.
+- [x] Run `/bin/bash tests/test_attention.sh`; observe empty candidate selection.
+- [x] Extract the existing resolver and use it in both consumers; include the shared module in Python compilation and test import paths.
+- [x] Run `/bin/bash tests/test_attention.sh` and `/bin/bash tests/test_setup.sh`; expect zero failures.
+- [x] Commit role compatibility.
 
 ### Task 4: Independent review authorization (defect 1)
 
@@ -67,12 +67,12 @@
 
 **Interfaces:** Add `review_loop_assign_reviewer TICKET SHA ROUND REVIEWER [STATE_DIR]`; extend `review_loop_on_review_verdict TICKET SHA VERDICT STATE_DIR REVIEWER` to require the sender. Assignment records current round and SHA before prompting. Reject sender mismatch without mutating the legitimate review.
 
-- [ ] Add failing worker/other-seat PASS tests, missing-assignment tests, independent primary/failover success, self-failover deferral and retry, duplicate anchors, and terminal/critique PASS rejection.
-- [ ] Run the state and supervisor suites and observe unauthorized review acceptance.
-- [ ] Persist assignment before all primary/failover/deferred dispatches; require the assigned independent sender and pending review for PASS. Pass sender identity through the scanner before marking an anchor seen. Keep canonical-SHA failures fail closed and preserve duplicate BLOCK semantics.
-- [ ] Update direct state-machine test callers to establish assignments explicitly; test stale SHA and repeat completions.
-- [ ] Run `/bin/bash tests/test_review_loop.sh` and `/bin/bash tests/test_async_gate.sh`; expect zero failures.
-- [ ] Commit review authorization and protocol changes.
+- [x] Add failing worker/other-seat PASS tests, missing-assignment tests, independent primary/failover success, self-failover deferral and retry, duplicate anchors, and terminal/critique PASS rejection.
+- [x] Run the state and supervisor suites and observe unauthorized review acceptance.
+- [x] Persist assignment before all primary/failover/deferred dispatches; require the assigned independent sender and pending review for PASS. Pass sender identity through the scanner before marking an anchor seen. Keep canonical-SHA failures fail closed and preserve duplicate BLOCK semantics.
+- [x] Update direct state-machine test callers to establish assignments explicitly; test stale SHA and repeat completions.
+- [x] Run `/bin/bash tests/test_review_loop.sh` and `/bin/bash tests/test_async_gate.sh`; expect zero failures.
+- [x] Commit review authorization and protocol changes.
 
 ### Task 5: Shared GREEN continuation (defect 6)
 
@@ -80,11 +80,11 @@
 
 **Interfaces:** `_gate_green_continue TICKET SEAT SHA ISOLATED` contains the existing isolated-seat state-machine/directive path; asynchronous and inline gates call it after tree validation.
 
-- [ ] Extend inline tests to assert loop-off enqueue and loop-on review, then PASS enqueue; include docs fast path, duplicate completion, state failure and root-seat preservation.
-- [ ] Run the supervisor suite and observe missing inline continuation.
-- [ ] Extract and call the helper from both gate modes; document identical review/integration policy.
-- [ ] Run `/bin/bash tests/test_async_gate.sh`; expect zero failures.
-- [ ] Commit inline parity.
+- [x] Extend inline tests to assert loop-off enqueue and loop-on review, then PASS enqueue; include docs fast path, duplicate completion, state failure and root-seat preservation.
+- [x] Run the supervisor suite and observe missing inline continuation.
+- [x] Extract and call the helper from both gate modes; document identical review/integration policy.
+- [x] Run `/bin/bash tests/test_async_gate.sh`; expect zero failures.
+- [x] Commit inline parity.
 
 ### Task 6: Final verification and independent review
 
@@ -92,7 +92,30 @@
 
 **Interfaces:** Existing `make check` remains the final gate.
 
-- [ ] Run `make check`; expect clean lint and every shell/Python suite passing.
-- [ ] Have one fresh reviewer inspect the whole change against the approved design and Review Focus. Resolve important findings with failing regressions before fixes.
-- [ ] Re-run checks warranted by review changes; record actual checks, limitations and any unresolved findings.
-- [ ] Commit remaining current-documentation/plan updates and finish the branch locally, ready for review.
+- [x] Run `make check`; expect clean lint and every shell/Python suite passing.
+- [x] Have one fresh reviewer inspect the whole change against the approved design and Review Focus. Resolve important findings with failing regressions before fixes.
+- [x] Re-run checks warranted by review changes; record actual checks, limitations and any unresolved findings.
+- [x] Commit remaining current-documentation/plan updates and finish the branch locally, ready for review.
+
+
+## Execution decisions
+
+- Reused the dedicated repair checkout and implemented natively, with one fresh whole-branch reviewer.
+- Queue and tree-drift repairs share a commit because they meet at integration finalization.
+- The CAS seeded regression now targets the locked queue writer, which owns the same expected-old Git update.
+- Promotion bookkeeping marks only ancestors of the actual promoted tip, preserving newer integrated records during concurrent drains.
+- A corrupt review round stays pending instead of producing PASS; repairing corrupt session state can require operator attention.
+- Stale reclamation and owner-checked release use Python's existing standard-library `fcntl` support around the PID-directory protocol. This prevents a delayed reaper deleting a new live holder without adding a dependency.
+- Shared-user credential access remains the documented security constraint. Live model/Herdr delivery and remote promotion are outside these hermetic checks.
+
+
+## Verified result
+
+- Final runtime revision: `5b15979`.
+- `make check`: exit 0; all 30 suites passed; lint clean across 61 shell files.
+- Attention: 30 Python tests; review state machine: 59 assertions; supervisor/gate suite: 113 assertions; arbiter: 111 assertions.
+- Queue tests cover real reader compatibility, duplicate/concurrent arrivals, stale-owner replacement, write failure, supersession, and promotion ancestry.
+- Drift tests cover tracked files, visible untracked files, HEAD changes, and clean integration.
+- Fresh whole-branch review identified two Important findings. Both were reproduced before correction: stale-recovery mutual exclusion and docs-only receipt persistence. Their regressions and the final aggregate gate passed after correction. No second review was claimed.
+- No dependencies added. No live Herdr/model sessions, Linux execution, remote pushes, merges, or deployment were performed.
+- Branch retained locally as `codex/fix-six-orchestration-defects`.
