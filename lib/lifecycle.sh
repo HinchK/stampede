@@ -241,8 +241,26 @@ review_canonical_sha() { # SHA REPO_DIR
   git -C "$repo" rev-parse --verify --quiet "${sha}^{commit}" 2>/dev/null || return 1
 }
 
-review_loop_on_review_verdict() { # TICKET SHA VERDICT [STATE_DIR]
-  local ticket="$1" sha="$2" verdict="$3" sd="${4:-$PWD/.herdr-swarm}"
+review_loop_assign_reviewer() { # TICKET SHA ROUND REVIEWER [STATE_DIR]
+  local ticket="$1" sha="$2" round="$3" reviewer="$4" sd="${5:-$PWD/.herdr-swarm}"
+  local f cur canon
+  f=$(_review_state_file "$sd")
+  [[ -n "$reviewer" && "$round" =~ ^[1-9][0-9]*$ && -f "$f" ]] || return 1
+  cur=$(jq -r --arg t "$ticket" '.reviews[$t].sha // ""' "$f") || return 1
+  if canon=$(review_canonical_sha "$sha" "$(dirname "$sd")"); then sha="$canon"; fi
+  if canon=$(review_canonical_sha "$cur" "$(dirname "$sd")"); then cur="$canon"; fi
+  [[ -n "$cur" && "$sha" == "$cur" ]] || return 1
+  jq -e --arg t "$ticket" --arg r "$round" --arg reviewer "$reviewer" \
+    '.reviews[$t] | .state == "awaiting_review" and (.round|tostring) == $r and .seat != $reviewer' \
+    "$f" >/dev/null || return 1
+  # shellcheck disable=SC2016  # jq variables are literal
+  _review_write "$sd" \
+    '.reviews[$t] += {reviewer:$reviewer, reviewer_round:($r|tonumber), reviewer_sha:$sha}' \
+    --arg t "$ticket" --arg reviewer "$reviewer" --arg r "$round" --arg sha "$sha"
+}
+
+review_loop_on_review_verdict() { # TICKET SHA VERDICT STATE_DIR REVIEWER
+  local ticket="$1" sha="$2" verdict="$3" sd="${4:-$PWD/.herdr-swarm}" reviewer="${5:-}"
   local f; f=$(_review_state_file "$sd")
 
   [[ -f "$f" ]] || { printf 'ALERT_INVALID %s no-review-state\n' "$ticket"; return 1; }
@@ -253,6 +271,26 @@ review_loop_on_review_verdict() { # TICKET SHA VERDICT [STATE_DIR]
   seat=$(jq -r --arg t "$ticket" '.reviews[$t].seat // ""' "$f")
   round=$(jq -r --arg t "$ticket" '.reviews[$t].round // 0' "$f")
   max=$(jq -r --arg t "$ticket" '.reviews[$t].max_rounds // 0' "$f")
+
+  # Sender authorization precedes any transition, including invalid-input
+  # handling: another seat cannot block a legitimate pending review either.
+  local assigned assigned_round assigned_sha canonical_cur
+  assigned=$(jq -r --arg t "$ticket" '.reviews[$t].reviewer // ""' "$f")
+  assigned_round=$(jq -r --arg t "$ticket" '.reviews[$t].reviewer_round // 0' "$f")
+  assigned_sha=$(jq -r --arg t "$ticket" '.reviews[$t].reviewer_sha // ""' "$f")
+  canonical_cur=$(review_canonical_sha "$cur_sha" "$(dirname "$sd")") || canonical_cur="$cur_sha"
+  if [[ -z "$reviewer" || "$assigned" != "$reviewer" || "$reviewer" == "$seat" \
+        || "$assigned_sha" != "$canonical_cur" ]]; then
+    printf 'ALERT_INVALID %s unauthorized-reviewer\n' "$ticket"
+    return 1
+  fi
+  if [[ "$assigned_round" != "$round" ]]; then
+    if [[ "$verdict" != BLOCK || "$state" != critique_dispatched \
+          || ! "$round" =~ ^[1-9][0-9]*$ || "$assigned_round" != "$((round - 1))" ]]; then
+      printf 'ALERT_INVALID %s stale-review-assignment\n' "$ticket"
+      return 1
+    fi
+  fi
 
   case "$verdict" in
     PASS|BLOCK) ;;
@@ -280,6 +318,7 @@ review_loop_on_review_verdict() { # TICKET SHA VERDICT [STATE_DIR]
   [[ "$sha" == "$cur_sha" ]] || { _review_fail_closed "$ticket" "$sd" "sha-mismatch:expected:${cur_sha:-none}"; return 1; }
 
   if [[ "$verdict" == "PASS" ]]; then
+    [[ "$state" == awaiting_review ]] || { printf 'ALERT_INVALID %s no-pending-review\n' "$ticket"; return 1; }
     # shellcheck disable=SC2016  # jq program, not shell
     _review_write "$sd" \
       '.reviews[$t].state = "review_passed" | .reviews[$t].updated = $now | .reviews[$t].history += [{event:"verdict", verdict:"PASS", sha:$h, at:$now}]' \
@@ -293,6 +332,7 @@ review_loop_on_review_verdict() { # TICKET SHA VERDICT [STATE_DIR]
     printf 'DISPATCH_CRITIQUE %s %s %s %s %s\n' "$seat" "$ticket" "$round" "$max" "$(review_loop_findings_path "$ticket" "$sha" "$sd")"
     return 0
   fi
+  [[ "$state" == awaiting_review ]] || { printf 'ALERT_INVALID %s no-pending-review\n' "$ticket"; return 1; }
 
   if (( round < max )); then
     local next=$(( round + 1 ))

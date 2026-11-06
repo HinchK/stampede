@@ -260,6 +260,39 @@ inline_state=$(last_suite_of 309)
 njobs_inline=$(find "$STATE/gates" -name '*.job' 2>/dev/null | wc -l | tr -d ' ')
 [[ "$inline_state" == "green" ]] && assert_ok 3a "gc=0: verdict recorded synchronously (inline)" || assert_bad 3a "inline gate ($inline_state)"
 [[ "$njobs_inline" == 0 ]] && assert_ok 3b "gc=0: no job files created" || assert_bad 3b "stray jobs ($njobs_inline)"
+[[ $(jq -s '[.[] | select(.ticket == "309" and .status == "queued")] | length' "$Q") == 1 ]] \
+  && assert_ok 3c "gc=0: loop off GREEN enqueues" || assert_bad 3c "inline GREEN was stranded"
+
+export CONFIG_REVIEW_LOOP=1
+SEAT_NAME_reviewer=seat-r
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m inline-review
+SHA_IR=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #INLINE-REVIEW $SHA_IR"
+harvest_verdicts >/dev/null 2>&1
+[[ $(jq -r '.reviews["INLINE-REVIEW"].state' "$STATE/reviews.json" 2>/dev/null) == awaiting_review ]] \
+  && assert_ok 3d "gc=0: loop on GREEN requests review" || assert_bad 3d "inline review not requested"
+_review_scan_verdicts seat-r "REVIEW VERDICT #INLINE-REVIEW $SHA_IR PASS" >/dev/null 2>&1
+harvest_verdicts >/dev/null 2>&1
+[[ $(jq -s '[.[] | select(.ticket == "INLINE-REVIEW" and .status == "queued")] | length' "$Q") == 1 ]] \
+  && assert_ok 3e "gc=0: assigned PASS enqueues once" || assert_bad 3e "inline PASS continuation failed"
+
+printf 'docs\n' > "$WTB/README.md"
+git -C "$WTB" add README.md
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -qm inline-docs
+SHA_ID=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #INLINE-DOCS $SHA_ID"
+harvest_verdicts >/dev/null 2>&1
+[[ $(jq -s '[.[] | select(.ticket == "INLINE-DOCS" and .status == "queued")] | length' "$Q") == 1 ]] \
+  && assert_ok 3f "gc=0: docs-only GREEN uses fast path" || assert_bad 3f "inline docs stranded"
+printf '{broken\n' > "$STATE/reviews.json"
+git -C "$WTB" -c user.email=t@t -c user.name=t commit -q --allow-empty -m inline-corrupt
+SHA_IC=$(git -C "$WTB" rev-parse HEAD)
+VERDICT_B="ARCH DONE #INLINE-CORRUPT $SHA_IC"
+harvest_verdicts >/dev/null 2>&1
+[[ $(jq -s '[.[] | select(.ticket == "INLINE-CORRUPT")] | length' "$Q") == 0 ]] \
+  && assert_ok 3g "gc=0: corrupt review state cannot bypass review" || assert_bad 3g "corrupt review enqueued"
+rm -f "$STATE/reviews.json"
+export CONFIG_REVIEW_LOOP=0
 GATE_CONCURRENCY=2
 
 # ── 13: review loop wiring (REV-5) ─────────────────────────────────────────
@@ -402,11 +435,11 @@ jq --arg t REV-13 '.reviews[$t].round = "bad"' "$STATE/reviews.json" > "$STATE/r
 printf '[CONCERNS] docs/x.md:1 — typo\n' > "$STATE/reviews/REV-13-$SHA_RG.md"
 VERDICT_R="REVIEW VERDICT #REV-13 $SHA_RG PASS"
 harvest_verdicts >/dev/null 2>&1
-grep -qF '"summary": "review PASS for #REV-13 (round 0, 1 findings)"' "$STATE"/traces/*.jsonl 2>/dev/null \
-  && assert_ok 13g "corrupt round degrades to 0 in telemetry; findings still counted" \
-  || assert_bad 13g "no/incorrect telemetry for REV-13"
-[[ "$(rstate REV-13)" == "review_passed" ]] \
-  && assert_ok 13g2 "state machine unaffected by corrupt round" || assert_bad 13g2 "state $(rstate REV-13)"
+! grep -qF '"summary": "review PASS for #REV-13' "$STATE"/traces/*.jsonl 2>/dev/null \
+  && assert_ok 13g "corrupt round cannot produce an accepted PASS receipt" \
+  || assert_bad 13g "corrupt review produced PASS telemetry"
+[[ "$(rstate REV-13)" == "awaiting_review" && "$(qcount REV-13 "$SHA_RG")" == 0 ]] \
+  && assert_ok 13g2 "corrupt round keeps review pending, never enqueues" || assert_bad 13g2 "state $(rstate REV-13)"
 
 # [13e] supervisor sources cleanly under TERM=dumb (tput hardening receipt)
 RROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)

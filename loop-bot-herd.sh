@@ -281,14 +281,6 @@ resolve_seat_gate() {
 # gate_tree_matches GATE_DIR SHA → 0 when HEAD == sha and tree is pristine
 # (porcelain includes untracked files — an untracked *_test.py would be
 # collected by the runner, so it counts as drift).
-gate_tree_matches() {
-  local dir="$1" want_sha="$2"
-  local head_full sha_full
-  head_full=$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)
-  sha_full=$(git -C "$dir" rev-parse "${want_sha}^{commit}" 2>/dev/null || true)
-  [[ -n "$head_full" && "$head_full" == "$sha_full" ]] || return 1
-  [[ -z "$(git -C "$dir" status --porcelain 2>/dev/null)" ]]
-}
 
 # ── async gate job engine (ADR 0013: durable jobs, bounded, non-blocking) ──
 # Job records:   ${STATE_DIR}/gates/<seat>-<sha7>.job  (atomic tmp+mv, pid inside)
@@ -361,6 +353,18 @@ gate_job_running() { # TICKET SHA
 
 # Non-blocking reap: for every finished job, post-check drift → verdict
 # record → telemetry → (green && isolated) arbiter_enqueue → cleanup.
+# Both execution modes continue through exactly the same review policy.
+_gate_green_continue() { # TICKET SEAT SHA ISOLATED
+  local ticket="$1" seat="$2" sha="$3" isolated="$4" rdirs rrc=0
+  [[ "$isolated" == true ]] || return 0
+  rdirs=$(review_loop_on_gate_green "$ticket" "$seat" "$sha" "$STATE_DIR" 2>/dev/null) || rrc=$?
+  if (( rrc != 0 )); then
+    warn "review loop state machine failed for #$ticket @ ${sha} — NOT enqueued; human evaluation required"
+  else
+    _review_directives "$rdirs" "$ticket" "$sha"
+  fi
+}
+
 gate_reap() {
   local job jrc jid meta seat ticket sha dir iso rc_val suite_ok ts gate_log
   for job in "$STATE_DIR"/gates/*.job; do
@@ -398,23 +402,7 @@ gate_reap() {
       fi
     elif [[ "$rc_val" == "0" ]]; then
       suite_ok="green"; ok "gate job ${jid}: GREEN (log: $gate_log)"
-      if [[ "$iso" == "true" ]]; then
-        # Review loop seam (REV-5): the state machine decides what a green
-        # gate means next — ENQUEUE when the loop is off (the pre-REV-5
-        # behavior, verbatim), DISPATCH_REVIEWER when it is on. The machine
-        # owns policy; the directive executor owns effects.
-        local rdirs rrc=0
-        rdirs=$(review_loop_on_gate_green "$ticket" "$seat" "$sha" "$STATE_DIR" 2>/dev/null) || rrc=$?
-        if (( rrc != 0 )); then
-          # Fail closed: never enqueue behind the machine's back. The green
-          # verdict is recorded; a machine failure means corrupt state (REV-3
-          # semantics: fail closed, human decides). We never silently fall
-          # back to the pre-REV-5 enqueue — that would bypass review.
-          warn "review loop state machine failed for #$ticket @ ${sha} — NOT enqueued; human evaluation required"
-        else
-          _review_directives "$rdirs" "$ticket" "$sha"
-        fi
-      fi
+      _gate_green_continue "$ticket" "$seat" "$sha" "$iso"
     else
       suite_ok="RED"; bad "gate job ${jid}: RED (rc=${rc_val}) — NOT filed; worker must fix (log: $gate_log)"
       if _headless_ceiling_breached "$ticket" 1; then
@@ -499,6 +487,10 @@ _review_failover_seat() {
 # round budget; the target's own seat brief does NOT.
 _dispatch_reviewer() { # RSEAT TICKET SHA ROUND MAX [MODE]
   local rseat="$1" t="$2" sha="$3" r="$4" m="$5" mode="${6:-primary}"
+  if ! review_loop_assign_reviewer "$t" "$sha" "$r" "$rseat" "$STATE_DIR"; then
+    warn "review dispatch refused for #$t: independent current reviewer required"
+    return 1
+  fi
   local msg fo="false" fsuffix=""
   if [[ "$mode" == "failover" ]]; then
     fo="true"
@@ -529,7 +521,8 @@ _quota_defer_reviewer() { # TICKET SHA ROUND MAX — record the durable marker
 # remove the marker. One resolution per deferred dispatch (REV-FAILOVER-1:
 # retry-to-primary on clear, or failover while walled — never both).
 _quota_drain_markers() { # SEAT MODE
-  local seat="$1" mode="$2" rec t sha r m
+  local seat="$1" mode="$2" rec t sha r m pending
+  pending=$(mktemp "${QUOTA_DEFER_FILE}.XXXXXX") || return 1
   while IFS= read -r rec; do
     [[ -n "$rec" ]] || continue
     t=$(jq -r '.ticket // empty' <<<"$rec" 2>/dev/null) || continue
@@ -537,9 +530,25 @@ _quota_drain_markers() { # SEAT MODE
     r=$(jq -r '.round // empty' <<<"$rec" 2>/dev/null)
     m=$(jq -r '.max // empty' <<<"$rec" 2>/dev/null)
     [[ -n "$t" && -n "$sha" && -n "$r" && -n "$m" ]] || continue
-    _dispatch_reviewer "$seat" "$t" "$sha" "$r" "$m" "$mode"
+    if ! _dispatch_reviewer "$seat" "$t" "$sha" "$r" "$m" "$mode"; then
+      printf '%s\n' "$rec" >> "$pending"
+    fi
   done < "$QUOTA_DEFER_FILE"
-  rm -f "$QUOTA_DEFER_FILE"
+  mv "$pending" "$QUOTA_DEFER_FILE"
+  [[ -s "$QUOTA_DEFER_FILE" ]] || rm -f "$QUOTA_DEFER_FILE"
+}
+
+# Pre-upgrade pending reviews have no sender assignment. Redispatch them;
+# quota-deferred reviews already have their own retry path.
+_review_recover_assignments() {
+  local file="$STATE_DIR/reviews.json" t sha round max
+  [[ -f "$file" ]] || return 0
+  while IFS=$'\t' read -r t sha round max; do
+    if [[ -f "$QUOTA_DEFER_FILE" ]] && jq -e -s --arg t "$t" \
+      'any(.[]; .ticket == $t)' "$QUOTA_DEFER_FILE" >/dev/null; then continue; fi
+    _review_directives "DISPATCH_REVIEWER ${SEAT_NAME_reviewer:-reviewer} $t $sha $round $max" "$t" "$sha"
+  done < <(jq -r '.reviews | to_entries[] | select(.value.state == "awaiting_review" and (.value.reviewer_sha // "") == "")
+    | [.key, .value.sha, .value.round, .value.max_rounds] | @tsv' "$file")
 }
 
 # Each poll cycle, before anything else dispatches to an agy seat: still
@@ -588,12 +597,14 @@ _review_directives() { # DIRECTIVES-LINES TICKET SHA
         # during the pause window, not just the first.
         if _agy_quota_exhausted "$rseat"; then
           if fseat=$(_review_failover_seat); then
-            _dispatch_reviewer "$fseat" "$d2" "$d3" "$d4" "$d5" failover
+            _dispatch_reviewer "$fseat" "$d2" "$d3" "$d4" "$d5" failover || \
+              _quota_defer_reviewer "$d2" "$d3" "$d4" "$d5"
           else
             _quota_defer_reviewer "$d2" "$d3" "$d4" "$d5"
           fi
         else
-          _dispatch_reviewer "$rseat" "$d2" "$d3" "$d4" "$d5"
+          _dispatch_reviewer "$rseat" "$d2" "$d3" "$d4" "$d5" || \
+            _quota_defer_reviewer "$d2" "$d3" "$d4" "$d5"
         fi
         if [[ "${CONFIG_BOUNDED_LOOPER:-0}" != 1 ]]; then
           looper_notice "LOOP-BOT: filed verdict for #$d2 @ ${d3}; reviewer pending before arbiter."
@@ -651,7 +662,6 @@ _review_scan_verdicts() { # SEAT PANE-OUTPUT
     if [[ -f "$seen_file" ]] && grep -qF "$seen_key" "$seen_file"; then
       continue
     fi
-    printf '%s\n' "$seen_key" >> "$seen_file"
 
     # Round at verdict time (pre-transition) + findings count from the
     # durable evidence file — measured values, never guesses. Both are
@@ -673,21 +683,18 @@ _review_scan_verdicts() { # SEAT PANE-OUTPUT
     fc=${fc:-0}
 
     local dirs rc=0
-    dirs=$(review_loop_on_review_verdict "$ticket" "$sha" "$verdict" "$STATE_DIR" 2>/dev/null) || rc=$?
+    dirs=$(review_loop_on_review_verdict "$ticket" "$sha" "$verdict" "$STATE_DIR" "$seat" 2>/dev/null) || rc=$?
     # REV-FAILOVER-1 / ADR 0018: durably attribute which reviewer seat —
     # primary or failover — delivered this verdict. The telemetry event
     # below already names the seat; this writes it into reviews.json too,
     # guarded on a successful transition so a failed state machine never
     # gains a bare record, and never creating an entry that does not
     # already exist.
-    if (( rc == 0 )) && [[ -f "${STATE_DIR}/reviews.json" ]] \
-      && jq --arg t "$ticket" --arg s "$seat" \
-           'if .reviews[$t] then .reviews[$t].reviewer = $s else . end' \
-           "${STATE_DIR}/reviews.json" > "${STATE_DIR}/reviews.json.tmp" 2>/dev/null; then
-      mv "${STATE_DIR}/reviews.json.tmp" "${STATE_DIR}/reviews.json"
-    else
-      rm -f "${STATE_DIR}/reviews.json.tmp"
+    if (( rc != 0 )); then
+      _review_directives "$dirs" "$ticket" "$sha"
+      continue
     fi
+    printf '%s\n' "$seen_key" >> "$seen_file"
     "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" review.verdict "$seat" "$ticket" \
       "$(jq -cn --arg t "$ticket" --arg h "$sha" --arg v "$verdict" --arg r "$round" --arg f "$fc" \
         '($r|tonumber? // 0) as $rn | ($f|tonumber? // 0) as $fn |
@@ -969,6 +976,7 @@ harvest_verdicts() {
           fi
         elif [[ "$gate_rc" -eq 0 ]]; then
           suite_ok="green"; ok "suite gate GREEN for #$ticket @ ${sha} (log: $gate_log)"
+          _gate_green_continue "$ticket" "$seat" "$sha" "$GATE_ISOLATED"
           echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence "$gate_log")}" >> "$SESSION_LOG"
         else
           suite_ok="RED"; bad "suite gate RED for #$ticket @ ${sha} — NOT filed; arch must fix before done (log: $gate_log)"
@@ -1281,7 +1289,7 @@ arbiter_handback_feedback() {
   done < <(jq -r 'select(.status == "conflict" or .status == "integration_red")
     | [ (.ticket | tostring), (.seat // ""), .sha, .status,
         (if .status == "conflict" then ((.files // []) | join(", "))
-         else (.gate.log // "") end) ] | @tsv' "$q" 2>/dev/null)
+         else ([.gate.reason, .gate.log] | map(select(. != null)) | join("; ")) end) ] | @tsv' "$q" 2>/dev/null)
 }
 
 arbiter_auto_drain() {
@@ -1326,6 +1334,7 @@ arbiter_auto_drain() {
 }
 
 cmd_once() {
+  _review_recover_assignments
   _quota_retry_deferred   # QUOTA-2: drain deferred reviewer dispatches first —
                           # nothing dispatches to an agy seat ahead of the retry
   gate_recover
