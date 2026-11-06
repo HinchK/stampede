@@ -301,4 +301,29 @@ printf '{"paused": false, "frontier_drain": false, "suite_gate": false}\n' \
 grep -qi 'suite gate' "$ENV_DIR/up2.log" \
   || { echo "J: up summary does not warn when the suite gate is off" >&2; tail -30 "$ENV_DIR/up2.log" >&2; exit 1; }
 
+echo "==> K: after a healthy bounded launch, status names the looper agent and verify exits 0"
+make_env
+force_looper_agy "$ENV_DIR/fresh project"
+"$ENV_DIR/yeehaw.sh" start --brainstorm --topic "looper happy path" > "$ENV_DIR/up.log" 2>&1 \
+  || { echo "K: up failed with a healthy looper chain" >&2; tail -30 "$ENV_DIR/up.log" >&2; exit 1; }
+"$ROOT/bin/stampede" status "$ENV_DIR/fresh project" > "$ENV_DIR/status.log" 2>&1 \
+  || { echo "K: status failed after healthy launch" >&2; cat "$ENV_DIR/status.log" >&2; exit 1; }
+grep -E 'looper-.*agy' "$ENV_DIR/status.log" \
+  || { echo "K: status does not name the looper as an agy agent" >&2; cat "$ENV_DIR/status.log" >&2; exit 1; }
+if grep -E 'looper-' "$ENV_DIR/status.log" | grep -Eqi 'agentless|[[:space:]]shell[[:space:]]'; then
+  echo "K: status describes the looper as agentless/shell" >&2
+  grep -E 'looper-' "$ENV_DIR/status.log" >&2
+  exit 1
+fi
+if grep -qi 'suite gate' "$ENV_DIR/status.log"; then
+  echo "K: status printed a suite-gate warning with a runnable TEST_CMD" >&2
+  cat "$ENV_DIR/status.log" >&2
+  exit 1
+fi
+set +e
+"$ROOT/bin/stampede" verify "$ENV_DIR/fresh project" > "$ENV_DIR/verify.log" 2>&1
+k_rc=$?
+set -e
+[[ "$k_rc" -eq 0 ]] || { echo "K: verify exited $k_rc after healthy launch" >&2; cat "$ENV_DIR/verify.log" >&2; exit 1; }
+
 printf 'test_seat_missing: PASS\n'

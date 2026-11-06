@@ -2,7 +2,7 @@
 id: HORIZON-5
 title: "Parked-queue triage audit"
 type: wayfinder:decision
-status: backlog
+status: resolved
 assignee: pm
 owns: maps/tickets-parked
 parent: maps/next-horizon.md

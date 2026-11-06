@@ -2,7 +2,7 @@
 id: HORIZON-1
 title: "Integrate BRIEF-1, promote integration to main, push"
 type: wayfinder:task
-status: backlog
+status: resolved
 assignee: human
 owns: STATE.md
 parent: maps/next-horizon.md

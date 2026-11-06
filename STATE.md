@@ -1,5 +1,13 @@
 # Swarm State Checkpoint: Universal Herdr Swarm (`herd-swarm`)
 
+**Updated:** 2026-11-05  
+**HEAD after Phase 0:** `0028ea9` on `origin/main` (LOOPER-1 published)  
+**Suites:** 27, `make check` green locally at report time  
+**Now:** hygiene branch `fix/looper-docs-and-hygiene` — commit-graph audit, docs/changelog alignment, HORIZON-1/HORIZON-5 frontmatter, `test_seat_missing.sh` scenario K.  
+**Not doing:** version bump, live Herdr, P3-4, 2026-10-13 frontier spec rewrite.
+
+---
+
 **Updated:** 2026-10-08  
 **Plan of Record:** [maps/universal-herdr-swarm.md](maps/universal-herdr-swarm.md)  
 **Execution Roadmap:** [docs/reordered-plan.md](docs/reordered-plan.md)  
