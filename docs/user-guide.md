@@ -63,6 +63,9 @@ runnable suite, supply one when prompted; a gate cannot be trusted without
 it. Run `stampede status <repo>` to see the configured roster, attention mode,
 live Herdr agents, and recent activity.
 
+Setting `[fanout] gate_concurrency = 0` runs tests inline. Both inline and
+background tests follow the same review and integration policy.
+
 ## Choose how much attention Stampede uses
 
 ```bash
@@ -94,6 +97,12 @@ arbiter remains manual.
 
 ## Inspect and run the arbiter manually
 
+When the reviewer loop is enabled, Stampede records the assigned reviewer
+before sending the request and accepts a verdict only from that independent
+seat. A backup reviewer that implemented the ticket cannot review it; the
+request stays deferred until the primary becomes available. Pending reviews
+from older sessions without an assignment are redispatched by the supervisor.
+
 Workers report `ARCH DONE #<ticket> <commit-sha>`. The supervisor re-runs the
 project suite on that exact commit. GREEN candidates enter the integration
 queue; startup and the ordinary supervisor loop leave them there. The
@@ -113,6 +122,11 @@ not move the base branch. `promote --confirm` is the deliberate human step
 that moves it. Run these from a plain shell, not an agent pane. The explicit
 headless batch mode retains its own in-batch drain behavior when you choose
 that separate command.
+
+The integration test must leave HEAD and tracked or visible untracked files
+unchanged. A successful test exit with a changed tree is handed back with its
+gate log, and the integration ref stays unchanged. New GREEN arrivals can
+enter the queue while an integration test is running.
 
 ## Leave, return, or stop
 

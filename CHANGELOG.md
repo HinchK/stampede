@@ -10,6 +10,16 @@ pre-1.0: the public surface is not frozen.
 
 ## [Unreleased]
 
+### Fixed
+- Review verdicts require the assigned independent sender; self-reviewing
+  quota failover stays deferred, and legacy pending reviews are redispatched.
+- Queue writes are serialized, preserve compact JSONL, and keep arrivals and
+  superseded candidates safe during an integration gate. Promotion bookkeeping
+  covers only commits included in the promoted tip.
+- Integration gates reject HEAD or visible file drift even after a passing test.
+- Setup and attention share legacy/renamed architect role interpretation.
+- Inline gates continue through the same review and enqueue policy as background gates.
+
 ### Changed
 - **Bounded looper is a critical seated agent** (LOOPER-1): setup's default
   `attention.bounded_looper = true` launches the configured looper kind
