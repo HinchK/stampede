@@ -318,6 +318,9 @@ review_loop_on_review_verdict() { # TICKET SHA VERDICT STATE_DIR REVIEWER
   [[ "$sha" == "$cur_sha" ]] || { _review_fail_closed "$ticket" "$sd" "sha-mismatch:expected:${cur_sha:-none}"; return 1; }
 
   if [[ "$verdict" == "PASS" ]]; then
+    # REV-DUP-1: sha already matched the recorded one above, so a repeat PASS on
+    # review_passed is idempotent — no alert, no second ENQUEUE.
+    [[ "$state" == review_passed ]] && return 0
     [[ "$state" == awaiting_review ]] || { printf 'ALERT_INVALID %s no-pending-review\n' "$ticket"; return 1; }
     # shellcheck disable=SC2016  # jq program, not shell
     _review_write "$sd" \
@@ -332,6 +335,7 @@ review_loop_on_review_verdict() { # TICKET SHA VERDICT STATE_DIR REVIEWER
     printf 'DISPATCH_CRITIQUE %s %s %s %s %s\n' "$seat" "$ticket" "$round" "$max" "$(review_loop_findings_path "$ticket" "$sha" "$sd")"
     return 0
   fi
+  [[ "$state" == review_blocked ]] && return 0   # REV-DUP-1: repeat BLOCK at the recorded sha
   [[ "$state" == awaiting_review ]] || { printf 'ALERT_INVALID %s no-pending-review\n' "$ticket"; return 1; }
 
   if (( round < max )); then
