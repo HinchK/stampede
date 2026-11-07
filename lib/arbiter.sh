@@ -51,7 +51,7 @@ _arb_cfg() {
   ARB_BASE="${BASE_BRANCH:-$(git -C "$ARB_REPO" rev-parse --abbrev-ref HEAD 2>/dev/null || printf 'main')}"
   ARB_QUEUE="${ARB_STATE}/integration.jsonl"
   ARB_REF="refs/heads/swarm/${ARB_SLUG}/integration"
-  ARB_WT="${ARB_REPO}/.herdr-swarm/worktrees/arbiter-${ARB_SLUG}"
+  ARB_WT="${ARB_REPO}/.herdr-swarm/worktrees/integration-${ARB_SLUG}"
 }
 
 _arb_cmd_runnable() {
@@ -407,10 +407,10 @@ _arb_integrate() { # TICKET SEAT SHA I0
     fi
     local gate_dir="${ARB_STATE}/gate-logs"
     gate_log="${gate_dir}/arbiter-${ticket}-${sha:0:7}.log"
-    mkdir -p "$gate_dir" "${ARB_STATE}/arbiter-tmp"
+    mkdir -p "$gate_dir" "${ARB_STATE}/gate-tmp/integration"
     local gate_rc=0
-    (cd "$ARB_WT" && TMPDIR="${ARB_STATE}/arbiter-tmp" \
-      "$TIMEOUT_BIN" "${SUITE_TIMEOUT_S:-300}" sh -c "$TEST_CMD") >"$gate_log" 2>&1 || gate_rc=$?
+    # Path carries no "arbiter" (suites matched that substring) and the env is scrubbed.
+    gate_exec "$ARB_WT" "${ARB_STATE}/gate-tmp/integration" "${SUITE_TIMEOUT_S:-300}" "$TEST_CMD" >"$gate_log" 2>&1 || gate_rc=$?
     if ! gate_tree_matches "$ARB_WT" "$candidate"; then
       _arb_set_status "$ticket" "$sha" integration_red \
         "$(jq -cn --arg old "$i0" --arg log "$gate_log" \

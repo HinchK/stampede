@@ -180,7 +180,7 @@ check "conflict record lists the file" \
 check "integration ref unmoved after conflict" \
   '[[ $(git -C "$REPO" rev-parse '"$IREF"') != "$SHA_C" ]]'
 check "arbiter worktree clean after merge --abort" \
-  '[[ -z "$(git -C "$REPO/.herdr-swarm/worktrees/arbiter-ptest" status --porcelain)" ]]'
+  '[[ -z "$(git -C "$REPO/.herdr-swarm/worktrees/integration-ptest" status --porcelain)" ]]'
 
 # ── 4. integration_red leaves the ref unmoved ──────────────────────────────
 printf 'RED\n' > "$TEST_DIR/wc/red.flag"
@@ -600,7 +600,7 @@ git -C "$REPO" worktree add -q --detach "$TEST_DIR/ww" "swarm/ptest/seat-w"
 printf '#!/bin/sh\nexit 1\n' > "$TEST_DIR/ww/check.sh"
 SHA_W=$(commit_at "$TEST_DIR/ww" "seat-w breaks the suite")
 IREF_S0=$(git -C "$REPO" rev-parse "$IREF")
-ARB_WT_LOCK="$(git -C "$REPO/.herdr-swarm/worktrees/arbiter-ptest" rev-parse --absolute-git-dir)/index.lock"
+ARB_WT_LOCK="$(git -C "$REPO/.herdr-swarm/worktrees/integration-ptest" rev-parse --absolute-git-dir)/index.lock"
 : > "$ARB_WT_LOCK"
 arbiter_enqueue 216 seat-w "$SHA_W"
 arbiter_drain 2>/dev/null
@@ -614,13 +614,13 @@ ck 216 integration_red "worktree freed: the candidate's own suite is gated (RED)
 
 # A worktree dir without its .git link resolves to the ROOT repo.
 ROOT_HEAD_S0=$(git -C "$REPO" rev-parse --abbrev-ref HEAD)
-mv "$REPO/.herdr-swarm/worktrees/arbiter-ptest/.git" "$TEST_DIR/arb-wt-gitlink"
+mv "$REPO/.herdr-swarm/worktrees/integration-ptest/.git" "$TEST_DIR/arb-wt-gitlink"
 jq -s -c 'map(if .ticket == "216" then .status = "queued" else . end) | .[]' "$Q" > "$Q.tmp" && mv "$Q.tmp" "$Q"
 arbiter_drain 2>/dev/null
 ck 216 queued "unlinked arbiter worktree: record left queued"
 check "unlinked arbiter worktree: root checkout stays on its branch" \
   '[[ "$(git -C "$REPO" rev-parse --abbrev-ref HEAD)" == "$ROOT_HEAD_S0" ]]'
-mv "$TEST_DIR/arb-wt-gitlink" "$REPO/.herdr-swarm/worktrees/arbiter-ptest/.git"
+mv "$TEST_DIR/arb-wt-gitlink" "$REPO/.herdr-swarm/worktrees/integration-ptest/.git"
 arbiter_drain 2>/dev/null
 ck 216 integration_red "worktree relinked: drain resumes"
 
