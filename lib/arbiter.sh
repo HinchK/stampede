@@ -334,6 +334,23 @@ _arb_wt_unusable() { # TICKET SEAT SHA — the stall must show in the Ops stream
     "$(jq -cn '{summary:"gate harness unavailable: arbiter worktree unusable — left queued"}')"
 }
 
+# ARB-LOCK-1: say WHO holds the drain lock and whether it is merely stopped.
+# kill -0 succeeds for a Ctrl+Z'd (state T) process, so liveness alone hides it.
+_arb_lock_holder_report() { # LOCK_DIR
+  local lk="$1" pid info stat
+  pid=""
+  [[ -f "$lk/pid" ]] && pid=$(cat "$lk/pid" 2>/dev/null || true)
+  printf 'arbiter: another drain holds the lock\n' >&2
+  [[ -n "$pid" ]] || return 0
+  info=$(ps -o etime=,command= -p "$pid" 2>/dev/null | sed -E 's/^ +//' || true)
+  stat=$(ps -o stat= -p "$pid" 2>/dev/null | tr -d ' ' || true)
+  printf 'arbiter:   holder pid %s%s\n' "$pid" "${info:+ — elapsed+command: $info}" >&2
+  if [[ "$stat" == T* ]]; then
+    # shellcheck disable=SC2016  # backticks are literal advice text
+    printf 'arbiter:   WARNING: pid %s is STOPPED (Ctrl+Z). Resume it with `fg` in its shell or `kill -CONT %s`, or end it with `kill -TERM %s`.\n' "$pid" "$pid" "$pid" >&2
+  fi
+}
+
 # ── drain ──────────────────────────────────────────────────────────────────
 # Serialized queue processor: oldest queued record first, one at a time.
 arbiter_drain() {
@@ -341,10 +358,12 @@ arbiter_drain() {
   [[ -f "$ARB_QUEUE" ]] || return 0
 
   arbiter_lock "$ARB_STATE" || {
-    printf 'arbiter: another drain holds the lock\n' >&2
+    _arb_lock_holder_report "$ARB_STATE/arbiter.lock"
     return 0
   }
 
+  local drain_n=0 drain_total
+  drain_total=$(arbiter_queued_count)
   while :; do
     local rec
     rec=$(jq -r -c -s 'map(select(.status == "queued")) | sort_by(.ts) | .[0] // empty' "$ARB_QUEUE" 2>/dev/null || true)
@@ -373,6 +392,10 @@ arbiter_drain() {
       return 1
     fi
 
+    drain_n=$((drain_n + 1))
+    # ARB-LOCK-1: the gate runs silently for up to SUITE_TIMEOUT_S; announce it.
+    printf 'arbiter: gating #%s (%s @ %s) [%s/%s queued, logs in %s/gate-logs] — can take up to %ss\n' \
+      "$ticket" "$seat" "${sha:0:7}" "$drain_n" "$drain_total" "$ARB_STATE" "${SUITE_TIMEOUT_S:-300}" >&2
     if ! _arb_integrate "$ticket" "$seat" "$sha" "$i0"; then
       # ARB-DRAIN-1: a conflict or RED gate resolves THIS record and leaves the
       # ref and worktree clean at I0, so the records behind it are independent

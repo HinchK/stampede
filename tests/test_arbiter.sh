@@ -713,6 +713,25 @@ ck 304 queued "the original ticket stays queued"
 check "same (ticket, sha) re-enqueue is still an idempotent no-op" \
   'arbiter_enqueue 304 seat-z "$SHA_Z" 2>/dev/null'
 
+# (the earlier ARB-DUP-1 ticket 304 is still queued, so this pass gates two records)
+# ── ARB-LOCK-1: progress line per gate; lock refusal names holder + stopped state ──
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wprog" "$IREF"
+printf 'progress\n' > "$TEST_DIR/wprog/progress-lock1.txt"
+SHA_P1=$(commit_at "$TEST_DIR/wprog" "progress candidate")
+arbiter_enqueue 306 seat-p "$SHA_P1"
+prog=$(arbiter_drain 2>&1 >/dev/null)
+check "drain announces each gate before running it" \
+  '[[ "$prog" == *"gating #306 (seat-p @ ${SHA_P1:0:7}) [2/2 queued"* ]]'
+sleep 300 & STOPPED_PID=$!
+kill -STOP "$STOPPED_PID"
+mkdir -p "$STATE_DIR/arbiter.lock"
+printf '%s\n' "$STOPPED_PID" > "$STATE_DIR/arbiter.lock/pid"
+refusal=$(ARBITER_TMP_SLEEP=0.01 arbiter_drain 2>&1 >/dev/null)
+kill -CONT "$STOPPED_PID" 2>/dev/null; kill "$STOPPED_PID" 2>/dev/null; wait "$STOPPED_PID" 2>/dev/null || true
+rm -rf "$STATE_DIR/arbiter.lock"
+check "lock refusal names the holder pid" '[[ "$refusal" == *"holder pid $STOPPED_PID"* ]]'
+check "lock refusal warns that a stopped holder is stopped" '[[ "$refusal" == *"STOPPED (Ctrl+Z)"* && "$refusal" == *"kill -CONT $STOPPED_PID"* ]]'
+
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))
