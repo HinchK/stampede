@@ -290,5 +290,25 @@ Selection of a qualifying recipe version for future work at the next authorized 
 _Avoid_: Hot-changing active workers or treating recipe adoption as permission to merge runtime code, expand authority, or continue beyond a stop.
 
 **Self-improvement agent**:
-The agent dedicated exclusively to improving the swarm and its harnesses.
+The agent dedicated exclusively to improving the swarm and its harnesses while the self-improvement feature is enabled.
 _Avoid_: Assigning it ordinary delivery work.
+
+**Milestone closeout**:
+The wrap-up that follows evidence that a milestone's code reached `main`: a short efficiency retrospective, failure and collision accounting, preserved and cleaned-up associated worktrees, and the Four-T scorecard. Run by the self-improvement agent while the self-improvement toggle is on; a closeout that cannot finish stays pending and resumes under valid authority.
+_Avoid_: Triggering it from an agent's claim of completion, repeating completed closeout actions after a restart, or reading it as permission to delete work.
+
+**Four-T scorecard**:
+The standard milestone measures: Tokens, Time, Toil and Trouble, each reported with its source and coverage. Unavailable values are unknown.
+_Avoid_: Treating a missing measurement as zero trouble or zero human effort, or drawing a universal cross-model efficiency claim from the figures.
+
+**Self-improvement toggle**:
+The single project-level on/off choice for the self-improvement agent and its milestone closeout. Enabled by default; disabling schedules none of that feature's work.
+_Avoid_: Treating disabling it as permission to discard unfinished work, interrupt a preservation unsafely, or clear a pending recovery obligation.
+
+**Recovery branch**:
+The ordinary local branch that keeps a closed-out worktree's unfinished work visible for focused follow-up, existing or newly created, with uncommitted and untracked work snapshotted onto it before the worktree is removed.
+_Avoid_: Assuming a branch reference alone preserves uncommitted files, or removing the worktree before the transfer is verified.
+
+**Improvement gate**:
+The per-candidate check for adopting a harness candidate. Before evaluation it fixes a measurable Four-T target, quality requirements and the task family; the candidate is then compared with the current recipe on the motivating problem and on separate regression checks, at least twice, with independent review and all improvement overhead counted. Only a candidate that meets its target without breaking quality or authority boundaries is adopted; an inconclusive result keeps the current recipe.
+_Avoid_: Letting a candidate alter its own target or grading, accepting a passing project suite as evidence of the target, or treating adoption as permission to merge runtime code.

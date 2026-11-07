@@ -27,7 +27,7 @@ Reach a build-ready design for a simpler, provider-independent Stampede rooted i
 - Research artifacts live in `docs/findings/`; each research ticket records its throwaway `research/<name>` branch and commit. Research facts inform later choices without selecting a provider, budget, or autonomy policy on the user's behalf.
 - **Current constraint source:** [Define the first engineering workload and what better means](issues/01-workload-and-success.md) records the settled pilot brief and requirements, which refine the earlier open-constraint framing. The initial pilot is subscription-only; API and local-model support are deferred. [Set replication, routing, resource, and authority limits](issues/07-replication-and-routing.md) records startup opt-in for capacity/quota management and the ongoing backup/alert policy. Harness evolution is scoped by [Define how harness improvements are proposed, evaluated, and adopted](issues/08-harness-evolution.md); runtime changes follow ordinary engineering tasks. Existing protections remain in force while planning.
 - Completion requires a traceable, practical design handoff covering the prompt coach, Herdr reuse, startup recovery, self-improvement, existing authority and verification boundaries, and migration sequence. The lightweight evidence rule for adopting improvements remains to be decided; bypassing the comparative experiment does not itself settle that rule. No open decision or unexamined in-scope fog may remain.
-- **Milestone closeout, directed by HinchK on 2026-11-06:** after each milestone with code merged to `main`, require a short efficiency retrospective, tool-failure and collision accounting, cleanup of associated worktrees, and simple tokens/time/toil/trouble metrics. One agent is always dedicated exclusively to self-improvement. Unfinished work moves onto local branches for focused follow-up before associated worktrees are removed. Details are recorded in [Agree the migration sequence and build-ready handoff](issues/10-design-handoff.md).
+- **Milestone closeout, directed by HinchK on 2026-11-06:** the self-improvement feature is toggleable. When enabled, one agent is dedicated exclusively to self-improvement and closes each milestone with code merged to `main` through an efficiency retrospective, failure/collision accounting, associated-worktree cleanup, and the accepted four-T scorecard. Preserve unfinished work on local branches before removing associated worktrees. Details and proposed toggle defaults are recorded in [Agree the migration sequence and build-ready handoff](issues/10-design-handoff.md).
 - Reference principles: [OpenAI harness engineering](https://openai.com/index/harness-engineering/) and [Anthropic long-running harnesses](https://www.anthropic.com/research/effective-harnesses-for-long-running-agents). The user-provided Agent-First Engineering PDF is supporting material, not authorization to adopt its automerge or zero-handwritten-code policies.
 
 ## Decisions so far
@@ -54,9 +54,7 @@ Reach a build-ready design for a simpler, provider-independent Stampede rooted i
 
 ## Not yet specified
 
-- Additional harness capabilities that become necessary when provider research and the operator prototype reveal concrete failure modes.
-- Further project/environment constraints exposed by the selected pilot, beyond the common continuity and evaluation questions already ticketed.
-- Interactions between the chosen evolution method and the chosen runtime that cannot yet be stated as precise additional decisions.
+- The proposed initial team and shared-worktree arrangement, put on hold by HinchK on 2026-11-06. The handoff preserves the current topology; revisit only if HinchK reopens it.
 
 ## Out of scope
 
@@ -71,3 +69,5 @@ Reach a build-ready design for a simpler, provider-independent Stampede rooted i
 - Implementing or releasing the new runtime, launching project swarms, or executing the comparison experiment in this planning epic.
 - Claiming universal swarm superiority, training model weights, or building a commercial multi-user service.
 - Changing current promotion permissions, weakening verification, or granting additional spending authority through this map.
+
+- Provider-research and operator-prototype follow-ups, and constraints a pilot might have exposed: both depended on work this map no longer performs. Anything unexpected surfaces during the implementation walkthrough as an ordinary task.
