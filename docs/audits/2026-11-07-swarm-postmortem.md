@@ -118,7 +118,7 @@ The `looper` is mid-way through one task: `arch-1` has reconciled the EHS-10 con
 Settled in a grilling with HinchK after sections 1–10 were written. `looper`'s and `arch-2`'s accounts arrived first. `looper`'s confirms #169: between 16:46 and 22:02 it wrote `reviews.json` and `integration.jsonl` by hand with inline Python.
 
 1. **One project slug**, taken from `[swarm] name` (`stampede`), naming agents, seat branches and the integration line. See [ADR 0019](../adr/0019-one-project-slug.md) and `CONTEXT.md` §4.
-2. **Discard all twelve 2026-11-06 feature/fix commits** (EHS-10, EHS-STEP2/3/4, MUX-NATIVE-1, HARNESS-HARDEN-1 and the test-isolation fixes `31d5e7a`, `f3b61a3`, `e1d09b9`), archived at tag `archive/swarm-2026-11-07` (`d9a4bbd`) and in the out-of-repo bundle backup.
+2. **Discard all twelve 2026-11-06 feature/fix commits** (EHS-10, EHS-STEP2/3/4, MUX-NATIVE-1, HARNESS-HARDEN-1 and the test-isolation fixes `31d5e7a`, `f3b61a3`, `e1d09b9`), archived at tags `archive/2026-11-07/*` (`arch-1` = `d9a4bbd` holds all of it) and in the out-of-repo bundle backup.
 3. **Discard VIS-CHARTER-1** (`c55c69d`) too, archived the same way.
 4. **Reset once, by hand, under the existing git rules.** Order: herd down, unlock and remove worktrees, then move refs. No `stampede reset` command, and no rule relaxed. This replaces the proposal in section 6.
 5. **Only the human answers a grilling.** See `CONTEXT.md` §15.
