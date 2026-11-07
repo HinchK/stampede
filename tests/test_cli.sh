@@ -112,6 +112,8 @@ cat > "$HB_BIN/opencode" <<'EOF'
 #!/bin/sh
 brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
 tid=$(sed -nE 's/^id:[[:space:]]*//p' "$brief" 2>/dev/null | head -n1 | tr -d '[:space:]')
+# a real worker leaves a commit of its own; two tickets must not share one sha (ARB-DUP-1)
+git -c user.email=t@t -c user.name=t commit -q --allow-empty -m "work ${tid:-unknown}" 2>/dev/null
 sha=$(git rev-parse HEAD 2>/dev/null || printf 0000000000000000000000000000000000000000)
 reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete response to ([^ ]+) and.*/\1/p')
 [ -n "$reply" ] && printf 'worker reply for %s\n' "${tid:-unknown}" > "$reply"
@@ -291,6 +293,8 @@ if [[ -e "$HB_BIN/timeout" ]]; then
 #!/bin/sh
 brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
 tid=$(sed -nE 's/^id:[[:space:]]*//p' "$brief" 2>/dev/null | head -n1 | tr -d '[:space:]')
+# a real worker leaves a commit of its own; two tickets must not share one sha (ARB-DUP-1)
+git -c user.email=t@t -c user.name=t commit -q --allow-empty -m "work ${tid:-unknown}" 2>/dev/null
 sha=$(git rev-parse HEAD 2>/dev/null || printf 0000000000000000000000000000000000000000)
 reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete response to ([^ ]+) and.*/\1/p')
 [ -n "$reply" ] && printf 'worker reply for %s\n' "${tid:-unknown}" > "$reply"
@@ -374,6 +378,8 @@ if [[ -e "$HB_BIN/timeout" ]]; then
 #!/bin/sh
 brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
 tid=$(sed -nE 's/^id:[[:space:]]*//p' "$brief" 2>/dev/null | head -n1 | tr -d '[:space:]')
+# a real worker leaves a commit of its own; two tickets must not share one sha (ARB-DUP-1)
+git -c user.email=t@t -c user.name=t commit -q --allow-empty -m "work ${tid:-unknown}" 2>/dev/null
 sha=$(git rev-parse HEAD 2>/dev/null || printf 0000000000000000000000000000000000000000)
 reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete response to ([^ ]+) and.*/\1/p')
 [ -n "$reply" ] && printf 'worker reply for %s\n' "${tid:-unknown}" > "$reply"
@@ -427,6 +433,8 @@ if [[ -e "$HB_BIN/timeout" ]]; then
 #!/bin/sh
 brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
 tid=$(sed -nE 's/^id:[[:space:]]*//p' "$brief" 2>/dev/null | head -n1 | tr -d '[:space:]')
+# a real worker leaves a commit of its own; two tickets must not share one sha (ARB-DUP-1)
+git -c user.email=t@t -c user.name=t commit -q --allow-empty -m "work ${tid:-unknown}" 2>/dev/null
 sha=$(git rev-parse HEAD 2>/dev/null || printf 0000000000000000000000000000000000000000)
 reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete response to ([^ ]+) and.*/\1/p')
 [ -n "$reply" ] && printf 'worker reply for %s\n' "${tid:-unknown}" > "$reply"

@@ -668,7 +668,9 @@ ck 77 queued "legacy numeric row seeded queued"
 _arb_set_status 77 "$SHA_A" conflict >/dev/null 2>&1
 ck 77 conflict "status write lands on a numeric row (pre-fix: silent no-op)"
 num_seed 78 "$SHA_A"
-arbiter_enqueue 78 seat-num "$SHA_B" >/dev/null 2>&1
+# a re-verdict needs a sha not already integrated (ARB-DUP-1 refuses those)
+SHA_N=$(git -C "$REPO" -c user.email=t@t -c user.name=t commit-tree "$sha_base^{tree}" -p "$sha_base" -m reverdict-78)
+arbiter_enqueue 78 seat-num "$SHA_N" >/dev/null 2>&1
 check "numeric row superseded by string re-verdict" \
   '[[ $(jq -s "[.[] | select((.ticket|tostring) == \"78\" and .status == \"superseded\")] | length" "$Q") == 1 ]]'
 check "exactly one queued row remains for 78" \
@@ -694,6 +696,22 @@ arbiter_enqueue 302 seat-y "$SHA_Y"
 arbiter_drain 2>/dev/null
 ck 301 conflict "head-of-line record is marked conflict"
 ck 302 integrated "independent record behind it still integrates in the same pass"
+
+# ── ARB-DUP-1: one sha, one ticket; integrated shas are not re-queued ──────
+rows_for() { jq -s --arg t "$1" '[.[] | select((.ticket|tostring) == $t)] | length' "$Q"; }
+check "already-integrated sha is refused at enqueue" \
+  '! arbiter_enqueue 303 seat-y "$SHA_Y" 2>/dev/null'
+check "refused integrated sha leaves no queue row" '[[ $(rows_for 303) == 0 ]]'
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wz" "$IREF"
+printf 'dup\n' > "$TEST_DIR/wz/dup-drain1.txt"
+SHA_Z=$(commit_at "$TEST_DIR/wz" "dup candidate")
+arbiter_enqueue 304 seat-z "$SHA_Z"
+check "sha queued under another ticket is refused" \
+  '! arbiter_enqueue 305 seat-z "$SHA_Z" 2>/dev/null'
+check "refused duplicate-sha ticket leaves no queue row" '[[ $(rows_for 305) == 0 ]]'
+ck 304 queued "the original ticket stays queued"
+check "same (ticket, sha) re-enqueue is still an idempotent no-op" \
+  'arbiter_enqueue 304 seat-z "$SHA_Z" 2>/dev/null'
 
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"

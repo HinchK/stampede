@@ -257,6 +257,28 @@ arbiter_enqueue() {
   local now changes older
   now=$(date +%s)
 
+  # ARB-DUP-1: one commit lands under one ticket. Refuse a sha another ticket
+  # already integrated (its gate would re-run on measured code and the second
+  # ticket would show integrated for work it never produced) or has queued
+  # (default: no multi-ticket commits; model that explicitly if ever wanted).
+  # A sha merely contained in the ref with no ticket's integrated row (a worker
+  # that reports the base) still enqueues: it resolves as a no-op and releases
+  # its lease. Refusals record nothing.
+  # The ticket's own (ticket, sha) already queued or integrated is idempotent.
+  if [[ -f "$ARB_QUEUE" ]] && jq -e -s --arg t "$ticket" --arg s "$sha" \
+       'any(.[]; (.ticket|tostring) == $t and .sha == $s and (.status == "queued" or .status == "integrated"))' \
+       "$ARB_QUEUE" >/dev/null 2>&1; then
+    return 0
+  fi
+  local holder
+  holder=$([[ -f "$ARB_QUEUE" ]] && jq -r -s --arg t "$ticket" --arg s "$sha" \
+    '[.[] | select(.sha == $s and (.status == "queued" or .status == "integrated") and (.ticket|tostring) != $t)] | .[0] | if . then "\(.ticket) (\(.status))" else empty end' \
+    "$ARB_QUEUE" 2>/dev/null || true)
+  if [[ -n "$holder" ]]; then
+    printf 'arbiter: #%s REFUSED — %s is already held by #%s (one commit, one ticket)\n' "$ticket" "${sha:0:7}" "$holder" >&2
+    return 1
+  fi
+
   changes=$(_arb_queue_write enqueue "$(jq -cn --argjson ts "$now" --arg t "$ticket" \
     --arg seat "$seat" --arg sha "$sha" \
     '{ts: $ts, ticket: $t, seat: $seat, sha: $sha, status: "queued"}')") || return 1
