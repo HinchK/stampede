@@ -678,6 +678,23 @@ arbiter_enqueue 79 seat-num "$SHA_A" >/dev/null 2>&1
 check "string enqueue at the same (ticket, sha) is a duplicate, not an append" \
   '[[ $(jq -s "[.[] | select((.ticket|tostring) == \"79\")] | length" "$Q") == 1 ]]'
 
+# ── ARB-DRAIN-1: a conflict must not block independent work behind it ──────
+# earlier sections leave queued numeric rows at the head; retire them so this pass starts at 301
+jq -r -s '.[] | select(.status == "queued") | "\(.ticket) \(.sha)"' "$Q" | while read -r qt qs; do _arb_set_status "$qt" "$qs" superseded >/dev/null 2>&1; done
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wx" main
+printf 'ALPHA-HEADLINE\n' > "$TEST_DIR/wx/alpha.txt"
+SHA_X=$(commit_at "$TEST_DIR/wx" "head-of-line conflicting work")
+# based on the integration tip with a clean gate: earlier sections left a racer check.sh in the tree
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wy" "$IREF"
+printf '#!/bin/sh\nexit 0\n' > "$TEST_DIR/wy/check.sh"
+printf 'independent\n' > "$TEST_DIR/wy/independent-drain1.txt"
+SHA_Y=$(commit_at "$TEST_DIR/wy" "independent work behind the conflict")
+arbiter_enqueue 301 seat-x "$SHA_X"
+arbiter_enqueue 302 seat-y "$SHA_Y"
+arbiter_drain 2>/dev/null
+ck 301 conflict "head-of-line record is marked conflict"
+ck 302 integrated "independent record behind it still integrates in the same pass"
+
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))

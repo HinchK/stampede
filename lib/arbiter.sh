@@ -352,7 +352,14 @@ arbiter_drain() {
     fi
 
     if ! _arb_integrate "$ticket" "$seat" "$sha" "$i0"; then
-      break   # record resolved (conflict/red/retry), or ungateable; stop the pass
+      # ARB-DRAIN-1: a conflict or RED gate resolves THIS record and leaves the
+      # ref and worktree clean at I0, so the records behind it are independent
+      # and keep draining. Anything else (still queued: harness failure, CAS or
+      # status write lost; superseded: the queue changed under the gate) stops
+      # the pass — the next drain re-reads the queue.
+      jq -e -s --arg t "$ticket" --arg s "$sha" \
+        '[.[] | select((.ticket|tostring) == $t and .sha == $s)] | last | .status | IN("conflict","integration_red")' \
+        "$ARB_QUEUE" >/dev/null 2>&1 || break
     fi
   done
 
