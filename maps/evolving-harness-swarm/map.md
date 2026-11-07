@@ -52,6 +52,8 @@ Reach a build-ready design for a simpler, provider-independent Stampede rooted i
 
 - [Define how harness improvements are proposed, evaluated, and adopted](issues/08-harness-evolution.md): improve versioned harness recipes, adopt qualifying changes automatically for future work using independent comparisons, and retain scoped rollback; runtime changes use ordinary tasks.
 
+- [Agree the migration sequence and build-ready handoff](issues/10-design-handoff.md): accepted a four-step reuse-first implementation handoff with a three-question coaching default, a per-candidate improvement gate (two repeat comparisons), a toggleable self-improvement agent with milestone closeout, and the current topology as baseline.
+
 ## Not yet specified
 
 - The proposed initial team and shared-worktree arrangement, put on hold by HinchK on 2026-11-06. The handoff preserves the current topology; revisit only if HinchK reopens it.

@@ -2,7 +2,7 @@
 id: EHS-10
 title: "Agree the migration sequence and build-ready handoff"
 type: wayfinder:grilling
-status: claimed
+status: resolved
 assignee: HinchK
 parent: maps/evolving-harness-swarm/map.md
 blocked_by: [EHS-05, EHS-06, EHS-07, EHS-08]
@@ -77,3 +77,7 @@ HinchK accepted the three open proposals:
 - **Topology:** proceed on the current topology; the held team and shared-worktree change is recorded as deferred in the map's Not yet specified section.
 
 HinchK also approved: landing these planning edits on a separate `docs/ehs-handoff` branch for merge review (this agent does not touch or move `main`); five new glossary terms (milestone closeout, Four-T scorecard, self-improvement toggle, recovery branch, improvement gate) with no ADR; and clearing the three remaining fog items, since two depended on bypassed work and one is resolved by this handoff. Final acceptance of the handoff is still pending, so this ticket stays claimed.
+
+### 2026-11-06 — Resolution: handoff accepted
+
+HinchK accepted [Simple startup and milestone self-improvement](../../../docs/superpowers/specs/2026-11-06-simple-startup-and-milestone-closeout-design.md) as the build-ready implementation handoff. It orders four steps (coached setup and saved brief; recovered startup; toggle, exclusive improvement role and milestone closeout; safe cleanup and recipe improvement), each placed in an existing owner and paired with acceptance checks that end in `make check` on the final candidate and a visible Herdr walkthrough. The accepted decisions are the three-question coaching default, the per-candidate improvement gate with at least two repeat comparisons, and the current topology as baseline; the held team and shared-worktree change stays deferred in the map. Each requirement traces to a resolved decision in the spec's traceability section. This epic stops before implementation: no runtime behaviour, provider spending, merge or deployment is authorized by it.

@@ -1,6 +1,6 @@
 # Simple startup and milestone self-improvement
 
-Draft implementation handoff, 2026-11-06. Owning decision: [Agree the migration sequence and build-ready handoff](../../../maps/evolving-harness-swarm/issues/10-design-handoff.md). Source inspection baseline: `5082818`; existing local planning edits are additional context. This document is for human review, not a claim that the behavior is implemented.
+Accepted implementation handoff, 2026-11-06. Owning decision: [Agree the migration sequence and build-ready handoff](../../../maps/evolving-harness-swarm/issues/10-design-handoff.md). Source inspection baseline: `5082818`; existing local planning edits are additional context. This document is not a claim that the behavior is implemented.
 
 ## Outcome and boundaries
 
@@ -84,4 +84,4 @@ No mass worktree cleanup, provider spending, merge or deployment is authorized b
 - Recovery and authority: [continuity](../../../maps/evolving-harness-swarm/issues/06-continuity-and-integration.md), [resource limits](../../../maps/evolving-harness-swarm/issues/07-replication-and-routing.md), [supervision](../../../maps/evolving-harness-swarm/issues/12-traffic-control-authority.md), [native route limits](../../../maps/evolving-harness-swarm/issues/13-subscription-route-enforcement.md).
 - Improvement and closeout: [evolution policy](../../../maps/evolving-harness-swarm/issues/08-harness-evolution.md), amended by [the active handoff decision](../../../maps/evolving-harness-swarm/issues/10-design-handoff.md).
 
-The coaching default and the improvement gate are accepted. The team and shared-worktree change stays deferred (see the map's Not yet specified section); this handoff builds on the current topology. Final handoff acceptance remains pending.
+The coaching default and the improvement gate are accepted. The team and shared-worktree change stays deferred (see the map's Not yet specified section); this handoff builds on the current topology. HinchK accepted this handoff on 2026-11-06.
