@@ -91,6 +91,16 @@ config_get_seat_prop() {
   config_get "seats.${seat_key}.${prop}" "$default_val" "$toml_path"
 }
 
+# The one project slug (ADR 0019): [swarm] name from the config, slugified.
+# When the config sets no name (or is missing), fall back to the slugified
+# <source> (repo or dir name) so unnamed local projects still get a slug.
+# Every caller that namespaces agents, branches or refs must go through this.
+config_project_slug() {
+  local toml_path="${1:-$DEFAULT_CONFIG}" fallback="${2:-}" name
+  name=$(config_get "swarm.name" "" "$toml_path")
+  slugify "${name:-$fallback}"
+}
+
 # Dump complete shell environment with namespaced names.
 # Slug is passed through slugify() (Herdr-legal), and slug/toml_path travel as
 # python sys.argv — never interpolated into the Python source. Every emitted

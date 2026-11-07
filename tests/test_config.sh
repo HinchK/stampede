@@ -308,5 +308,19 @@ check "8d" "long slugs sharing a prefix stay distinct" \
 check "8e" "longest seat prefix + capped slug fits 32 chars" \
   '[[ $(printf "%s" "looper_standby-$(slugify Standard-Pentest/kultivait)" | wc -c) -le 32 ]]'
 
+# ── 9. ADR 0019: one project slug, taken from [swarm] name ──────────────────
+C9="$TEST_DIR/slug-named.toml"
+printf '[swarm]\nname = "stampede"\n' > "$C9"
+C9N="$TEST_DIR/slug-unnamed.toml"
+printf '[swarm]\nversion = "1"\n' > "$C9N"
+check "9a" "[swarm] name wins over the repo-derived fallback" \
+  '[[ $(config_project_slug "$C9" hinchk/stampede) == "stampede" ]]'
+check "9b" "[swarm] name is slugified" \
+  'printf "[swarm]\nname = \"My App\"\n" > "$TEST_DIR/s9b.toml"; [[ $(config_project_slug "$TEST_DIR/s9b.toml" x) == "my-app" ]]'
+check "9c" "no [swarm] name falls back to the slugified source" \
+  '[[ $(config_project_slug "$C9N" hinchk/stampede) == $(slugify hinchk/stampede) ]]'
+check "9d" "missing config file falls back to the source" \
+  '[[ $(config_project_slug "$TEST_DIR/nope.toml" t/scratch) == "t-scratch" ]]'
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))

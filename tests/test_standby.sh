@@ -39,7 +39,7 @@ case " \$* " in
   *" pane split "*) printf '%s\n' '$SPLIT_RET'; exit 0 ;;
   *" agent read "*)
     # quota probe reads the looper seat's pane: banner controlled below
-    if [[ "\$3" == "looper-t-x" && -n "\$QUOTA_BANNER" ]]; then
+    if [[ "\$3" == "looper-x" && -n "\$QUOTA_BANNER" ]]; then
       printf 'Individual quota reached. Resets in '
       printf '%s' "\$QUOTA_BANNER"
       printf '.\n'
@@ -84,8 +84,8 @@ brief = "briefs/looper-standby.in.md"
 enabled = false
 EOF
 jq -cn '{version: 2, workspace_id: "w9", seats: [
-  {name: "looper-t-x", kind: "agy", pane: "w9:p7", isolated: false},
-  {name: "arch-t-x", kind: "opencode", pane: "w9:p3", isolated: true,
+  {name: "looper-x", kind: "agy", pane: "w9:p7", isolated: false},
+  {name: "arch-x", kind: "opencode", pane: "w9:p3", isolated: true,
    worktree_dir: "/tmp/none", branch: "swarm/x/arch"}]}' > "$T/.herdr-swarm/seats.json"
 
 S="$REPO_ROOT/lib/standby.sh"
@@ -127,9 +127,9 @@ grep -q -- "-- --model zai-coding-plan/glm-5.3-flash" "$LOG" \
   && ok 3b "agent start carries the configured flash model" || bad 3b "model arg missing"
 [[ -f "$T/.herdr-swarm/briefs/looper-standby.md" ]] \
   && ok 3c "brief rendered into target .herdr-swarm/briefs/" || bad 3c "brief missing"
-grep -q "agent prompt looper-standby-t-x " "$LOG" \
+grep -q "agent prompt looper-standby-x " "$LOG" \
   && ok 3d "brief delivered by file-path prompt (nonce protocol)" || bad 3d "no delivery prompt"
-jq -e '.holder == "standby" and .seat == "looper-standby-t-x" and .pane == "w9:p42" and .forced == false' \
+jq -e '.holder == "standby" and .seat == "looper-standby-x" and .pane == "w9:p42" and .forced == false' \
   "$LOCK" >/dev/null 2>&1 \
   && ok 3e "lock: holder standby, seat, pane, forced=false" || bad 3e "lock: $(cat "$LOCK")"
 
@@ -162,7 +162,7 @@ grep -q "pane close w9:p42" "$LOG" && ok 6a "recorded pane closed by explicit id
 out=$(bash "$S" down "$T" --yes 2>&1); rc=$?
 [[ "$rc" == 0 && "$out" == *"nothing to stand down"* ]] \
   && ok 7 "down without lock is a clean no-op" || bad 7 "rc=$rc out=$out"
-jq -cn '{holder: "looper", seat: "looper-t-x", pane: "w9:p7"}' > "$LOCK"
+jq -cn '{holder: "looper", seat: "looper-x", pane: "w9:p7"}' > "$LOCK"
 out=$(bash "$S" down "$T" --yes 2>&1); rc=$?
 [[ "$rc" -ne 0 ]] && ok 7b "down refuses a foreign-held lock" || bad 7b "rc=$rc out=$out"
 rm -f "$LOCK"
@@ -171,9 +171,9 @@ rm -f "$LOCK"
 export QUOTA_BANNER="1h30m0s"
 bash "$S" up "$T" >/dev/null 2>&1
 mkdir -p "$T/.herdr-swarm/research"
-printf '# handoff\n- dispatched T1 to arch-t-x\n' > "$T/.herdr-swarm/research/looper-standby-handoff.md"
+printf '# handoff\n- dispatched T1 to arch-x\n' > "$T/.herdr-swarm/research/looper-standby-handoff.md"
 out=$(bash "$S" down "$T" --yes 2>&1); rc=$?
-[[ "$rc" == 0 && "$out" == *"handoff file present"*"looper-t-x resumes"* ]] \
+[[ "$rc" == 0 && "$out" == *"handoff file present"*"looper-x resumes"* ]] \
   && ok 8 "clean handshake: handoff noted, resumption named" || bad 8 "rc=$rc out=$out"
 
 # [9] brief render invariants: every hard rule, zero unresolved placeholders

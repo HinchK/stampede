@@ -118,7 +118,7 @@ slug_source="${REPO:-}"
 if [[ -z "$slug_source" || "$slug_source" == "none" ]]; then
   slug_source=$(basename "$REPO_DIR")
 fi
-PROJECT_SLUG=$(slugify "$slug_source")
+PROJECT_SLUG=$(config_project_slug "$DEFAULT_CONFIG" "$slug_source")
 config_env=$(config_dump_env "$PROJECT_SLUG")
 eval "$config_env"
 
