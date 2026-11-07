@@ -2,7 +2,7 @@
 id: EHS
 title: "Stampede: an evolving harness swarm for long-horizon engineering"
 type: wayfinder:map
-status: open
+status: superseded
 assignee: null
 ---
 
@@ -13,6 +13,8 @@ assignee: null
 Reach a build-ready design for a simpler, provider-independent Stampede rooted in Herdr, with a short prompt-coach startup, recovery from startup failures, and bounded harness self-improvement.
 
 ## Notes
+
+- **Superseded on 2026-11-07** by the [swarm post-mortem](../../docs/audits/2026-11-07-swarm-postmortem.md). The EHS-10 Q1–Q7 grilling answers came from `looper`, not HinchK, and the directions dated 2026-11-06 below (self-improvement toggle, dedicated agent, Four-T closeout) were not requested by HinchK. All implementation built from this map was discarded and archived at tags `archive/2026-11-07/*` (`arch-1` = `d9a4bbd` holds all of it). The research reports under `docs/findings/2026-11-06-*` stay as research. Do not dispatch from this map. Its vocabulary moved to [vocabulary.md](vocabulary.md).
 
 - **Scope redirected by HinchK on 2026-11-06:** continue this existing map toward a simple implementation handoff. The comparative experiment is bypassed. Existing decisions remain useful except where this direction changes them; the proposed team and shared-worktree arrangement is on hold pending further direction.
 - Intended user: an experienced AI engineer using multiple frontier subscriptions for everyday development and continued learning. Simplicity, continuity, and evidence matter; maximizing active agents or generated code is not an objective.
