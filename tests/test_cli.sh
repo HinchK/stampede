@@ -105,6 +105,13 @@ out=$("$REPO_ROOT/bin/stampede" headless --help 2>&1); rc=$?
 [[ "$rc" != 0 ]] && ok "headless non-numeric max rejected" || bad "abc max rc=$rc"
 out=$("$REPO_ROOT/bin/stampede" help 2>&1)
 [[ "$out" == *"headless"* ]] && ok "help lists headless" || bad "help missing headless"
+# ARB-CLI-1: a slug/missing path before a real subcommand names the real problem
+out=$("$REPO_ROOT/bin/stampede" arbiter hinchk-stampede drain 2>&1); rc=$?
+[[ "$rc" == 2 && "$out" == *"repository directory not found: hinchk-stampede"* ]] \
+  && ok "arbiter <slug> drain: explicit repo-not-found error, rc 2" || bad "arbiter slug rc=$rc: $out"
+out=$("$REPO_ROOT/bin/stampede" arbiter bogus 2>&1); rc=$?
+[[ "$rc" == 2 && "$out" == *"expected init-ref"* ]] \
+  && ok "arbiter <unknown> keeps the generic subcommand error" || bad "arbiter bogus rc=$rc: $out"
 
 # [9] headless end-to-end: scratch repo, stub vendor, NO herdr on PATH
 HB_BIN=$(mktemp -d "$SCRATCH/hb-bin.XXXXXX")
