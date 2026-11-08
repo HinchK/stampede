@@ -12,6 +12,17 @@ stampede_cmd_arbiter() {
     repo="$1"
     shift
   fi
+  # ARB-CLI-1: "arbiter <slug> drain" (a name or missing path before a real
+  # subcommand) used to read the slug as the subcommand and blame "expected
+  # init-ref…". Name the actual mistake.
+  case "${1:-}" in
+    init-ref|drain|promote|enqueue|enqueue-and-drain|grant-session|revoke-session|pr-body) ;;
+    *) case "${2:-}" in
+    init-ref|drain|promote|enqueue|enqueue-and-drain|grant-session|revoke-session|pr-body)
+      printf 'arbiter: repository directory not found: %s (pass a directory path, or omit [repo] inside the repository)\n' "${1:-}" >&2
+      return 2 ;;
+    esac ;;
+  esac
   repo=$(cd "$repo" 2>/dev/null && pwd -P) || { printf 'arbiter: repo not found\n' >&2; return 1; }
   cmd="${1:-}"
   case "$cmd" in
@@ -28,7 +39,7 @@ stampede_cmd_arbiter() {
   source "$root/lib/config.sh"
   # shellcheck source=/dev/null
   source "$root/lib/profile.sh"
-  PROJECT_SLUG=$(config_project_slug "$(basename "$repo")" "$config")
+  PROJECT_SLUG=$(config_project_slug "$config" "$(basename "$repo")")
   if ! config_env=$(config_dump_env "$PROJECT_SLUG" "$config"); then
     printf 'arbiter: invalid project configuration\n' >&2
     return 1

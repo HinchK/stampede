@@ -66,6 +66,10 @@ out=$(review_verdict "$T" "$A1" PASS "$SD") && rc=0 || rc=$?
 [[ "$rc" == 0 ]] && ok "PASS rc 0" || bad "PASS rc=$rc"
 directive "$out" "PASS enqueues gated sha" "ENQUEUE $T $seat $A1"
 [[ "$(state_of)" == "review_passed" ]] && ok "state: review_passed" || bad "state: $(state_of)"
+# REV-DUP-1: a repeated PASS for the recorded (ticket, sha) is a quiet no-op
+out=$(review_verdict "$T" "$A1" PASS "$SD") && rc=0 || rc=$?
+[[ "$rc" == 0 && -z "$out" ]] && ok "duplicate PASS is a silent no-op (rc 0, no directive)" || bad "duplicate PASS rc=$rc out=$out"
+[[ "$(state_of)" == "review_passed" ]] && ok "duplicate PASS leaves state review_passed" || bad "state: $(state_of)"
 
 # ── 4. full cycle: BLOCK r1 -> critique -> refine -> re-verdict -> PASS ───
 out=$(review_loop_on_gate_green "$T" "$seat" "$A1" "$SD")
@@ -100,6 +104,8 @@ out=$(review_verdict "$T" "$A2" BLOCK "$SD") && rc=0 || rc=$?
 directive "$out" "ALERT_BLOCKED with budget" "ALERT_BLOCKED $T $A2 2 2"
 if printf '%s\n' "$out" | grep -q "ENQUEUE"; then bad "blocked review must NOT enqueue"; else ok "no enqueue on blocked"; fi
 [[ "$(state_of)" == "review_blocked" ]] && ok "state: review_blocked" || bad "state: $(state_of)"
+out=$(review_verdict "$T" "$A2" BLOCK "$SD") && rc=0 || rc=$?
+[[ "$rc" == 0 && -z "$out" ]] && ok "duplicate BLOCK on review_blocked is a silent no-op" || bad "duplicate BLOCK rc=$rc out=$out"
 
 # ── 6. corrupt / invalid verdicts fail closed ─────────────────────────────
 review_loop_on_gate_green "$T" "$seat" "$A1" "$SD" >/dev/null

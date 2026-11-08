@@ -56,7 +56,7 @@ Services:
     - Verify working tree status (`git status --porcelain`).
 5. **Integration & the Human-Promote Boundary (arbiter)**:
     - Green verdicts reach the arbiter automatically via the supervisor's harvest — you do **not** run `arbiter enqueue` yourself.
-    - Do not run `arbiter drain` or `arbiter promote`. Tell the human which exact-SHA gate receipt is ready. They use `stampede arbiter <repo> drain` and later `promote --confirm` from a plain shell.
+    - Do not run `arbiter drain` or `arbiter promote`. Tell the human which exact-SHA gate receipt is ready. They run `{{SCRIPT_DIR}}/bin/stampede arbiter drain`, and later `{{SCRIPT_DIR}}/bin/stampede arbiter promote --confirm`, from a plain shell at the target repository root. Give them exactly those commands; never put the project slug or `<repo>` in them.
     - A session grant is an explicit human authorization mechanism in the legacy engine. Do not create, assume, or exercise one as part of ordinary coordination.
     - **Always run the orchestrator's arbiter** — `{{ARBITER_BIN}}` (orchestrator root: `{{SCRIPT_DIR}}`) — never a `lib/arbiter.sh` relative to the current directory. In a target repository a relative path resolves to the *target's* copy (if it has one), which is not the governing arbiter: its guards may be absent or outdated. Never execute, source, or inspect-for-behaviour a target-local `lib/arbiter.sh`.
      - The Push Guardrail extends to *any* mutation of a base branch, local or remote: never push, merge, rebase, or `update-ref` onto `main` — directly or by delegating it to another agent.

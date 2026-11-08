@@ -957,7 +957,7 @@ worker_feedback() { printf '%s|%s|%s|%s\n' "$1" "$2" "$4" "$5" >> "$HB_OUT"; }
 : > "$HB_OUT"; : > "$STATE/handback-notified"
 cat > "$Q" <<'HBQ'
 {"ts":1,"ticket":"HB-1","seat":"arch-1","sha":"aaaaaaa1111111111111111111111111111111aa","status":"conflict","files":["lib/a.sh","lib/b.sh"]}
-{"ts":2,"ticket":"HB-2","seat":"arch-2","sha":"bbbbbbb2222222222222222222222222222222bb","status":"integration_red","gate":{"log":"/tmp/arb-HB-2.log"}}
+{"ts":2,"ticket":"HB-2","seat":"arch-2","sha":"bbbbbbb2222222222222222222222222222222bb","status":"integration_red","gate":{"log":"/tmp/arb-HB-2.log","failed_suite":"tests/test_hb.sh"}}
 {"ts":3,"ticket":"HB-3","seat":"arch-1","sha":"ccccccc3333333333333333333333333333333cc","status":"integrated"}
 HBQ
 arbiter_handback_feedback
@@ -974,6 +974,9 @@ grep -q '^arch-2|HB-2|integration_red|' "$HB_OUT" \
 grep -q '/tmp/arb-HB-2.log' "$HB_OUT" \
   && assert_ok 19d "RED message carries the gate log path" \
   || assert_bad 19d "RED message carries no gate log"
+grep -q 'failed suite: tests/test_hb.sh' "$HB_OUT" \
+  && assert_ok 19d2 "RED message names the failing suite (#168)" \
+  || assert_bad 19d2 "RED message omits the failing suite"
 expect 19e "$(grep -c 'HB-3' "$HB_OUT" || true)" 0 "integrated record is not handed back"
 
 # Idempotent: a 30s poll must not re-prompt the same hand-back forever.

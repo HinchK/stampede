@@ -105,6 +105,13 @@ out=$("$REPO_ROOT/bin/stampede" headless --help 2>&1); rc=$?
 [[ "$rc" != 0 ]] && ok "headless non-numeric max rejected" || bad "abc max rc=$rc"
 out=$("$REPO_ROOT/bin/stampede" help 2>&1)
 [[ "$out" == *"headless"* ]] && ok "help lists headless" || bad "help missing headless"
+# ARB-CLI-1: a slug/missing path before a real subcommand names the real problem
+out=$("$REPO_ROOT/bin/stampede" arbiter hinchk-stampede drain 2>&1); rc=$?
+[[ "$rc" == 2 && "$out" == *"repository directory not found: hinchk-stampede"* ]] \
+  && ok "arbiter <slug> drain: explicit repo-not-found error, rc 2" || bad "arbiter slug rc=$rc: $out"
+out=$("$REPO_ROOT/bin/stampede" arbiter bogus 2>&1); rc=$?
+[[ "$rc" == 2 && "$out" == *"expected init-ref"* ]] \
+  && ok "arbiter <unknown> keeps the generic subcommand error" || bad "arbiter bogus rc=$rc: $out"
 
 # [9] headless end-to-end: scratch repo, stub vendor, NO herdr on PATH
 HB_BIN=$(mktemp -d "$SCRATCH/hb-bin.XXXXXX")
@@ -112,6 +119,8 @@ cat > "$HB_BIN/opencode" <<'EOF'
 #!/bin/sh
 brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
 tid=$(sed -nE 's/^id:[[:space:]]*//p' "$brief" 2>/dev/null | head -n1 | tr -d '[:space:]')
+# a real worker leaves a commit of its own; two tickets must not share one sha (ARB-DUP-1)
+git -c user.email=t@t -c user.name=t commit -q --allow-empty -m "work ${tid:-unknown}" 2>/dev/null
 sha=$(git rev-parse HEAD 2>/dev/null || printf 0000000000000000000000000000000000000000)
 reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete response to ([^ ]+) and.*/\1/p')
 [ -n "$reply" ] && printf 'worker reply for %s\n' "${tid:-unknown}" > "$reply"
@@ -155,20 +164,14 @@ printf -- '---\nid: T-RESOLVED\nstatus: resolved\nowns: f.txt\n---\nbody\n' > "$
   # deliberately-failing batch) kills the whole suite before rc capture.
   # shellcheck disable=SC1091
   source "$REPO_ROOT/lib/common.sh"
-  # shellcheck disable=SC1091
-  source "$REPO_ROOT/lib/config.sh"
   set +e +o pipefail
-  # ADR 0019: the batch's slug is the orchestrator config's [swarm]
-  # name (these fixtures ship no swarm.config.toml), the profile REPO only
-  # when no name is set — derive it the same way, never re-implement it.
-  hb_slug() { config_project_slug "$1" "$REPO_ROOT/swarm.config.toml"; }
   # ARB-SLUG-1 (arrived via integration): drain refuses when the canonical
   # integration ref is missing — one-time explicit init, exactly the setup a
-  # real repo gets, with the slug the batch itself will resolve (ADR 0019;
-  # REPO "t/scratch" → slugify).
-  PROJECT_SLUG="$(hb_slug t/scratch)" REPO_DIR="$HR_REPO" STATE_DIR="$HR_REPO/.herdr-swarm" \
+  # real repo gets, with the slug the batch itself will resolve (profile
+  # [swarm] name "stampede", ADR 0019 — not the profile REPO).
+  PROJECT_SLUG="stampede" REPO_DIR="$HR_REPO" STATE_DIR="$HR_REPO/.herdr-swarm" \
     BASE_BRANCH=main PATH="$HB_PATH" bash "$REPO_ROOT/lib/arbiter.sh" init-ref >/dev/null 2>&1 || true
-  git -C "$HR_REPO" show-ref --verify --quiet "refs/heads/swarm/$(hb_slug t/scratch)/integration" \
+  git -C "$HR_REPO" show-ref --verify --quiet "refs/heads/swarm/stampede/integration" \
     && ok "integration ref initialized (ARB-SLUG-1 one-time setup)" || bad "init-ref failed"
 
 if [[ -e "$HB_BIN/timeout" ]]; then
@@ -293,12 +296,14 @@ if [[ -e "$HB_BIN/timeout" ]]; then
   git -C "$HR4" add -A; git -C "$HR4" commit -qm tickets
   # ARB-SLUG-1: same one-time init as [9], slug matching the batch's resolve
   # (profile REPO "t/scratch4")
-  PROJECT_SLUG="$(hb_slug t/scratch4)" REPO_DIR="$HR4" STATE_DIR="$HR4/.herdr-swarm" \
+  PROJECT_SLUG="stampede" REPO_DIR="$HR4" STATE_DIR="$HR4/.herdr-swarm" \
     BASE_BRANCH=main PATH="$HB_PATH" bash "$REPO_ROOT/lib/arbiter.sh" init-ref >/dev/null 2>&1 || true
   cat > "$HB_BIN/opencode" <<'EOF'
 #!/bin/sh
 brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
 tid=$(sed -nE 's/^id:[[:space:]]*//p' "$brief" 2>/dev/null | head -n1 | tr -d '[:space:]')
+# a real worker leaves a commit of its own; two tickets must not share one sha (ARB-DUP-1)
+git -c user.email=t@t -c user.name=t commit -q --allow-empty -m "work ${tid:-unknown}" 2>/dev/null
 sha=$(git rev-parse HEAD 2>/dev/null || printf 0000000000000000000000000000000000000000)
 reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete response to ([^ ]+) and.*/\1/p')
 [ -n "$reply" ] && printf 'worker reply for %s\n' "${tid:-unknown}" > "$reply"
@@ -374,34 +379,35 @@ if [[ -e "$HB_BIN/timeout" ]]; then
   # a live interactive swarm's ledger: a seated arch-1 with a real pane,
   # worktree, and branch — exactly what `herdr-loop-swarm.sh up` writes
   mkdir -p "$HR6/.herdr-swarm"
-  S6=$(hb_slug t/scratch6)
-  jq -cn '{version: 2, seats: [{name: "arch-1-'"$S6"'", kind: "opencode", pane: "wX:p9",
-    worktree_dir: "/tmp/interactive-arch-1-wt", branch: "swarm/'"$S6"'/arch-1", isolated: true}]}' \
+  jq -cn '{version: 2, seats: [{name: "arch-1-stampede", kind: "opencode", pane: "wX:p9",
+    worktree_dir: "/tmp/interactive-arch-1-wt", branch: "swarm/stampede/arch-1", isolated: true}]}' \
     > "$HR6/.herdr-swarm/seats.json"
-  LIVE_BEFORE=$(jq -c '.seats[] | select(.name == "arch-1-'"$S6"'")' "$HR6/.herdr-swarm/seats.json")
+  LIVE_BEFORE=$(jq -c '.seats[] | select(.name == "arch-1-stampede")' "$HR6/.herdr-swarm/seats.json")
   cat > "$HB_BIN/opencode" <<'EOF'
 #!/bin/sh
 brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
 tid=$(sed -nE 's/^id:[[:space:]]*//p' "$brief" 2>/dev/null | head -n1 | tr -d '[:space:]')
+# a real worker leaves a commit of its own; two tickets must not share one sha (ARB-DUP-1)
+git -c user.email=t@t -c user.name=t commit -q --allow-empty -m "work ${tid:-unknown}" 2>/dev/null
 sha=$(git rev-parse HEAD 2>/dev/null || printf 0000000000000000000000000000000000000000)
 reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete response to ([^ ]+) and.*/\1/p')
 [ -n "$reply" ] && printf 'worker reply for %s\n' "${tid:-unknown}" > "$reply"
 printf 'ARCH DONE #%s %s\n' "${tid:-unknown}" "$sha"
 EOF
   chmod +x "$HB_BIN/opencode"
-  PROJECT_SLUG="$(hb_slug t/scratch6)" REPO_DIR="$HR6" STATE_DIR="$HR6/.herdr-swarm" \
+  PROJECT_SLUG="stampede" REPO_DIR="$HR6" STATE_DIR="$HR6/.herdr-swarm" \
     BASE_BRANCH=main PATH="$HB_PATH" bash "$REPO_ROOT/lib/arbiter.sh" init-ref >/dev/null 2>&1 || true
   PATH="$HB_PATH" "$REPO_ROOT/bin/stampede" headless "$HR6" --max-tickets 1 --timeout 60 >"$SCRATCH/hl-ledger.out" 2>&1; rc=$?
   [[ "$rc" == 0 ]] \
     && ok "batch green alongside a live interactive swarm" || bad "ledger batch rc=$rc: $(tail -3 "$SCRATCH/hl-ledger.out")"
-  LIVE_AFTER=$(jq -c '.seats[] | select(.name == "arch-1-'"$S6"'")' "$HR6/.herdr-swarm/seats.json")
+  LIVE_AFTER=$(jq -c '.seats[] | select(.name == "arch-1-stampede")' "$HR6/.herdr-swarm/seats.json")
   [[ "$LIVE_BEFORE" == "$LIVE_AFTER" && -n "$LIVE_AFTER" ]] \
     && ok "interactive seat record byte-identical after the batch" \
     || bad "interactive seat mutated: $LIVE_BEFORE -> $LIVE_AFTER"
-  jq -e '.seats[] | select(.name == "arch-1-'"$S6"'") | .pane == "wX:p9" and .worktree_dir == "/tmp/interactive-arch-1-wt" and .branch == "swarm/'"$S6"'/arch-1"' \
+  jq -e '.seats[] | select(.name == "arch-1-stampede") | .pane == "wX:p9" and .worktree_dir == "/tmp/interactive-arch-1-wt" and .branch == "swarm/stampede/arch-1"' \
     "$HR6/.herdr-swarm/seats.json" >/dev/null 2>&1 \
     && ok "interactive pane/worktree/branch all intact" || bad "interactive fields overwritten"
-  jq -e '.seats[] | select(.name == "headless-arch-1-'"$S6"'") | .isolated == true' \
+  jq -e '.seats[] | select(.name == "headless-arch-1-stampede") | .isolated == true' \
     "$HR6/.herdr-swarm/seats.json" >/dev/null 2>&1 \
     && ok "namespaced headless-<seat> ledger entry created" || bad "no headless-arch-1 entry: $(cat "$HR6/.herdr-swarm/seats.json")"
   jq -e -s 'any(.[]; (.ticket|tostring) == "T-L1" and .suite == "green")' \
@@ -424,7 +430,7 @@ if [[ -e "$HB_BIN/timeout" ]]; then
   printf 'x\n' > "$HR7/f.txt"; git -C "$HR7" add -A; git -C "$HR7" commit -qm base
   printf -- '---\nid: T-G1\nstatus: backlog\n---\nbody\n' > "$HR7/maps/tickets/tg.md"
   git -C "$HR7" add -A; git -C "$HR7" commit -qm tickets
-  PROJECT_SLUG="$(hb_slug t/scratch7)" REPO_DIR="$HR7" STATE_DIR="$HR7/.herdr-swarm" \
+  PROJECT_SLUG="stampede" REPO_DIR="$HR7" STATE_DIR="$HR7/.herdr-swarm" \
     BASE_BRANCH=main PATH="$HB_PATH" bash "$REPO_ROOT/lib/arbiter.sh" init-ref >/dev/null 2>&1 || true
   # long-lived repo: a stable session id + a PRIOR run's dead letter under
   # that same session — exactly what session-only counting mis-attributed
@@ -436,6 +442,8 @@ if [[ -e "$HB_BIN/timeout" ]]; then
 #!/bin/sh
 brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
 tid=$(sed -nE 's/^id:[[:space:]]*//p' "$brief" 2>/dev/null | head -n1 | tr -d '[:space:]')
+# a real worker leaves a commit of its own; two tickets must not share one sha (ARB-DUP-1)
+git -c user.email=t@t -c user.name=t commit -q --allow-empty -m "work ${tid:-unknown}" 2>/dev/null
 sha=$(git rev-parse HEAD 2>/dev/null || printf 0000000000000000000000000000000000000000)
 reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete response to ([^ ]+) and.*/\1/p')
 [ -n "$reply" ] && printf 'worker reply for %s\n' "${tid:-unknown}" > "$reply"
