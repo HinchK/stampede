@@ -34,6 +34,9 @@ pre-1.0: the public surface is not frozen.
     `|| true` at the six kickoff/notice/feedback sites.
 
 ### Fixed
+- `test_async_gate.sh` [1e] polls for the slow seat's verdict (15s bound)
+  instead of a fixed 4s window, which flaked [1e]/[1f]/[6] on a stalled
+  host; `expect()` failure text no longer swaps wanted and got.
 - One project slug (#166, ADR 0019): the launcher, supervisor, standby,
   verify roster, `stampede arbiter` and `stampede autopilot` all take the
   slug from `[swarm] name` via `config_project_slug`, falling back to the
