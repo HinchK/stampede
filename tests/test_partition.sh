@@ -227,6 +227,19 @@ fi
 partition_check "$CAND2" "$REPO" >/dev/null 2>&1
 ok 15b "drift does not block later dispatch (exit path exercised)"
 
+# ── case dep: blocked_by / depends_on hold a ticket until its blockers resolve ──
+mkdir -p "$REPO/maps/tickets"
+printf -- '---\nid: DEP-DONE\nstatus: resolved\n---\n' > "$REPO/maps/tickets/dep-done.md"
+printf -- '---\nid: DEP-OPEN\nstatus: in_progress\n---\n' > "$REPO/maps/tickets/dep-open.md"
+dep_case() { printf -- '---\nid: %s\nstatus: backlog\n%s\n---\n' "$1" "$2" > "$REPO/maps/tickets/$1.md"; }
+dep_case D1 'blocked_by: [DEP-DONE]';            dep_case D2 'blocked_by: DEP-DONE,DEP-OPEN'
+dep_case D3 'depends_on: [DEP-DONE, DEP-GONE]';  dep_case D4 'owns: lib/x.c'
+ticket_blockers_open "$REPO/maps/tickets/D1.md" "$REPO" >/dev/null && bad dep-a "resolved blocker still blocks" || ok dep-a "resolved blocker releases the ticket"
+[[ "$(ticket_blockers_open "$REPO/maps/tickets/D2.md" "$REPO")" == DEP-OPEN ]] && ok dep-b "comma list names only the open blocker" || bad dep-b "open blocker in a comma list"
+[[ "$(ticket_blockers_open "$REPO/maps/tickets/D3.md" "$REPO")" == DEP-GONE ]] && ok dep-c "a blocker with no ticket file blocks (fail closed)" || bad dep-c "missing blocker"
+ticket_blockers_open "$REPO/maps/tickets/D4.md" "$REPO" >/dev/null && bad dep-d "no deps still blocks" || ok dep-d "a ticket with no deps is ready"
+rm -f "$REPO"/maps/tickets/dep-*.md "$REPO"/maps/tickets/D[1-4].md
+
 # ── suggest ────────────────────────────────────────────────────────────────
 SUG=$(partition_suggest main drift-br "$REPO")
 if printf '%s' "$SUG" | grep -q 'lib/declared.c' && printf '%s' "$SUG" | grep -q 'lib/undeclared.c'; then
