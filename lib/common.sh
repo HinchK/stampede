@@ -114,14 +114,20 @@ _timeout_runnable() { # CANDIDATE
 # gate_exec DIR TMPDIR SECONDS CMD — run a suite gate hermetically (ARB-HERM-1).
 # A suite must not see the pane that launched it: ambient REPO_DIR/STATE_DIR/
 # HERDR_* made suites resolve the real ledger and filter their demo agents out
-# (five false REDs on 2026-11-07). Scrub in a subshell, then bound with
+# (five false REDs on 2026-11-07); the slug/config vars point them at the live
+# swarm the same way (#164). Scrub in a subshell, then bound with
 # TIMEOUT_BIN (callers resolve_timeout first). Exit 127 when DIR is missing.
+# env -u, not unset: `STATE_DIR=x fn` makes a temporary binding, and unset
+# inside fn only peels it — the outer exported STATE_DIR would leak through.
 gate_exec() {
-  local dir="$1" tmp="$2" secs="$3" cmd="$4" v
+  local dir="$1" tmp="$2" secs="$3" cmd="$4" v args=()
+  for v in REPO_DIR STATE_DIR PROJECT_SLUG SWARM_CONFIG_NAME \
+           $(compgen -e | grep -E '^(HERDR_|STAMPEDE_CONFIG)' || true); do
+    args+=(-u "$v")
+  done
   (
     cd "$dir" || exit 127
-    for v in $(compgen -e | grep -E '^(REPO_DIR|STATE_DIR|HERDR_.*)$' || true); do unset "$v"; done
-    TMPDIR="$tmp" exec "$TIMEOUT_BIN" "$secs" sh -c "$cmd"
+    TMPDIR="$tmp" exec env "${args[@]}" "$TIMEOUT_BIN" "$secs" sh -c "$cmd"
   )
 }
 

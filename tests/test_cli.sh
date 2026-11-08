@@ -157,21 +157,27 @@ printf -- '---\nid: T-RESOLVED\nstatus: resolved\nowns: f.txt\n---\nbody\n' > "$
   printf -- '---\nid: T-2\nstatus: backlog\n---\nbody two\n' > "$HR_REPO/maps/tickets/t2.md"
   git -C "$HR_REPO" add -A; git -C "$HR_REPO" commit -qm tickets
   # slugify for the ARB-SLUG-1 init-ref below (the ref must be created under
-  # the same slug the batch itself resolves from the profile REPO).
+  # the same slug the batch itself resolves — ADR 0019).
   # set +e/+o pipefail: lib/common.sh runs `set -euo pipefail` at its top —
   # without the restore, the leak flips this suite (written for set -u only)
   # into fail-abort mode, and any later non-zero command (e.g. [10]'s
   # deliberately-failing batch) kills the whole suite before rc capture.
   # shellcheck disable=SC1091
   source "$REPO_ROOT/lib/common.sh"
+  # shellcheck disable=SC1091
+  source "$REPO_ROOT/lib/config.sh"
   set +e +o pipefail
+  # ADR 0019: the batch's slug is the orchestrator config's [swarm]
+  # name (these fixtures ship no swarm.config.toml), the profile REPO only
+  # when no name is set — derive it the same way, never re-implement it.
+  hb_slug() { config_project_slug "$REPO_ROOT/swarm.config.toml" "$1"; }
   # ARB-SLUG-1 (arrived via integration): drain refuses when the canonical
   # integration ref is missing — one-time explicit init, exactly the setup a
-  # real repo gets, with the slug the batch itself will resolve (profile
-  # [swarm] name "stampede", ADR 0019 — not the profile REPO).
-  PROJECT_SLUG="stampede" REPO_DIR="$HR_REPO" STATE_DIR="$HR_REPO/.herdr-swarm" \
+  # real repo gets, with the slug the batch itself will resolve (ADR 0019;
+  # REPO "t/scratch" → slugify).
+  PROJECT_SLUG="$(hb_slug t/scratch)" REPO_DIR="$HR_REPO" STATE_DIR="$HR_REPO/.herdr-swarm" \
     BASE_BRANCH=main PATH="$HB_PATH" bash "$REPO_ROOT/lib/arbiter.sh" init-ref >/dev/null 2>&1 || true
-  git -C "$HR_REPO" show-ref --verify --quiet "refs/heads/swarm/stampede/integration" \
+  git -C "$HR_REPO" show-ref --verify --quiet "refs/heads/swarm/$(hb_slug t/scratch)/integration" \
     && ok "integration ref initialized (ARB-SLUG-1 one-time setup)" || bad "init-ref failed"
 
 if [[ -e "$HB_BIN/timeout" ]]; then
@@ -235,7 +241,9 @@ if [[ -e "$HB_BIN/timeout" ]]; then
   git -C "$HR3" config user.email t@t; git -C "$HR3" config user.name t
   git -C "$HR3" remote add origin https://github.com/t/scratch3.git
   printf '.herdr-swarm/\n' > "$HR3/.gitignore"
-  printf 'test:\n\t@exit 1\n' > "$HR3/Makefile"          # the gate is RED, always
+  # RED for the worker, green only in the supervisor's base-check checkout:
+  # the failure is the worker's, so the re-verdict ceiling is what ends it.
+  printf 'test:\n\t@case "$$PWD" in */base-gates/*) exit 0;; *) exit 1;; esac\n' > "$HR3/Makefile"
   mkdir -p "$HR3/maps/tickets"
   printf 'x\n' > "$HR3/f.txt"; git -C "$HR3" add -A; git -C "$HR3" commit -qm base
   printf -- '---\nid: T-RED\nstatus: backlog\n---\nbody\n' > "$HR3/maps/tickets/tred.md"
@@ -294,7 +302,7 @@ if [[ -e "$HB_BIN/timeout" ]]; then
   git -C "$HR4" add -A; git -C "$HR4" commit -qm tickets
   # ARB-SLUG-1: same one-time init as [9], slug matching the batch's resolve
   # (profile REPO "t/scratch4")
-  PROJECT_SLUG="stampede" REPO_DIR="$HR4" STATE_DIR="$HR4/.herdr-swarm" \
+  PROJECT_SLUG="$(hb_slug t/scratch4)" REPO_DIR="$HR4" STATE_DIR="$HR4/.herdr-swarm" \
     BASE_BRANCH=main PATH="$HB_PATH" bash "$REPO_ROOT/lib/arbiter.sh" init-ref >/dev/null 2>&1 || true
   cat > "$HB_BIN/opencode" <<'EOF'
 #!/bin/sh
@@ -377,10 +385,11 @@ if [[ -e "$HB_BIN/timeout" ]]; then
   # a live interactive swarm's ledger: a seated arch-1 with a real pane,
   # worktree, and branch — exactly what `herdr-loop-swarm.sh up` writes
   mkdir -p "$HR6/.herdr-swarm"
-  jq -cn '{version: 2, seats: [{name: "arch-1-stampede", kind: "opencode", pane: "wX:p9",
-    worktree_dir: "/tmp/interactive-arch-1-wt", branch: "swarm/stampede/arch-1", isolated: true}]}' \
+  S6=$(hb_slug t/scratch6)
+  jq -cn '{version: 2, seats: [{name: "arch-1-'"$S6"'", kind: "opencode", pane: "wX:p9",
+    worktree_dir: "/tmp/interactive-arch-1-wt", branch: "swarm/'"$S6"'/arch-1", isolated: true}]}' \
     > "$HR6/.herdr-swarm/seats.json"
-  LIVE_BEFORE=$(jq -c '.seats[] | select(.name == "arch-1-stampede")' "$HR6/.herdr-swarm/seats.json")
+  LIVE_BEFORE=$(jq -c '.seats[] | select(.name == "arch-1-'"$S6"'")' "$HR6/.herdr-swarm/seats.json")
   cat > "$HB_BIN/opencode" <<'EOF'
 #!/bin/sh
 brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
@@ -393,19 +402,19 @@ reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete res
 printf 'ARCH DONE #%s %s\n' "${tid:-unknown}" "$sha"
 EOF
   chmod +x "$HB_BIN/opencode"
-  PROJECT_SLUG="stampede" REPO_DIR="$HR6" STATE_DIR="$HR6/.herdr-swarm" \
+  PROJECT_SLUG="$(hb_slug t/scratch6)" REPO_DIR="$HR6" STATE_DIR="$HR6/.herdr-swarm" \
     BASE_BRANCH=main PATH="$HB_PATH" bash "$REPO_ROOT/lib/arbiter.sh" init-ref >/dev/null 2>&1 || true
   PATH="$HB_PATH" "$REPO_ROOT/bin/stampede" headless "$HR6" --max-tickets 1 --timeout 60 >"$SCRATCH/hl-ledger.out" 2>&1; rc=$?
   [[ "$rc" == 0 ]] \
     && ok "batch green alongside a live interactive swarm" || bad "ledger batch rc=$rc: $(tail -3 "$SCRATCH/hl-ledger.out")"
-  LIVE_AFTER=$(jq -c '.seats[] | select(.name == "arch-1-stampede")' "$HR6/.herdr-swarm/seats.json")
+  LIVE_AFTER=$(jq -c '.seats[] | select(.name == "arch-1-'"$S6"'")' "$HR6/.herdr-swarm/seats.json")
   [[ "$LIVE_BEFORE" == "$LIVE_AFTER" && -n "$LIVE_AFTER" ]] \
     && ok "interactive seat record byte-identical after the batch" \
     || bad "interactive seat mutated: $LIVE_BEFORE -> $LIVE_AFTER"
-  jq -e '.seats[] | select(.name == "arch-1-stampede") | .pane == "wX:p9" and .worktree_dir == "/tmp/interactive-arch-1-wt" and .branch == "swarm/stampede/arch-1"' \
+  jq -e '.seats[] | select(.name == "arch-1-'"$S6"'") | .pane == "wX:p9" and .worktree_dir == "/tmp/interactive-arch-1-wt" and .branch == "swarm/'"$S6"'/arch-1"' \
     "$HR6/.herdr-swarm/seats.json" >/dev/null 2>&1 \
     && ok "interactive pane/worktree/branch all intact" || bad "interactive fields overwritten"
-  jq -e '.seats[] | select(.name == "headless-arch-1-stampede") | .isolated == true' \
+  jq -e '.seats[] | select(.name == "headless-arch-1-'"$S6"'") | .isolated == true' \
     "$HR6/.herdr-swarm/seats.json" >/dev/null 2>&1 \
     && ok "namespaced headless-<seat> ledger entry created" || bad "no headless-arch-1 entry: $(cat "$HR6/.herdr-swarm/seats.json")"
   jq -e -s 'any(.[]; (.ticket|tostring) == "T-L1" and .suite == "green")' \
@@ -428,7 +437,7 @@ if [[ -e "$HB_BIN/timeout" ]]; then
   printf 'x\n' > "$HR7/f.txt"; git -C "$HR7" add -A; git -C "$HR7" commit -qm base
   printf -- '---\nid: T-G1\nstatus: backlog\n---\nbody\n' > "$HR7/maps/tickets/tg.md"
   git -C "$HR7" add -A; git -C "$HR7" commit -qm tickets
-  PROJECT_SLUG="stampede" REPO_DIR="$HR7" STATE_DIR="$HR7/.herdr-swarm" \
+  PROJECT_SLUG="$(hb_slug t/scratch7)" REPO_DIR="$HR7" STATE_DIR="$HR7/.herdr-swarm" \
     BASE_BRANCH=main PATH="$HB_PATH" bash "$REPO_ROOT/lib/arbiter.sh" init-ref >/dev/null 2>&1 || true
   # long-lived repo: a stable session id + a PRIOR run's dead letter under
   # that same session — exactly what session-only counting mis-attributed

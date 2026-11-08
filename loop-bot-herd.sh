@@ -354,8 +354,46 @@ gate_job_running() { # TICKET SHA
 # Non-blocking reap: for every finished job, post-check drift → verdict
 # record → telemetry → (green && isolated) arbiter_enqueue → cleanup.
 # Both execution modes continue through exactly the same review policy.
+_gate_base() { # SHA → where the worker branched: the integration line, else the base checkout
+  git -C "$REPO_DIR" merge-base "$1" "refs/heads/swarm/${PROJECT_SLUG}/integration" 2>/dev/null \
+    || git -C "$REPO_DIR" merge-base "$1" HEAD 2>/dev/null
+}
+
+# A RED the base also fails is not the worker's to fix; once per base sha.
+_base_is_red() { # SHA → 0 when the merge-base fails the suite too
+  local base rcf wt rc=0
+  base=$(_gate_base "$1") || return 1
+  [[ "$base" != "$(git -C "$REPO_DIR" rev-parse "$1" 2>/dev/null)" ]] || return 1
+  rcf="${STATE_DIR}/base-gates/${base}.rc"
+  if [[ ! -f "$rcf" ]]; then
+    resolve_timeout || return 1
+    wt="${STATE_DIR}/base-gates/wt-${base:0:12}"
+    mkdir -p "${STATE_DIR}/base-gates" "${STATE_DIR}/gate-tmp/base" "${STATE_DIR}/gate-logs"
+    git -C "$REPO_DIR" worktree add -q --detach "$wt" "$base" >/dev/null 2>&1 || return 1
+    gate_exec "$wt" "${STATE_DIR}/gate-tmp/base" "$SUITE_TIMEOUT_S" "$TEST_CMD" \
+      >"${STATE_DIR}/gate-logs/base-${base:0:12}.log" 2>&1 || rc=$?
+    git -C "$REPO_DIR" worktree remove "$wt" >/dev/null 2>&1 || warn "base gate worktree $wt left in place (not clean)"
+    printf '%s' "$rc" > "$rcf"
+  fi
+  # 126/127: the base cannot run the suite at all, which attributes nothing.
+  case "$(cat "$rcf")" in 0|126|127) return 1 ;; esac
+}
+
+_base_red_escalate() { # TICKET SHA → 0 when headless dead-lettered it (no human is watching a batch)
+  bad "#$1 @ $2 RED, and its base RED too — worker NOT asked to repair; fix the base (log: ${STATE_DIR}/gate-logs/base-*.log)"
+  _sup_notify "base RED" "#$1: the base also fails the suite; worker repair loop skipped"
+  _headless_active || return 1
+  _headless_deadletter "$1" "$2" "suite RED and its base fails too — fix the base"
+  return 0
+}
+
 _gate_green_continue() { # TICKET SEAT SHA ISOLATED
-  local ticket="$1" seat="$2" sha="$3" isolated="$4" rdirs rrc=0
+  local ticket="$1" seat="$2" sha="$3" isolated="$4" rdirs rrc=0 tf owns base
+  if tf=$(_partition_ticket_file "$ticket" "$REPO_DIR" 2>/dev/null) \
+     && owns=$(sed -nE 's/^owns:[[:space:]]*//p' "$tf" | head -n1) && [[ -n "$owns" ]] \
+     && base=$(_gate_base "$sha"); then
+    partition_drift_check "$ticket" "$owns" "$base" "$sha" "$REPO_DIR" || true
+  fi
   [[ "$isolated" == true ]] || return 0
   rdirs=$(review_loop_on_gate_green "$ticket" "$seat" "$sha" "$STATE_DIR" 2>/dev/null) || rrc=$?
   if (( rrc != 0 )); then
@@ -403,6 +441,8 @@ gate_reap() {
     elif [[ "$rc_val" == "0" ]]; then
       suite_ok="green"; ok "gate job ${jid}: GREEN (log: $gate_log)"
       _gate_green_continue "$ticket" "$seat" "$sha" "$iso"
+    elif _base_is_red "$sha"; then
+      suite_ok="base_red"; _base_red_escalate "$ticket" "$sha" && suite_ok="dead_letter"
     else
       suite_ok="RED"; bad "gate job ${jid}: RED (rc=${rc_val}) — NOT filed; worker must fix (log: $gate_log)"
       if _headless_ceiling_breached "$ticket" 1; then
@@ -761,7 +801,7 @@ looper_notice() { # MESSAGE — pane: herdr prompt · headless: durable log
     printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >> "$STATE_DIR/worklog.log"
     return 0
   fi
-  herdr agent prompt "${SEAT_NAME_looper:-looper}" "$1" >/dev/null 2>&1 || true
+  herdr agent prompt "${SEAT_NAME_looper:-looper}" "$1" >/dev/null 2>&1 || warn "herdr agent prompt to ${SEAT_NAME_looper:-looper} failed (rc=$?) — message NOT delivered"
 }
 
 attention_event() { # KIND TICKET EVIDENCE [SEAT]
@@ -800,7 +840,7 @@ worker_feedback() { # SEAT TICKET SHA TAG MESSAGE
         invalidated|stale|blocked) attention_event blocked "$ticket" "$msg" "$seat" || true; return 0 ;;
       esac
     fi
-    herdr agent prompt "$seat" "$msg" >/dev/null 2>&1 || true
+    herdr agent prompt "$seat" "$msg" >/dev/null 2>&1 || warn "herdr agent prompt to $seat failed (rc=$?) — message NOT delivered"
     return 0
   fi
   local wt kind brief
@@ -991,6 +1031,9 @@ harvest_verdicts() {
         elif [[ "$gate_rc" -eq 0 ]]; then
           suite_ok="green"; ok "suite gate GREEN for #$ticket @ ${sha} (log: $gate_log)"
           _gate_green_continue "$ticket" "$seat" "$sha" "$GATE_ISOLATED"
+          echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence "$gate_log")}" >> "$SESSION_LOG"
+        elif _base_is_red "$sha"; then
+          suite_ok="base_red"; _base_red_escalate "$ticket" "$sha" && suite_ok="dead_letter"
           echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence "$gate_log")}" >> "$SESSION_LOG"
         else
           suite_ok="RED"; bad "suite gate RED for #$ticket @ ${sha} — NOT filed; arch must fix before done (log: $gate_log)"
@@ -1184,6 +1227,11 @@ dispatch_partition_guard() {
   fi
   tname=$(sed -nE 's/^id:[[:space:]]*(.+)$/\1/p' "$tf" | head -n1 | tr -d '"')
   [[ -n "$tname" ]] || tname=$(basename "$tf" .md)
+  local blockers
+  if blockers=$(ticket_blockers_open "$tf" "$REPO_DIR"); then
+    bad "dispatch BLOCKED (dependencies): #$tname waits on unresolved $(tr '\n' ' ' <<<"$blockers")— nothing was sent"
+    return 1
+  fi
   partition_check "$tf" "$REPO_DIR" || prc=$?
   if [[ "$prc" == 1 ]]; then
     bad "dispatch BLOCKED (partition): #$tname overlaps active work — nothing was sent; live leases:"
@@ -1237,8 +1285,8 @@ dispatch_sync_worker() { # WORKER
   wt=$(_headless_seat_field "$worker" worktree_dir)
   [[ -n "$wt" && -d "$wt" ]] || return 0
   [[ "$(cd "$wt" && pwd -P)" != "$(cd "$REPO_DIR" && pwd -P)" ]] || return 0
-  # ARB-SLUG-1: the same slug expression the arbiter drain uses.
-  ref="refs/heads/swarm/${SWARM_CONFIG_NAME:-$PROJECT_SLUG}/integration"
+  # ADR 0019: the one project slug the arbiter drain uses too.
+  ref="refs/heads/swarm/${PROJECT_SLUG}/integration"
   git -C "$wt" rev-parse -q --verify "$ref" >/dev/null || return 0
   git -C "$wt" merge-base --is-ancestor "$ref" HEAD && return 0
   if ! git -C "$wt" merge --ff-only -q "$ref" >/dev/null 2>&1; then
@@ -1336,10 +1384,9 @@ arbiter_auto_drain() {
   # Explicit env: a separate process does not inherit the supervisor's
   # unexported shell bindings, and the arbiter must come from the
   # orchestrator (SCRIPT_DIR), never the target tree (DOG-13).
-  # ARB-SLUG-1: the drain's slug is the config [swarm] name — the canonical
-  # integration-ref slug — NOT this process's seat-namespacing slug (the
-  # profile-REPO slug), whose mismatch is what forked a phantom ref.
-  REPO_DIR="$REPO_DIR" STATE_DIR="$STATE_DIR" PROJECT_SLUG="${SWARM_CONFIG_NAME:-$PROJECT_SLUG}" \
+  # ADR 0019: one project slug ([swarm] name) names seats and the
+  # integration ref alike, so the drain cannot fork a second line (#166).
+  REPO_DIR="$REPO_DIR" STATE_DIR="$STATE_DIR" PROJECT_SLUG="$PROJECT_SLUG" \
   BASE_BRANCH="${BASE_BRANCH:-}" TEST_CMD="$TEST_CMD" SUITE_TIMEOUT_S="$SUITE_TIMEOUT_S" \
   bash "$SCRIPT_DIR/lib/arbiter.sh" drain \
     >> "${STATE_DIR}/gate-logs/arbiter-drain.log" 2>&1 &

@@ -321,6 +321,8 @@ check "9c" "no [swarm] name falls back to the slugified source" \
   '[[ $(config_project_slug "$C9N" hinchk/stampede) == $(slugify hinchk/stampede) ]]'
 check "9d" "missing config file falls back to the source" \
   '[[ $(config_project_slug "$TEST_DIR/nope.toml" t/scratch) == "t-scratch" ]]'
+check "9e" "seat names carry the [swarm] name slug, not the repo slug (#166)" \
+  'printf "[swarm]\nname = \"stampede\"\n[seats.arch_1]\nname = \"arch-1\"\ndefault_kind = \"agy\"\n" > "$TEST_DIR/s9.toml"; config_dump_env "$(config_project_slug "$TEST_DIR/s9.toml" hinchk/stampede)" "$TEST_DIR/s9.toml" | grep -q "SEAT_NAME_arch_1=arch-1-stampede"'
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))

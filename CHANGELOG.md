@@ -19,7 +19,38 @@ pre-1.0: the public surface is not frozen.
   stay enforced; `off` restores the previous attention mode. `promote` is
   now a silent no-op when the base branch is already at the integration tip.
 
+- Four borrows from the 2026-11-07 prior-art survey:
+  - A GREEN gate records files outside the ticket's `owns:` line in
+    `owns-violations.jsonl` (the existing `partition_drift_check`, now
+    called). Never blocking.
+  - A RED gate first runs the suite once at the worker's merge-base; when
+    the base fails too the verdict is `base_red`, the human is notified,
+    and the worker is not sent into a repair loop (a headless batch
+    dead-letters it with that reason). A base that cannot run the suite at
+    all (exit 126/127) attributes nothing and stays an ordinary RED.
+  - A ticket whose `blocked_by:` / `depends_on:` names an unresolved (or
+    unknown) ticket is not dispatched, interactively or headless.
+  - A failed `herdr agent prompt` warns instead of vanishing behind
+    `|| true` at the six kickoff/notice/feedback sites.
+
 ### Fixed
+- One project slug (#166, ADR 0019): the launcher, supervisor, standby,
+  verify roster, `stampede arbiter` and `stampede autopilot` all take the
+  slug from `[swarm] name` via `config_project_slug`, falling back to the
+  profile `REPO` or directory name only when no name is set. Agent names,
+  seat branches and the integration ref can no longer split across
+  `swarm/<repo-slug>/…` and `swarm/<name>/…`.
+- Gate suites run hermetically (#164): the arbiter's integration gate and
+  the supervisor's sync, async and base gates run `TEST_CMD` through
+  `gate_exec`, which strips `REPO_DIR`, `STATE_DIR`, the slug,
+  `STAMPEDE_CONFIG*` and `HERDR_*` with `env -u` (an `unset` inside a
+  function only peels a `VAR=x fn` prefix binding) so a suite cannot read
+  the live swarm's state instead of its fixtures. `test_frontier_launch.sh` matches arbiter invocations, not the
+  substring "arbiter" in the gate's own checkout path.
+- `arbiter drain` no longer halts on the first conflict or
+  `integration_red` (#172): independent work queued behind it integrates
+  in the same drain. A record left `queued` (gate harness unavailable) or
+  `superseded` (the queue changed under the gate) still stops the pass.
 - A rejected review verdict anchor is harvested exactly once (#REV-ALERT-1,
   audit Must-fix #1): pane scrollback persists across supervisor passes, and
   a rejected anchor that was never recorded in the seen-file re-alerted —

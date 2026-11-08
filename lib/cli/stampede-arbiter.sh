@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Human-invoked arbiter entry point with the target's profile and config.
 stampede_cmd_arbiter() {
-  local root repo="$PWD" cmd config profile config_env
+  local root repo="$PWD" cmd config profile config_env PROJECT_SLUG
   root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
   if [[ "${1:-}" == -h || "${1:-}" == --help ]]; then
     printf 'Usage: stampede arbiter [repo] init-ref|drain|promote --confirm\n'
@@ -39,7 +39,8 @@ stampede_cmd_arbiter() {
   source "$root/lib/config.sh"
   # shellcheck source=/dev/null
   source "$root/lib/profile.sh"
-  if ! config_env=$(config_dump_env "$(config_project_slug "$config" "$(basename "$repo")")" "$config"); then
+  PROJECT_SLUG=$(config_project_slug "$config" "$(basename "$repo")")
+  if ! config_env=$(config_dump_env "$PROJECT_SLUG" "$config"); then
     printf 'arbiter: invalid project configuration\n' >&2
     return 1
   fi
@@ -49,7 +50,6 @@ stampede_cmd_arbiter() {
     printf 'arbiter: project profile has no runnable TEST_CMD; refusing an ungated integration\n' >&2
     return 1
   fi
-  export REPO_DIR="$repo" STATE_DIR="$repo/.herdr-swarm" TEST_CMD SWARM_CONFIG_NAME
-  unset PROJECT_SLUG
+  export REPO_DIR="$repo" STATE_DIR="$repo/.herdr-swarm" TEST_CMD SWARM_CONFIG_NAME PROJECT_SLUG
   bash "$root/lib/arbiter.sh" "$@"
 }

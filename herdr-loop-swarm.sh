@@ -828,13 +828,13 @@ case "$MODE" in
   w)
     step "Focusing arch for Wayfinder Chartering pass..."
     herdr agent focus "$ARCH_AGENT" >/dev/null 2>&1 || true
-    herdr agent prompt "$ARCH_AGENT" "MILESTONE CHARTER: Chart milestone map for '${MILESTONE}' on repo ${REPO}. Follow your seat brief." >/dev/null 2>&1 || true
+    herdr agent prompt "$ARCH_AGENT" "MILESTONE CHARTER: Chart milestone map for '${MILESTONE}' on repo ${REPO}. Follow your seat brief." >/dev/null 2>&1 || warn "herdr agent prompt to $ARCH_AGENT failed (rc=$?) — kickoff NOT delivered"
     good "Arch is ready for your input in the Herd tab"
     ;;
   b)
     step "Focusing arch for Brainstorming & PRD breakdown..."
     herdr agent focus "$ARCH_AGENT" >/dev/null 2>&1 || true
-    herdr agent prompt "$ARCH_AGENT" "BRAINSTORM: Direction -> Design -> PRD -> Tickets for '${MILESTONE}'. Follow your seat brief." >/dev/null 2>&1 || true
+    herdr agent prompt "$ARCH_AGENT" "BRAINSTORM: Direction -> Design -> PRD -> Tickets for '${MILESTONE}'. Follow your seat brief." >/dev/null 2>&1 || warn "herdr agent prompt to $ARCH_AGENT failed (rc=$?) — kickoff NOT delivered"
     good "Arch is ready for brainstorming in the Herd tab"
     ;;
   r)
@@ -849,7 +849,7 @@ case "$MODE" in
       fi
     else
       step "Kicking Looper on Map #${MAP_NUM}..."
-      herdr agent prompt "$LOOPER_AGENT" "KICKOFF: Work Wayfinder Map #${MAP_NUM} on ${REPO} per your seat brief — drain the frontier in map order until closed, then run milestone closeout and report." >/dev/null 2>&1 || true
+      herdr agent prompt "$LOOPER_AGENT" "KICKOFF: Work Wayfinder Map #${MAP_NUM} on ${REPO} per your seat brief — drain the frontier in map order until closed, then run milestone closeout and report." >/dev/null 2>&1 || warn "herdr agent prompt to $LOOPER_AGENT failed (rc=$?) — kickoff NOT delivered"
       herdr agent focus "$LOOPER_AGENT" >/dev/null 2>&1 || true
       good "Looper is active on Map #${MAP_NUM}"
     fi
@@ -860,7 +860,7 @@ case "$MODE" in
       good "Bounded supervisor will inspect loop:ready tickets on its next pass"
     else
       step "Kicking Looper in autonomous queue mode..."
-      herdr agent prompt "$LOOPER_AGENT" "KICKOFF: Autonomous queue mode on ${REPO} — pull open unblocked tickets in order, execute through arch/docs/gh, verify with '${TEST_CMD}', and report when queue is empty." >/dev/null 2>&1 || true
+      herdr agent prompt "$LOOPER_AGENT" "KICKOFF: Autonomous queue mode on ${REPO} — pull open unblocked tickets in order, execute through arch/docs/gh, verify with '${TEST_CMD}', and report when queue is empty." >/dev/null 2>&1 || warn "herdr agent prompt to $LOOPER_AGENT failed (rc=$?) — kickoff NOT delivered"
       herdr agent focus "$LOOPER_AGENT" >/dev/null 2>&1 || true
       good "Looper is active in autonomous mode"
     fi

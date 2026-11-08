@@ -9,7 +9,7 @@
 # agent-pane promote block (GATE-1), and pushing — `git push` stays human.
 
 stampede_cmd_autopilot() {
-  local root repo="$PWD" cmd="" ttl=14400 config state config_env
+  local root repo="$PWD" cmd="" ttl=14400 config state config_env PROJECT_SLUG
   root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 
   if [[ -d "${1:-}" ]]; then
@@ -72,7 +72,8 @@ EOF
   fi
   # shellcheck disable=SC1091
   source "$root/lib/config.sh"
-  if ! config_env=$(config_dump_env "$(basename "$repo")" "$config"); then
+  PROJECT_SLUG=$(config_project_slug "$config" "$(basename "$repo")")
+  if ! config_env=$(config_dump_env "$PROJECT_SLUG" "$config"); then
     printf 'autopilot: invalid project configuration (%s)\n' "$config" >&2
     return 1
   fi
@@ -96,8 +97,8 @@ EOF
       # The integration ref is a one-time explicit act (ARB-SLUG-1); a human
       # running `autopilot on` is that act. init-ref still refuses if the ref
       # exists, and the slug is the same canonical config name drain uses.
-      if ! git -C "$repo" show-ref --verify --quiet "refs/heads/swarm/${SWARM_CONFIG_NAME}/integration"; then
-        REPO_DIR="$repo" STATE_DIR="$state" PROJECT_SLUG="$SWARM_CONFIG_NAME" \
+      if ! git -C "$repo" show-ref --verify --quiet "refs/heads/swarm/${PROJECT_SLUG}/integration"; then
+        REPO_DIR="$repo" STATE_DIR="$state" PROJECT_SLUG="$PROJECT_SLUG" \
           bash "$root/lib/arbiter.sh" init-ref >&2 || return 1
       fi
       if [[ ! -f "$state/autopilot-prev-mode" ]]; then
@@ -144,8 +145,8 @@ EOF
         fi
       fi
       printf 'promote grant:   %s\n' "$grant_line"
-      if git -C "$repo" show-ref --verify --quiet "refs/heads/swarm/${SWARM_CONFIG_NAME}/integration"; then
-        printf 'integration ref: %s\n' "$(git -C "$repo" rev-parse --short "refs/heads/swarm/${SWARM_CONFIG_NAME}/integration")"
+      if git -C "$repo" show-ref --verify --quiet "refs/heads/swarm/${PROJECT_SLUG}/integration"; then
+        printf 'integration ref: %s\n' "$(git -C "$repo" rev-parse --short "refs/heads/swarm/${PROJECT_SLUG}/integration")"
       else
         printf 'integration ref: missing (autopilot on creates it)\n'
       fi

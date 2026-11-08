@@ -102,7 +102,7 @@ printf 'predecessor\n' > "$G/pred.txt"; git -C "$G" add pred.txt; gcommit "$G" '
 git -C "$G" branch swarm/test/integration
 git -C "$G" checkout -q main
 # shellcheck disable=SC2034  # read by the sourced dispatch_sync_worker function
-REPO_DIR="$G" STATE_DIR="$TMP/sync-state" CHANNEL_DIR="$TMP/sync-channel" SWARM_CONFIG_NAME=test
+REPO_DIR="$G" STATE_DIR="$TMP/sync-state" CHANNEL_DIR="$TMP/sync-channel" PROJECT_SLUG=test
 mkdir -p "$STATE_DIR" "$CHANNEL_DIR"
 printf '{"seats":[{"name":"arch-1-test","isolated":true,"worktree_dir":"%s"},{"name":"arch-2-test","isolated":true,"worktree_dir":"%s"},{"name":"pm-test","isolated":false,"worktree_dir":"%s"}]}' \
   "$W1" "$W2" "$G" > "$STATE_DIR/seats.json"
@@ -132,5 +132,24 @@ printf -- '---\nid: 21\nowns: src/next.py\n---\n\nNext task\n' > "$TMP/sync-tick
   || { echo 'frontmatter ticket dispatch failed' >&2; exit 1; }
 [[ "$(git -C "$W3" rev-parse HEAD)" == "$(git -C "$G" rev-parse swarm/test/integration)" ]] \
   || { echo 'frontmatter ticket brief skipped the checkout sync' >&2; exit 1; }
+
+# A GREEN records files outside the ticket's owns; a RED first asks whether
+# the base fails too, so the worker is not sent to repair a broken trunk.
+WD="$TMP/wd"
+git -C "$G" worktree add -q --detach "$WD" swarm/test/integration
+mkdir -p "$G/maps/tickets"; printf -- '---\nid: 30\nowns: a.txt\n---\n' > "$G/maps/tickets/t30.md"
+printf 'a\n' > "$WD/a.txt"; printf 'b\n' > "$WD/b.txt"; git -C "$WD" add -A; gcommit "$WD" 'drifting work'
+SHA_D=$(git -C "$WD" rev-parse HEAD)
+_gate_green_continue 30 arch-x "$SHA_D" false 2>/dev/null
+jq -e 'select(.ticket == "30") | .files == ["b.txt"]' "$G/.herdr-swarm/owns-violations.jsonl" >/dev/null 2>&1 \
+  || { echo 'GREEN did not record the file outside owns' >&2; exit 1; }
+# shellcheck disable=SC2034  # read by the sourced _base_is_red
+TEST_CMD='test -e ok.txt'
+_base_is_red "$SHA_D" 2>/dev/null || { echo 'a base that fails the suite was blamed on the worker' >&2; exit 1; }
+rm -rf "$STATE_DIR/base-gates"
+# shellcheck disable=SC2034  # read by the sourced _base_is_red
+TEST_CMD='test ! -e b.txt'
+! _base_is_red "$SHA_D" 2>/dev/null || { echo 'a green base was reported RED' >&2; exit 1; }
+[[ -z "$(git -C "$G" worktree list | grep base-gates)" ]] || { echo 'base gate left its worktree behind' >&2; exit 1; }
 
 printf 'test_manual_arbiter: PASS\n'

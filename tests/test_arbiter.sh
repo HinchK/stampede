@@ -727,7 +727,8 @@ arbiter_enqueue 306 seat-p "$SHA_P1"
 prog=$(arbiter_drain 2>&1 >/dev/null)
 check "drain announces each gate before running it" \
   '[[ "$prog" == *"gating #306 (seat-p @ ${SHA_P1:0:7}) [2/2 queued"* ]]'
-sleep 300 & STOPPED_PID=$!
+# bash 3.2 runs the inherited EXIT trap (rm -rf $TEST_DIR) in a killed `sleep &` child; exec sheds it
+( trap - EXIT; exec sleep 300 ) & STOPPED_PID=$!
 kill -STOP "$STOPPED_PID"
 mkdir -p "$STATE_DIR/arbiter.lock"
 printf '%s\n' "$STOPPED_PID" > "$STATE_DIR/arbiter.lock/pid"
@@ -736,6 +737,32 @@ kill -CONT "$STOPPED_PID" 2>/dev/null; kill "$STOPPED_PID" 2>/dev/null; wait "$S
 rm -rf "$STATE_DIR/arbiter.lock"
 check "lock refusal names the holder pid" '[[ "$refusal" == *"holder pid $STOPPED_PID"* ]]'
 check "lock refusal warns that a stopped holder is stopped" '[[ "$refusal" == *"STOPPED (Ctrl+Z)"* && "$refusal" == *"kill -CONT $STOPPED_PID"* ]]'
+# ── 20. hermetic gate: the runner's swarm context never reaches the suite ──
+HERM_STATE="$TEST_DIR/herm-state"
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wherm" "swarm/ptest/integration"
+printf 'herm\n' > "$TEST_DIR/wherm/herm.txt"
+SHA_HERM=$(commit_at "$TEST_DIR/wherm" "seat-h work")
+STATE_DIR="$HERM_STATE" arbiter_enqueue 230 seat-h "$SHA_HERM" >/dev/null 2>&1
+HERDR_PANE_ID=wX:p1 STAMPEDE_CONFIG_FILE=/live/swarm.config.toml STATE_DIR="$HERM_STATE" \
+  TEST_CMD='test -z "${REPO_DIR-}${STATE_DIR-}${PROJECT_SLUG-}${HERDR_PANE_ID-}${STAMPEDE_CONFIG_FILE-}"' \
+  arbiter_drain 2>/dev/null
+check "integration gate sees no REPO_DIR/STATE_DIR/slug/HERDR_*/config from its runner" \
+  '[[ $(jq -r -s "map(select((.ticket|tostring) == \"230\")) | .[-1].status" "$HERM_STATE/integration.jsonl") == integrated ]]'
+
+# ── 21. one conflict does not halt the pass: independent work behind it lands
+DL_STATE="$TEST_DIR/dl-state"
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wdl1" main
+printf 'clash\n' > "$TEST_DIR/wdl1/alpha.txt"          # add/add vs integrated alpha.txt
+SHA_DL1=$(commit_at "$TEST_DIR/wdl1" "conflicting work")
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wdl2" "swarm/ptest/integration"
+printf 'independent\n' > "$TEST_DIR/wdl2/indep.txt"
+SHA_DL2=$(commit_at "$TEST_DIR/wdl2" "independent work")
+STATE_DIR="$DL_STATE" arbiter_enqueue 240 seat-x "$SHA_DL1" >/dev/null 2>&1
+STATE_DIR="$DL_STATE" arbiter_enqueue 241 seat-y "$SHA_DL2" >/dev/null 2>&1
+TEST_CMD="exit 0" STATE_DIR="$DL_STATE" arbiter_drain 2>/dev/null   # own gate: earlier sections leave a ref-racing check.sh in the tree
+dl_status() { jq -r -s --arg t "$1" 'map(select((.ticket|tostring) == $t)) | .[-1].status' "$DL_STATE/integration.jsonl"; }
+check "head-of-line conflict is recorded" '[[ $(dl_status 240) == conflict ]]'
+check "independent record behind the conflict integrates in the same pass" '[[ $(dl_status 241) == integrated ]]'
 
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
