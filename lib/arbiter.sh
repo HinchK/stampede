@@ -607,6 +607,16 @@ arbiter_promote() {
   local integ
   integ=$(git -C "$ARB_REPO" rev-parse "$ARB_REF")
 
+  # AUTOPILOT-1: a promote with nothing to move is a silent no-op — the
+  # autopilot pass calls this every cycle. Every refusal path (confirm gate,
+  # pane check, missing ref) runs before this point, so humans still hear a
+  # real "no" whenever there is one.
+  local base_tip
+  base_tip=$(git -C "$ARB_REPO" rev-parse "$ARB_BASE" 2>/dev/null || true)
+  if [[ -n "$base_tip" && "$integ" == "$base_tip" ]]; then
+    return 0
+  fi
+
   if [[ "$mode" == "pr" ]]; then
     local body="${ARB_STATE}/pr-body.md"
     arbiter_pr_body "$body"

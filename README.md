@@ -59,7 +59,9 @@ stampede arbiter /path/to/repo promote --confirm # only after human review
 ```
 
 `drain` advances a separate integration ref. Only the explicit promotion
-step moves the base branch.
+step moves the base branch. Less ceremony: `stampede autopilot /path/to/repo
+on` composes quiet intake, automatic drain, and a TTL'd promote grant into
+one switch (pushing stays human; see the user guide).
 
 ## Leave and return
 

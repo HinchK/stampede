@@ -684,6 +684,21 @@ _review_scan_verdicts() { # SEAT PANE-OUTPUT
 
     local dirs rc=0
     dirs=$(review_loop_on_review_verdict "$ticket" "$sha" "$verdict" "$STATE_DIR" "$seat" 2>/dev/null) || rc=$?
+    # REV-ALERT-1: the anchor was HARVESTED — a rejected verdict is recorded
+    # seen, because scrollback persists and re-alerting the same line every
+    # pass (and re-prompting the looper in non-bounded mode) is spam; every
+    # rejection is deterministic, and a genuinely new verdict is a new line.
+    # The one exception: a ticket awaiting review with NO reviewer assigned
+    # yet is repairable (_review_recover_assignments redispatches, and the
+    # same pane line must re-harvest once the assignment lands — pinned by
+    # the legacy-assignment case below).
+    local repairable
+    repairable=$(jq -r --arg t "$ticket" \
+      '.reviews[$t] // {} | if .state == "awaiting_review" and ((.reviewer // "") == "") then "yes" else "no" end' \
+      "$STATE_DIR/reviews.json" 2>/dev/null || printf 'no')
+    if (( rc == 0 )) || [[ "$repairable" != "yes" ]]; then
+      printf '%s\n' "$seen_key" >> "$seen_file"
+    fi
     # REV-FAILOVER-1 / ADR 0018: durably attribute which reviewer seat —
     # primary or failover — delivered this verdict. The telemetry event
     # below already names the seat; this writes it into reviews.json too,
@@ -694,7 +709,6 @@ _review_scan_verdicts() { # SEAT PANE-OUTPUT
       _review_directives "$dirs" "$ticket" "$sha"
       continue
     fi
-    printf '%s\n' "$seen_key" >> "$seen_file"
     "$PYTHON_BIN" "$SCRIPT_DIR/lib/telemetry.py" log "$SESSION_ID" review.verdict "$seat" "$ticket" \
       "$(jq -cn --arg t "$ticket" --arg h "$sha" --arg v "$verdict" --arg r "$round" --arg f "$fc" \
         '($r|tonumber? // 0) as $rn | ($f|tonumber? // 0) as $fn |
@@ -1341,7 +1355,19 @@ cmd_once() {
   health_pass
   harvest_verdicts
   gate_reap
-  # A green candidate stays queued until a human runs arbiter drain.
+  # A green candidate stays queued for the human arbiter pass — unless
+  # autopilot is on (AUTOPILOT-1). The drain is the same spawned separate
+  # process `drain-queued` uses (PROVE-7); promote runs only under a valid
+  # human-created session grant and is a silent no-op at the tip. Pushing
+  # stays a human act in every mode.
+  if [[ "$(ctl_get autopilot)" == "true" ]]; then
+    arbiter_auto_drain
+    _arb_cfg
+    if _arb_grant_valid; then
+      arbiter_promote \
+        || warn "autopilot: promote refused — the root checkout must be on the base branch and clean"
+    fi
+  fi
   arbiter_handback_feedback
   lease_release_integrated   # DOG-16: freed by integration evidence, never by green
   unpushed_watch

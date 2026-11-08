@@ -71,3 +71,38 @@ _review_scan_verdicts independent "REVIEW VERDICT #FAILOVER $SHA PASS"
 _review_scan_verdicts alternate "REVIEW VERDICT #FAILOVER $SHA PASS"
 [[ $(jq -r '.reviews.FAILOVER.state' "$STATE_DIR/reviews.json") == review_passed ]]
 echo 'PASS: only the assigned failover is accepted'
+
+# REV-ALERT-1 (audit Must-fix #1): a REJECTED verdict anchor is harvested
+# exactly once — unless it is repairable. Pane scrollback persists across
+# passes, so an anchor never recorded as seen re-alerts (and in non-bounded
+# mode re-prompts the looper) every 30s forever.
+review_loop_on_gate_green SPAM worker "$SHA" "$STATE_DIR" >/dev/null
+_dispatch_reviewer independent SPAM "$SHA" 1 2 >/dev/null
+alerts=0
+_review_directives() { alerts=$((alerts + 1)); }
+# Assigned to independent: a verdict from wrongseat is non-repairable —
+# same seat, same line, three passes, ONE alert.
+_review_scan_verdicts wrongseat "REVIEW VERDICT #SPAM $SHA PASS"
+_review_scan_verdicts wrongseat "REVIEW VERDICT #SPAM $SHA PASS"
+_review_scan_verdicts wrongseat "REVIEW VERDICT #SPAM $SHA PASS"
+if (( alerts != 1 )); then
+  echo "FAIL: rejected verdict anchor alerted $alerts times (persistent scrollback spam)" >&2
+  exit 1
+fi
+[[ $(jq -r '.reviews.SPAM.state' "$STATE_DIR/reviews.json") == awaiting_review ]]
+# A genuinely NEW verdict line is a new anchor — it must still alert.
+_review_scan_verdicts wrongseat "REVIEW VERDICT #SPAM $SHA BLOCK"
+if (( alerts != 2 )); then
+  echo 'FAIL: relaxation silenced genuinely new verdict lines' >&2
+  exit 1
+fi
+# The exception: awaiting review with NO reviewer assigned yet is repairable
+# (the legacy-redispatch path) — repeated scans must keep re-harvesting.
+review_loop_on_gate_green REPAIR worker "$SHA" "$STATE_DIR" >/dev/null
+_review_scan_verdicts wrongseat "REVIEW VERDICT #REPAIR $SHA PASS"
+_review_scan_verdicts wrongseat "REVIEW VERDICT #REPAIR $SHA PASS"
+if (( alerts != 4 )); then
+  echo 'FAIL: repairable unassigned-awaiting verdict was silenced' >&2
+  exit 1
+fi
+echo 'PASS: a rejected verdict anchor alerts exactly once (unless repairable)'

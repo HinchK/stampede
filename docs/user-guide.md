@@ -128,6 +128,30 @@ unchanged. A successful test exit with a changed tree is handed back with its
 gate log, and the integration ref stays unchanged. New GREEN arrivals can
 enter the queue while an integration test is running.
 
+## Run everything automatically (autopilot)
+
+The ceremony above is the careful default. When you want the swarm to run end
+to end on its own, compose the existing switches with one command:
+
+```bash
+stampede autopilot /path/to/your/repo on            # quiet intake + auto drain + local promote
+stampede autopilot /path/to/your/repo status
+stampede autopilot /path/to/your/repo off           # restores your previous attention mode
+```
+
+`on` sets attention to quiet and enables deterministic ticket intake, makes
+each supervisor pass drain the integration queue, creates the integration
+ref if it is missing, and writes a promote grant (default four hours;
+`--ttl SECONDS` to change) so the supervisor promotes locally when a drain
+lands — the same grant `arbiter grant-session` writes, and it is only ever
+created from a human shell.
+
+Autopilot never disables the suite gate, the state locks, or the agent-pane
+promote block, and it never pushes: local commits on the base branch stay a
+human act and the unpushed watchdog still warns hourly. The root checkout
+must stay on the base branch and clean for the automatic promote to succeed;
+when the grant expires, drain keeps going and promote waits for you again.
+
 ## Leave, return, or stop
 
 - **Leave for now:** press `ctrl+b q` in Herdr to detach. The server keeps

@@ -10,7 +10,24 @@ pre-1.0: the public surface is not frozen.
 
 ## [Unreleased]
 
+### Added
+- `stampede autopilot <repo> on|off|status` (#AUTOPILOT-1): one command that
+  composes the existing switches into a fast mode — quiet attention,
+  deterministic intake, a per-pass arbiter drain, and a TTL'd promote grant
+  so greens integrate and promote locally without the manual ceremony. The
+  suite gate, the state locks, the agent-pane promote block, and pushing
+  stay enforced; `off` restores the previous attention mode. `promote` is
+  now a silent no-op when the base branch is already at the integration tip.
+
 ### Fixed
+- A rejected review verdict anchor is harvested exactly once (#REV-ALERT-1,
+  audit Must-fix #1): pane scrollback persists across supervisor passes, and
+  a rejected anchor that was never recorded in the seen-file re-alerted —
+  and in non-bounded mode re-prompted the looper agent — every 30 seconds
+  forever, appending fail-closed history to reviews.json on each pass.
+  Rejections are now marked seen, except the one repairable case (awaiting
+  review with no reviewer assigned yet), which stays re-harvestable for the
+  legacy redispatch path.
 - Legacy numeric ticket rows can leave the integration queue again (#ARB-NUM):
   pre-ARB-STR enqueues wrote numeric ids, and the queue's own type-strict
   comparisons never matched them — status writes silently no-opped and every
