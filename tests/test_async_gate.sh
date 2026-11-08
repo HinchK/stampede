@@ -227,6 +227,26 @@ rec=$(jq -r -s '[.[] | select((.ticket | tostring) == "306")] | .[-1]' "$LOG")
   || assert_bad 7 "timeout handling ($rec)"
 SUITE_TIMEOUT_S=300
 
+# dash (Ubuntu /bin/sh) exits 2, "cannot open", when the base tree has no
+# suite script. That must stay an ordinary worker RED. Exit 2 with any other
+# log is a suite that ran and failed, which is a real base RED.
+base_sha=$(_gate_base "$SHA_B")
+mkdir -p "$STATE/base-gates" "$STATE/gate-logs"
+printf '2' > "$STATE/base-gates/${base_sha}.rc"
+printf 'dash: 0: cannot open ./gate.sh: No such file\n' > "$STATE/gate-logs/base-${base_sha:0:12}.log"
+if _base_is_red "$SHA_B"; then
+  assert_bad 7b "dash cannot-open classified as base RED"
+else
+  assert_ok 7b "dash cannot-open is not a base RED"
+fi
+printf 'suite failed\n' > "$STATE/gate-logs/base-${base_sha:0:12}.log"
+if _base_is_red "$SHA_B"; then
+  assert_ok 7c "exit 2 with a real suite failure is base RED"
+else
+  assert_bad 7c "real exit 2 was not base RED"
+fi
+rm -rf "$STATE/base-gates"
+
 # ── 4: crash safety — dead pid without rc discarded, never green ──────────
 rm -f "$WTB/gate.sh"; printf '#!/bin/sh\nsleep 8\n' > "$WTB/gate.sh"
 git -C "$WTB" add -A; git -C "$WTB" -c user.email=t@t -c user.name=t commit -q -m crashgate

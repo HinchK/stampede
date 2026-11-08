@@ -361,7 +361,7 @@ _gate_base() { # SHA → where the worker branched: the integration line, else t
 
 # A RED the base also fails is not the worker's to fix; once per base sha.
 _base_is_red() { # SHA → 0 when the merge-base fails the suite too
-  local base rcf wt rc=0
+  local base rcf wt rc=0 base_log
   base=$(_gate_base "$1") || return 1
   [[ "$base" != "$(git -C "$REPO_DIR" rev-parse "$1" 2>/dev/null)" ]] || return 1
   rcf="${STATE_DIR}/base-gates/${base}.rc"
@@ -376,7 +376,19 @@ _base_is_red() { # SHA → 0 when the merge-base fails the suite too
     printf '%s' "$rc" > "$rcf"
   fi
   # 126/127: the base cannot run the suite at all, which attributes nothing.
-  case "$(cat "$rcf")" in 0|126|127) return 1 ;; esac
+  # Ubuntu /bin/sh is dash, and a missing script is exit 2 ("cannot open" /
+  # "Can't open"), not 127. A suite that actually ran and failed can also
+  # exit 2, so that code counts only when the log says the script never opened.
+  base_log="${STATE_DIR}/gate-logs/base-${base:0:12}.log"
+  case "$(cat "$rcf")" in
+    0|126|127) return 1 ;;
+    2)
+      if [[ -f "$base_log" ]] && grep -q -E "cannot open|Can't open" "$base_log"; then
+        return 1
+      fi
+      ;;
+  esac
+  return 0
 }
 
 _base_red_escalate() { # TICKET SHA → 0 when headless dead-lettered it (no human is watching a batch)

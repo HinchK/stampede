@@ -471,6 +471,47 @@ _status_read_jsonl "$STATE_DIR/integration.jsonl"
         self.assertNotIn('"ticket": "t0"', prompt)
         self.assertNotIn("x" * 300, prompt)
 
+    def test_agy_failure_names_model_exit_and_stderr_without_the_prompt(self):
+        marker = "PROMPT-LEAK-MARKER"
+        policy = module.Attention(self.repo)
+        policy.seat_ready = lambda seat: True
+        stderr = "invalid model id gemini-2.5-pro\n" + ("s" * 400)
+
+        def fail(argv, **kwargs):
+            self.assertEqual(argv[:2], ["agy", "--print"])
+            self.assertIn(marker, argv[2])
+            if kwargs.get("timeout") == 100 and fail.mode == "timeout":
+                raise subprocess.TimeoutExpired(argv, 100, stderr=stderr)
+            raise subprocess.CalledProcessError(7, argv, stderr=stderr)
+
+        evidence = marker + ("p" * 1200)
+        fail.mode = "error"
+        with patch.object(module.subprocess, "run", side_effect=fail):
+            result = policy.event("red", "EHS-STEP2", evidence, "arch-1-test")
+        self._assert_agy_failure_recorded("EHS-STEP2", result, "exit 7", marker, stderr)
+
+        fail.mode = "timeout"
+        policy2 = module.Attention(self.repo)
+        policy2.seat_ready = lambda seat: True
+        with patch.object(module.subprocess, "run", side_effect=fail):
+            result = policy2.event("red", "EHS-STEP3", evidence, "arch-1-test")
+        self._assert_agy_failure_recorded("EHS-STEP3", result, "exit timeout", marker, stderr)
+
+    def _assert_agy_failure_recorded(self, ticket, result, exit_text, marker, stderr):
+        self.assertEqual(result["status"], "paused")
+        state = self.repo / ".herdr-swarm"
+        paused = json.loads((state / "attention.json").read_text())["paused"][ticket]
+        handoff = (state / "handoff.log").read_text()
+        trouble = (state / "troubleshooting.log").read_text()
+        for text in (result["reason"], paused, handoff, trouble):
+            self.assertNotIn(marker, text)
+            self.assertNotIn("You are Stampede", text)
+            self.assertIn("flash-test", text)
+            self.assertIn(exit_text, text)
+            self.assertIn("invalid model id gemini-2.5-pro", text)
+            self.assertNotIn(stderr, text)
+            self.assertNotIn("s" * 301, text)
+
 
 if __name__ == "__main__":
     unittest.main()
