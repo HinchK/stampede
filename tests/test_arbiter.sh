@@ -180,17 +180,22 @@ check "conflict record lists the file" \
 check "integration ref unmoved after conflict" \
   '[[ $(git -C "$REPO" rev-parse '"$IREF"') != "$SHA_C" ]]'
 check "arbiter worktree clean after merge --abort" \
-  '[[ -z "$(git -C "$REPO/.herdr-swarm/worktrees/arbiter-ptest" status --porcelain)" ]]'
+  '[[ -z "$(git -C "$REPO/.herdr-swarm/worktrees/integration-ptest" status --porcelain)" ]]'
 
 # ── 4. integration_red leaves the ref unmoved ──────────────────────────────
 printf 'RED\n' > "$TEST_DIR/wc/red.flag"
-printf '#!/bin/sh\nif [ -f red.flag ]; then exit 1; fi\nexit 0\n' > "$TEST_DIR/wc/check.sh"
+printf '#!/bin/sh\nif [ -f red.flag ]; then printf "\\342\\234\\226 FAILED: tests/test_fake.sh\\n" >&2; exit 1; fi\nexit 0\n' > "$TEST_DIR/wc/check.sh"
 rm -f "$TEST_DIR/wc/alpha.txt"
 SHA_R=$(commit_at "$TEST_DIR/wc" "breaks combined suite")
 REF_BEFORE=$(git -C "$REPO" rev-parse "$IREF")
 arbiter_enqueue 204 seat-c "$SHA_R"
-arbiter_drain 2>/dev/null
+RED_ERR=$(arbiter_drain 2>&1 >/dev/null)
 ck 204 integration_red "RED combined tree recorded as integration_red"
+# ARB-RED-MSG-1 (#168): the RED names the failing suite, in the message and the row.
+check "RED message names the failing suite" \
+  '[[ "$RED_ERR" == *"#204 integration gate RED in tests/test_fake.sh"* ]]'
+check "integration_red row carries gate.failed_suite" \
+  '[[ $(jq -r -s --arg t 204 "[.[] | select((.ticket|tostring) == \$t and .status == \"integration_red\")] | last | .gate.failed_suite" "$Q") == tests/test_fake.sh ]]'
 check "RED integration files NO green verdict record (#204)" \
   '[[ $(jq -s --arg t 204 "[.[] | select((.ticket|tostring) == \$t and .suite == \"green\")] | length" "$SV") == 0 ]]'
 check "integration ref NOT advanced on RED" \
@@ -600,7 +605,7 @@ git -C "$REPO" worktree add -q --detach "$TEST_DIR/ww" "swarm/ptest/seat-w"
 printf '#!/bin/sh\nexit 1\n' > "$TEST_DIR/ww/check.sh"
 SHA_W=$(commit_at "$TEST_DIR/ww" "seat-w breaks the suite")
 IREF_S0=$(git -C "$REPO" rev-parse "$IREF")
-ARB_WT_LOCK="$(git -C "$REPO/.herdr-swarm/worktrees/arbiter-ptest" rev-parse --absolute-git-dir)/index.lock"
+ARB_WT_LOCK="$(git -C "$REPO/.herdr-swarm/worktrees/integration-ptest" rev-parse --absolute-git-dir)/index.lock"
 : > "$ARB_WT_LOCK"
 arbiter_enqueue 216 seat-w "$SHA_W"
 arbiter_drain 2>/dev/null
@@ -614,13 +619,13 @@ ck 216 integration_red "worktree freed: the candidate's own suite is gated (RED)
 
 # A worktree dir without its .git link resolves to the ROOT repo.
 ROOT_HEAD_S0=$(git -C "$REPO" rev-parse --abbrev-ref HEAD)
-mv "$REPO/.herdr-swarm/worktrees/arbiter-ptest/.git" "$TEST_DIR/arb-wt-gitlink"
+mv "$REPO/.herdr-swarm/worktrees/integration-ptest/.git" "$TEST_DIR/arb-wt-gitlink"
 jq -s -c 'map(if .ticket == "216" then .status = "queued" else . end) | .[]' "$Q" > "$Q.tmp" && mv "$Q.tmp" "$Q"
 arbiter_drain 2>/dev/null
 ck 216 queued "unlinked arbiter worktree: record left queued"
 check "unlinked arbiter worktree: root checkout stays on its branch" \
   '[[ "$(git -C "$REPO" rev-parse --abbrev-ref HEAD)" == "$ROOT_HEAD_S0" ]]'
-mv "$TEST_DIR/arb-wt-gitlink" "$REPO/.herdr-swarm/worktrees/arbiter-ptest/.git"
+mv "$TEST_DIR/arb-wt-gitlink" "$REPO/.herdr-swarm/worktrees/integration-ptest/.git"
 arbiter_drain 2>/dev/null
 ck 216 integration_red "worktree relinked: drain resumes"
 
@@ -668,7 +673,9 @@ ck 77 queued "legacy numeric row seeded queued"
 _arb_set_status 77 "$SHA_A" conflict >/dev/null 2>&1
 ck 77 conflict "status write lands on a numeric row (pre-fix: silent no-op)"
 num_seed 78 "$SHA_A"
-arbiter_enqueue 78 seat-num "$SHA_B" >/dev/null 2>&1
+# a re-verdict needs a sha not already integrated (ARB-DUP-1 refuses those)
+SHA_N=$(git -C "$REPO" -c user.email=t@t -c user.name=t commit-tree "$sha_base^{tree}" -p "$sha_base" -m reverdict-78)
+arbiter_enqueue 78 seat-num "$SHA_N" >/dev/null 2>&1
 check "numeric row superseded by string re-verdict" \
   '[[ $(jq -s "[.[] | select((.ticket|tostring) == \"78\" and .status == \"superseded\")] | length" "$Q") == 1 ]]'
 check "exactly one queued row remains for 78" \
@@ -678,6 +685,58 @@ arbiter_enqueue 79 seat-num "$SHA_A" >/dev/null 2>&1
 check "string enqueue at the same (ticket, sha) is a duplicate, not an append" \
   '[[ $(jq -s "[.[] | select((.ticket|tostring) == \"79\")] | length" "$Q") == 1 ]]'
 
+# ── ARB-DRAIN-1: a conflict must not block independent work behind it ──────
+# earlier sections leave queued numeric rows at the head; retire them so this pass starts at 301
+jq -r -s '.[] | select(.status == "queued") | "\(.ticket) \(.sha)"' "$Q" | while read -r qt qs; do _arb_set_status "$qt" "$qs" superseded >/dev/null 2>&1; done
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wx" main
+printf 'ALPHA-HEADLINE\n' > "$TEST_DIR/wx/alpha.txt"
+SHA_X=$(commit_at "$TEST_DIR/wx" "head-of-line conflicting work")
+# based on the integration tip with a clean gate: earlier sections left a racer check.sh in the tree
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wy" "$IREF"
+printf '#!/bin/sh\nexit 0\n' > "$TEST_DIR/wy/check.sh"
+printf 'independent\n' > "$TEST_DIR/wy/independent-drain1.txt"
+SHA_Y=$(commit_at "$TEST_DIR/wy" "independent work behind the conflict")
+arbiter_enqueue 301 seat-x "$SHA_X"
+arbiter_enqueue 302 seat-y "$SHA_Y"
+arbiter_drain 2>/dev/null
+ck 301 conflict "head-of-line record is marked conflict"
+ck 302 integrated "independent record behind it still integrates in the same pass"
+
+# ── ARB-DUP-1: one sha, one ticket; integrated shas are not re-queued ──────
+rows_for() { jq -s --arg t "$1" '[.[] | select((.ticket|tostring) == $t)] | length' "$Q"; }
+check "already-integrated sha is refused at enqueue" \
+  '! arbiter_enqueue 303 seat-y "$SHA_Y" 2>/dev/null'
+check "refused integrated sha leaves no queue row" '[[ $(rows_for 303) == 0 ]]'
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wz" "$IREF"
+printf 'dup\n' > "$TEST_DIR/wz/dup-drain1.txt"
+SHA_Z=$(commit_at "$TEST_DIR/wz" "dup candidate")
+arbiter_enqueue 304 seat-z "$SHA_Z"
+check "sha queued under another ticket is refused" \
+  '! arbiter_enqueue 305 seat-z "$SHA_Z" 2>/dev/null'
+check "refused duplicate-sha ticket leaves no queue row" '[[ $(rows_for 305) == 0 ]]'
+ck 304 queued "the original ticket stays queued"
+check "same (ticket, sha) re-enqueue is still an idempotent no-op" \
+  'arbiter_enqueue 304 seat-z "$SHA_Z" 2>/dev/null'
+
+# (the earlier ARB-DUP-1 ticket 304 is still queued, so this pass gates two records)
+# ── ARB-LOCK-1: progress line per gate; lock refusal names holder + stopped state ──
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wprog" "$IREF"
+printf 'progress\n' > "$TEST_DIR/wprog/progress-lock1.txt"
+SHA_P1=$(commit_at "$TEST_DIR/wprog" "progress candidate")
+arbiter_enqueue 306 seat-p "$SHA_P1"
+prog=$(arbiter_drain 2>&1 >/dev/null)
+check "drain announces each gate before running it" \
+  '[[ "$prog" == *"gating #306 (seat-p @ ${SHA_P1:0:7}) [2/2 queued"* ]]'
+# bash 3.2 runs the inherited EXIT trap (rm -rf $TEST_DIR) in a killed `sleep &` child; exec sheds it
+( trap - EXIT; exec sleep 300 ) & STOPPED_PID=$!
+kill -STOP "$STOPPED_PID"
+mkdir -p "$STATE_DIR/arbiter.lock"
+printf '%s\n' "$STOPPED_PID" > "$STATE_DIR/arbiter.lock/pid"
+refusal=$(ARBITER_TMP_SLEEP=0.01 arbiter_drain 2>&1 >/dev/null)
+kill -CONT "$STOPPED_PID" 2>/dev/null; kill "$STOPPED_PID" 2>/dev/null; wait "$STOPPED_PID" 2>/dev/null || true
+rm -rf "$STATE_DIR/arbiter.lock"
+check "lock refusal names the holder pid" '[[ "$refusal" == *"holder pid $STOPPED_PID"* ]]'
+check "lock refusal warns that a stopped holder is stopped" '[[ "$refusal" == *"STOPPED (Ctrl+Z)"* && "$refusal" == *"kill -CONT $STOPPED_PID"* ]]'
 # ── 20. hermetic gate: the runner's swarm context never reaches the suite ──
 HERM_STATE="$TEST_DIR/herm-state"
 git -C "$REPO" worktree add -q --detach "$TEST_DIR/wherm" "swarm/ptest/integration"

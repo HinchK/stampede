@@ -234,12 +234,12 @@ good "Profile — repo: ${REPO:-local-only} · test: ${TEST_CMD} · ecosystem: $
 # Project slug: namespaces every agent name (Herdr's registry is server-global;
 # grammar ^[a-z][a-z0-9_-]*$ per docs/findings/herdr-semantics.md). Falls back
 # to the directory name for local-only projects so parallel swarms never
-# collide on agent names.
+# collide on agent names. [swarm] name wins when set (ADR 0019).
 slug_source="${REPO:-}"
 if [[ -z "$slug_source" || "$slug_source" == "none" ]]; then
   slug_source=$(basename "$PWD")
 fi
-PROJECT_SLUG=$(config_project_slug "$slug_source" "$CONFIG_FILE")
+PROJECT_SLUG=$(config_project_slug "$CONFIG_FILE" "$slug_source")
 good "Project slug: ${PROJECT_SLUG}"
 
 # Config binding: seats, kinds, models, tabs — single source of truth

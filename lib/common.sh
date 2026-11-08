@@ -111,6 +111,26 @@ _timeout_runnable() { # CANDIDATE
   "$1" 1 true >/dev/null 2>&1
 }
 
+# gate_exec DIR TMPDIR SECONDS CMD — run a suite gate hermetically (ARB-HERM-1).
+# A suite must not see the pane that launched it: ambient REPO_DIR/STATE_DIR/
+# HERDR_* made suites resolve the real ledger and filter their demo agents out
+# (five false REDs on 2026-11-07); the slug/config vars point them at the live
+# swarm the same way (#164). Scrub in a subshell, then bound with
+# TIMEOUT_BIN (callers resolve_timeout first). Exit 127 when DIR is missing.
+# env -u, not unset: `STATE_DIR=x fn` makes a temporary binding, and unset
+# inside fn only peels it — the outer exported STATE_DIR would leak through.
+gate_exec() {
+  local dir="$1" tmp="$2" secs="$3" cmd="$4" v args=()
+  for v in REPO_DIR STATE_DIR PROJECT_SLUG SWARM_CONFIG_NAME \
+           $(compgen -e | grep -E '^(HERDR_|STAMPEDE_CONFIG)' || true); do
+    args+=(-u "$v")
+  done
+  (
+    cd "$dir" || exit 127
+    TMPDIR="$tmp" exec env "${args[@]}" "$TIMEOUT_BIN" "$secs" sh -c "$cmd"
+  )
+}
+
 resolve_timeout() {
   if [[ -n "${TIMEOUT_BIN:-}" ]]; then
     if _timeout_runnable "$TIMEOUT_BIN"; then
@@ -133,17 +153,6 @@ resolve_timeout() {
   printf 'timeout: macOS ships none, and an unbounded suite gate can wedge integration\n' >&2
   printf 'timeout: remedy: brew install coreutils, or export TIMEOUT_BIN=/path/to/timeout\n' >&2
   return 1
-}
-
-# A suite that inherits the gate runner's swarm context reads the LIVE
-# .herdr-swarm instead of its fixtures and goes falsely RED.
-gate_env() { # CMD [ARGS...]
-  local v args=()
-  for v in REPO_DIR STATE_DIR PROJECT_SLUG SWARM_CONFIG_NAME \
-           $(compgen -e | grep -E '^(HERDR_|STAMPEDE_CONFIG)' || true); do
-    args+=(-u "$v")
-  done
-  env "${args[@]}" "$@"
 }
 
 # ── verdict evidence (HASH-1) ───────────────────────────────────────────────

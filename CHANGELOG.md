@@ -41,15 +41,16 @@ pre-1.0: the public surface is not frozen.
   seat branches and the integration ref can no longer split across
   `swarm/<repo-slug>/…` and `swarm/<name>/…`.
 - Gate suites run hermetically (#164): the arbiter's integration gate and
-  the supervisor's sync and async gates run `TEST_CMD` through `gate_env`,
-  which strips `REPO_DIR`, `STATE_DIR`, the slug, `STAMPEDE_CONFIG*` and
-  `HERDR_*` so a suite cannot read the live swarm's state instead of its
-  fixtures. `test_frontier_launch.sh` matches arbiter invocations, not the
+  the supervisor's sync, async and base gates run `TEST_CMD` through
+  `gate_exec`, which strips `REPO_DIR`, `STATE_DIR`, the slug,
+  `STAMPEDE_CONFIG*` and `HERDR_*` with `env -u` (an `unset` inside a
+  function only peels a `VAR=x fn` prefix binding) so a suite cannot read
+  the live swarm's state instead of its fixtures. `test_frontier_launch.sh` matches arbiter invocations, not the
   substring "arbiter" in the gate's own checkout path.
 - `arbiter drain` no longer halts on the first conflict or
-  `integration_red` (#172): a resolved record frees the pass, so
-  independent work queued behind it integrates in the same drain. A record
-  left `queued` (gate harness unavailable) still stops the pass.
+  `integration_red` (#172): independent work queued behind it integrates
+  in the same drain. A record left `queued` (gate harness unavailable) or
+  `superseded` (the queue changed under the gate) still stops the pass.
 - A rejected review verdict anchor is harvested exactly once (#REV-ALERT-1,
   audit Must-fix #1): pane scrollback persists across supervisor passes, and
   a rejected anchor that was never recorded in the seen-file re-alerted —

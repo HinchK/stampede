@@ -68,12 +68,6 @@ if cur is not None:
   fi
 }
 
-# Seats and the integration ref must share one slug, or integration splits
-# across two refs; FALLBACK (profile REPO / dir name) only when unnamed.
-config_project_slug() { # FALLBACK [TOML]
-  slugify "$(config_get swarm.name "$1" "${2:-$DEFAULT_CONFIG}")"
-}
-
 # List all enabled seat keys in declaration order
 config_get_seats() {
   local toml_path="${1:-$DEFAULT_CONFIG}"
@@ -95,6 +89,16 @@ config_get_seat_prop() {
   local toml_path="${4:-$DEFAULT_CONFIG}"
 
   config_get "seats.${seat_key}.${prop}" "$default_val" "$toml_path"
+}
+
+# The one project slug (ADR 0019): [swarm] name from the config, slugified.
+# When the config sets no name (or is missing), fall back to the slugified
+# <source> (repo or dir name) so unnamed local projects still get a slug.
+# Every caller that namespaces agents, branches or refs must go through this.
+config_project_slug() {
+  local toml_path="${1:-$DEFAULT_CONFIG}" fallback="${2:-}" name
+  name=$(config_get "swarm.name" "" "$toml_path")
+  slugify "${name:-$fallback}"
 }
 
 # Dump complete shell environment with namespaced names.

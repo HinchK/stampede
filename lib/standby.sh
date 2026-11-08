@@ -28,7 +28,7 @@ source "$STANDBY_ROOT/lib/briefs.sh"
 
 _standby_env() { # TARGET_DIR → exports SLUG/seat names/model/kind via config
   local target="$1"
-  # slug derivation mirrors the supervisor: [swarm] name, else profile REPO, else dir basename
+  # slug: config_project_slug ([swarm] name, else profile REPO, else dir basename)
   local slug_source=""
   if [[ -f "$target/.herdr-swarm/profile.env" ]]; then
     # shellcheck disable=SC1091
@@ -42,7 +42,7 @@ _standby_env() { # TARGET_DIR → exports SLUG/seat names/model/kind via config
   # roster); fall back to the orchestrator's own config.
   local cfg="$target/swarm.config.toml"
   [[ -f "$cfg" ]] || cfg="${STAMPEDE_CONFIG:-$STANDBY_ROOT/swarm.config.toml}"
-  SLUG=$(config_project_slug "$slug_source" "$cfg")
+  SLUG=$(config_project_slug "$cfg" "$slug_source")
   eval "$(config_dump_env "$SLUG" "$cfg")"
   STANDBY_NAME="${SEAT_NAME_looper_standby:-}"
   LOOPER_NAME="${SEAT_NAME_looper:-looper-$SLUG}"

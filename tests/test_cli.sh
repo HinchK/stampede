@@ -105,6 +105,13 @@ out=$("$REPO_ROOT/bin/stampede" headless --help 2>&1); rc=$?
 [[ "$rc" != 0 ]] && ok "headless non-numeric max rejected" || bad "abc max rc=$rc"
 out=$("$REPO_ROOT/bin/stampede" help 2>&1)
 [[ "$out" == *"headless"* ]] && ok "help lists headless" || bad "help missing headless"
+# ARB-CLI-1: a slug/missing path before a real subcommand names the real problem
+out=$("$REPO_ROOT/bin/stampede" arbiter hinchk-stampede drain 2>&1); rc=$?
+[[ "$rc" == 2 && "$out" == *"repository directory not found: hinchk-stampede"* ]] \
+  && ok "arbiter <slug> drain: explicit repo-not-found error, rc 2" || bad "arbiter slug rc=$rc: $out"
+out=$("$REPO_ROOT/bin/stampede" arbiter bogus 2>&1); rc=$?
+[[ "$rc" == 2 && "$out" == *"expected init-ref"* ]] \
+  && ok "arbiter <unknown> keeps the generic subcommand error" || bad "arbiter bogus rc=$rc: $out"
 
 # [9] headless end-to-end: scratch repo, stub vendor, NO herdr on PATH
 HB_BIN=$(mktemp -d "$SCRATCH/hb-bin.XXXXXX")
@@ -112,6 +119,8 @@ cat > "$HB_BIN/opencode" <<'EOF'
 #!/bin/sh
 brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
 tid=$(sed -nE 's/^id:[[:space:]]*//p' "$brief" 2>/dev/null | head -n1 | tr -d '[:space:]')
+# a real worker leaves a commit of its own; two tickets must not share one sha (ARB-DUP-1)
+git -c user.email=t@t -c user.name=t commit -q --allow-empty -m "work ${tid:-unknown}" 2>/dev/null
 sha=$(git rev-parse HEAD 2>/dev/null || printf 0000000000000000000000000000000000000000)
 reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete response to ([^ ]+) and.*/\1/p')
 [ -n "$reply" ] && printf 'worker reply for %s\n' "${tid:-unknown}" > "$reply"
@@ -161,7 +170,7 @@ printf -- '---\nid: T-RESOLVED\nstatus: resolved\nowns: f.txt\n---\nbody\n' > "$
   # ADR 0019: the batch's slug is the orchestrator config's [swarm]
   # name (these fixtures ship no swarm.config.toml), the profile REPO only
   # when no name is set — derive it the same way, never re-implement it.
-  hb_slug() { config_project_slug "$1" "$REPO_ROOT/swarm.config.toml"; }
+  hb_slug() { config_project_slug "$REPO_ROOT/swarm.config.toml" "$1"; }
   # ARB-SLUG-1 (arrived via integration): drain refuses when the canonical
   # integration ref is missing — one-time explicit init, exactly the setup a
   # real repo gets, with the slug the batch itself will resolve (ADR 0019;
@@ -299,6 +308,8 @@ if [[ -e "$HB_BIN/timeout" ]]; then
 #!/bin/sh
 brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
 tid=$(sed -nE 's/^id:[[:space:]]*//p' "$brief" 2>/dev/null | head -n1 | tr -d '[:space:]')
+# a real worker leaves a commit of its own; two tickets must not share one sha (ARB-DUP-1)
+git -c user.email=t@t -c user.name=t commit -q --allow-empty -m "work ${tid:-unknown}" 2>/dev/null
 sha=$(git rev-parse HEAD 2>/dev/null || printf 0000000000000000000000000000000000000000)
 reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete response to ([^ ]+) and.*/\1/p')
 [ -n "$reply" ] && printf 'worker reply for %s\n' "${tid:-unknown}" > "$reply"
@@ -383,6 +394,8 @@ if [[ -e "$HB_BIN/timeout" ]]; then
 #!/bin/sh
 brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
 tid=$(sed -nE 's/^id:[[:space:]]*//p' "$brief" 2>/dev/null | head -n1 | tr -d '[:space:]')
+# a real worker leaves a commit of its own; two tickets must not share one sha (ARB-DUP-1)
+git -c user.email=t@t -c user.name=t commit -q --allow-empty -m "work ${tid:-unknown}" 2>/dev/null
 sha=$(git rev-parse HEAD 2>/dev/null || printf 0000000000000000000000000000000000000000)
 reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete response to ([^ ]+) and.*/\1/p')
 [ -n "$reply" ] && printf 'worker reply for %s\n' "${tid:-unknown}" > "$reply"
@@ -436,6 +449,8 @@ if [[ -e "$HB_BIN/timeout" ]]; then
 #!/bin/sh
 brief=$(printf '%s\n' "$*" | sed -nE 's/.*BRIEF \(file\): ([^ ]+) .*/\1/p')
 tid=$(sed -nE 's/^id:[[:space:]]*//p' "$brief" 2>/dev/null | head -n1 | tr -d '[:space:]')
+# a real worker leaves a commit of its own; two tickets must not share one sha (ARB-DUP-1)
+git -c user.email=t@t -c user.name=t commit -q --allow-empty -m "work ${tid:-unknown}" 2>/dev/null
 sha=$(git rev-parse HEAD 2>/dev/null || printf 0000000000000000000000000000000000000000)
 reply=$(printf '%s\n' "$*" | sed -nE 's/.*REPLY CHANNEL: write your complete response to ([^ ]+) and.*/\1/p')
 [ -n "$reply" ] && printf 'worker reply for %s\n' "${tid:-unknown}" > "$reply"

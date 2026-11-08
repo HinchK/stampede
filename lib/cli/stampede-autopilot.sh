@@ -72,7 +72,7 @@ EOF
   fi
   # shellcheck disable=SC1091
   source "$root/lib/config.sh"
-  PROJECT_SLUG=$(config_project_slug "$(basename "$repo")" "$config")
+  PROJECT_SLUG=$(config_project_slug "$config" "$(basename "$repo")")
   if ! config_env=$(config_dump_env "$PROJECT_SLUG" "$config"); then
     printf 'autopilot: invalid project configuration (%s)\n' "$config" >&2
     return 1

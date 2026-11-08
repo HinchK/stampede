@@ -118,7 +118,7 @@ slug_source="${REPO:-}"
 if [[ -z "$slug_source" || "$slug_source" == "none" ]]; then
   slug_source=$(basename "$REPO_DIR")
 fi
-PROJECT_SLUG=$(config_project_slug "$slug_source")
+PROJECT_SLUG=$(config_project_slug "$DEFAULT_CONFIG" "$slug_source")
 config_env=$(config_dump_env "$PROJECT_SLUG")
 eval "$config_env"
 
@@ -318,7 +318,7 @@ gate_spawn() { # SEAT TICKET SHA GATE_DIR VERDICT_LINE ISOLATED
       printf '127' > "${jrc}.tmp" && mv "${jrc}.tmp" "$jrc"
       exit 0
     fi
-    TMPDIR="${STATE_DIR}/gate-tmp/${seat}" gate_env "$TIMEOUT_BIN" "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD" > "$jlog" 2>&1
+    gate_exec . "${STATE_DIR}/gate-tmp/${seat}" "$SUITE_TIMEOUT_S" "$TEST_CMD" > "$jlog" 2>&1
     local rc=$?
     printf '%s' "$rc" > "${jrc}.tmp" && mv "${jrc}.tmp" "$jrc"
   ) >/dev/null 2>&1 &
@@ -370,7 +370,7 @@ _base_is_red() { # SHA → 0 when the merge-base fails the suite too
     wt="${STATE_DIR}/base-gates/wt-${base:0:12}"
     mkdir -p "${STATE_DIR}/base-gates" "${STATE_DIR}/gate-tmp/base" "${STATE_DIR}/gate-logs"
     git -C "$REPO_DIR" worktree add -q --detach "$wt" "$base" >/dev/null 2>&1 || return 1
-    (cd "$wt" && TMPDIR="${STATE_DIR}/gate-tmp/base" gate_env "$TIMEOUT_BIN" "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD") \
+    gate_exec "$wt" "${STATE_DIR}/gate-tmp/base" "$SUITE_TIMEOUT_S" "$TEST_CMD" \
       >"${STATE_DIR}/gate-logs/base-${base:0:12}.log" 2>&1 || rc=$?
     git -C "$REPO_DIR" worktree remove "$wt" >/dev/null 2>&1 || warn "base gate worktree $wt left in place (not clean)"
     printf '%s' "$rc" > "$rcf"
@@ -1014,7 +1014,7 @@ harvest_verdicts() {
           continue
         fi
         local gate_rc=1
-        if (cd "$GATE_DIR" && TMPDIR="${STATE_DIR}/gate-tmp/${seat}" gate_env "$TIMEOUT_BIN" "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD") >"$gate_log" 2>&1; then
+        if gate_exec "$GATE_DIR" "${STATE_DIR}/gate-tmp/${seat}" "$SUITE_TIMEOUT_S" "$TEST_CMD" >"$gate_log" 2>&1; then
           gate_rc=0
         fi
         # Post-condition drift (TOCTOU): the worker must not have touched
@@ -1351,7 +1351,7 @@ arbiter_handback_feedback() {
   done < <(jq -r 'select(.status == "conflict" or .status == "integration_red")
     | [ (.ticket | tostring), (.seat // ""), .sha, .status,
         (if .status == "conflict" then ((.files // []) | join(", "))
-         else ([.gate.reason, .gate.log] | map(select(. != null)) | join("; ")) end) ] | @tsv' "$q" 2>/dev/null)
+         else ([.gate.reason, (.gate.failed_suite | if . then "failed suite: " + . else null end), .gate.log] | map(select(. != null)) | join("; ")) end) ] | @tsv' "$q" 2>/dev/null)
 }
 
 arbiter_auto_drain() {
