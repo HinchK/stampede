@@ -118,7 +118,7 @@ slug_source="${REPO:-}"
 if [[ -z "$slug_source" || "$slug_source" == "none" ]]; then
   slug_source=$(basename "$REPO_DIR")
 fi
-PROJECT_SLUG=$(slugify "$slug_source")
+PROJECT_SLUG=$(config_project_slug "$DEFAULT_CONFIG" "$slug_source")
 config_env=$(config_dump_env "$PROJECT_SLUG")
 eval "$config_env"
 
@@ -318,7 +318,7 @@ gate_spawn() { # SEAT TICKET SHA GATE_DIR VERDICT_LINE ISOLATED
       printf '127' > "${jrc}.tmp" && mv "${jrc}.tmp" "$jrc"
       exit 0
     fi
-    TMPDIR="${STATE_DIR}/gate-tmp/${seat}" "$TIMEOUT_BIN" "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD" > "$jlog" 2>&1
+    gate_exec . "${STATE_DIR}/gate-tmp/${seat}" "$SUITE_TIMEOUT_S" "$TEST_CMD" > "$jlog" 2>&1
     local rc=$?
     printf '%s' "$rc" > "${jrc}.tmp" && mv "${jrc}.tmp" "$jrc"
   ) >/dev/null 2>&1 &
@@ -974,7 +974,7 @@ harvest_verdicts() {
           continue
         fi
         local gate_rc=1
-        if (cd "$GATE_DIR" && TMPDIR="${STATE_DIR}/gate-tmp/${seat}" "$TIMEOUT_BIN" "$SUITE_TIMEOUT_S" sh -c "$TEST_CMD") >"$gate_log" 2>&1; then
+        if gate_exec "$GATE_DIR" "${STATE_DIR}/gate-tmp/${seat}" "$SUITE_TIMEOUT_S" "$TEST_CMD" >"$gate_log" 2>&1; then
           gate_rc=0
         fi
         # Post-condition drift (TOCTOU): the worker must not have touched

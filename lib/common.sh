@@ -111,6 +111,20 @@ _timeout_runnable() { # CANDIDATE
   "$1" 1 true >/dev/null 2>&1
 }
 
+# gate_exec DIR TMPDIR SECONDS CMD — run a suite gate hermetically (ARB-HERM-1).
+# A suite must not see the pane that launched it: ambient REPO_DIR/STATE_DIR/
+# HERDR_* made suites resolve the real ledger and filter their demo agents out
+# (five false REDs on 2026-11-07). Scrub in a subshell, then bound with
+# TIMEOUT_BIN (callers resolve_timeout first). Exit 127 when DIR is missing.
+gate_exec() {
+  local dir="$1" tmp="$2" secs="$3" cmd="$4" v
+  (
+    cd "$dir" || exit 127
+    for v in $(compgen -e | grep -E '^(REPO_DIR|STATE_DIR|HERDR_.*)$' || true); do unset "$v"; done
+    TMPDIR="$tmp" exec "$TIMEOUT_BIN" "$secs" sh -c "$cmd"
+  )
+}
+
 resolve_timeout() {
   if [[ -n "${TIMEOUT_BIN:-}" ]]; then
     if _timeout_runnable "$TIMEOUT_BIN"; then

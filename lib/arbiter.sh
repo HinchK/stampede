@@ -51,7 +51,7 @@ _arb_cfg() {
   ARB_BASE="${BASE_BRANCH:-$(git -C "$ARB_REPO" rev-parse --abbrev-ref HEAD 2>/dev/null || printf 'main')}"
   ARB_QUEUE="${ARB_STATE}/integration.jsonl"
   ARB_REF="refs/heads/swarm/${ARB_SLUG}/integration"
-  ARB_WT="${ARB_REPO}/.herdr-swarm/worktrees/arbiter-${ARB_SLUG}"
+  ARB_WT="${ARB_REPO}/.herdr-swarm/worktrees/integration-${ARB_SLUG}"
 }
 
 _arb_cmd_runnable() {
@@ -257,6 +257,28 @@ arbiter_enqueue() {
   local now changes older
   now=$(date +%s)
 
+  # ARB-DUP-1: one commit lands under one ticket. Refuse a sha another ticket
+  # already integrated (its gate would re-run on measured code and the second
+  # ticket would show integrated for work it never produced) or has queued
+  # (default: no multi-ticket commits; model that explicitly if ever wanted).
+  # A sha merely contained in the ref with no ticket's integrated row (a worker
+  # that reports the base) still enqueues: it resolves as a no-op and releases
+  # its lease. Refusals record nothing.
+  # The ticket's own (ticket, sha) already queued or integrated is idempotent.
+  if [[ -f "$ARB_QUEUE" ]] && jq -e -s --arg t "$ticket" --arg s "$sha" \
+       'any(.[]; (.ticket|tostring) == $t and .sha == $s and (.status == "queued" or .status == "integrated"))' \
+       "$ARB_QUEUE" >/dev/null 2>&1; then
+    return 0
+  fi
+  local holder
+  holder=$([[ -f "$ARB_QUEUE" ]] && jq -r -s --arg t "$ticket" --arg s "$sha" \
+    '[.[] | select(.sha == $s and (.status == "queued" or .status == "integrated") and (.ticket|tostring) != $t)] | .[0] | if . then "\(.ticket) (\(.status))" else empty end' \
+    "$ARB_QUEUE" 2>/dev/null || true)
+  if [[ -n "$holder" ]]; then
+    printf 'arbiter: #%s REFUSED — %s is already held by #%s (one commit, one ticket)\n' "$ticket" "${sha:0:7}" "$holder" >&2
+    return 1
+  fi
+
   changes=$(_arb_queue_write enqueue "$(jq -cn --argjson ts "$now" --arg t "$ticket" \
     --arg seat "$seat" --arg sha "$sha" \
     '{ts: $ts, ticket: $t, seat: $seat, sha: $sha, status: "queued"}')") || return 1
@@ -312,6 +334,23 @@ _arb_wt_unusable() { # TICKET SEAT SHA — the stall must show in the Ops stream
     "$(jq -cn '{summary:"gate harness unavailable: arbiter worktree unusable — left queued"}')"
 }
 
+# ARB-LOCK-1: say WHO holds the drain lock and whether it is merely stopped.
+# kill -0 succeeds for a Ctrl+Z'd (state T) process, so liveness alone hides it.
+_arb_lock_holder_report() { # LOCK_DIR
+  local lk="$1" pid info stat
+  pid=""
+  [[ -f "$lk/pid" ]] && pid=$(cat "$lk/pid" 2>/dev/null || true)
+  printf 'arbiter: another drain holds the lock\n' >&2
+  [[ -n "$pid" ]] || return 0
+  info=$(ps -o etime=,command= -p "$pid" 2>/dev/null | sed -E 's/^ +//' || true)
+  stat=$(ps -o stat= -p "$pid" 2>/dev/null | tr -d ' ' || true)
+  printf 'arbiter:   holder pid %s%s\n' "$pid" "${info:+ — elapsed+command: $info}" >&2
+  if [[ "$stat" == T* ]]; then
+    # shellcheck disable=SC2016  # backticks are literal advice text
+    printf 'arbiter:   WARNING: pid %s is STOPPED (Ctrl+Z). Resume it with `fg` in its shell or `kill -CONT %s`, or end it with `kill -TERM %s`.\n' "$pid" "$pid" "$pid" >&2
+  fi
+}
+
 # ── drain ──────────────────────────────────────────────────────────────────
 # Serialized queue processor: oldest queued record first, one at a time.
 arbiter_drain() {
@@ -319,10 +358,12 @@ arbiter_drain() {
   [[ -f "$ARB_QUEUE" ]] || return 0
 
   arbiter_lock "$ARB_STATE" || {
-    printf 'arbiter: another drain holds the lock\n' >&2
+    _arb_lock_holder_report "$ARB_STATE/arbiter.lock"
     return 0
   }
 
+  local drain_n=0 drain_total
+  drain_total=$(arbiter_queued_count)
   while :; do
     local rec
     rec=$(jq -r -c -s 'map(select(.status == "queued")) | sort_by(.ts) | .[0] // empty' "$ARB_QUEUE" 2>/dev/null || true)
@@ -351,8 +392,19 @@ arbiter_drain() {
       return 1
     fi
 
+    drain_n=$((drain_n + 1))
+    # ARB-LOCK-1: the gate runs silently for up to SUITE_TIMEOUT_S; announce it.
+    printf 'arbiter: gating #%s (%s @ %s) [%s/%s queued, logs in %s/gate-logs] — can take up to %ss\n' \
+      "$ticket" "$seat" "${sha:0:7}" "$drain_n" "$drain_total" "$ARB_STATE" "${SUITE_TIMEOUT_S:-300}" >&2
     if ! _arb_integrate "$ticket" "$seat" "$sha" "$i0"; then
-      break   # record resolved (conflict/red/retry), or ungateable; stop the pass
+      # ARB-DRAIN-1: a conflict or RED gate resolves THIS record and leaves the
+      # ref and worktree clean at I0, so the records behind it are independent
+      # and keep draining. Anything else (still queued: harness failure, CAS or
+      # status write lost; superseded: the queue changed under the gate) stops
+      # the pass — the next drain re-reads the queue.
+      jq -e -s --arg t "$ticket" --arg s "$sha" \
+        '[.[] | select((.ticket|tostring) == $t and .sha == $s)] | last | .status | IN("conflict","integration_red")' \
+        "$ARB_QUEUE" >/dev/null 2>&1 || break
     fi
   done
 
@@ -407,10 +459,10 @@ _arb_integrate() { # TICKET SEAT SHA I0
     fi
     local gate_dir="${ARB_STATE}/gate-logs"
     gate_log="${gate_dir}/arbiter-${ticket}-${sha:0:7}.log"
-    mkdir -p "$gate_dir" "${ARB_STATE}/arbiter-tmp"
+    mkdir -p "$gate_dir" "${ARB_STATE}/gate-tmp/integration"
     local gate_rc=0
-    (cd "$ARB_WT" && TMPDIR="${ARB_STATE}/arbiter-tmp" \
-      "$TIMEOUT_BIN" "${SUITE_TIMEOUT_S:-300}" sh -c "$TEST_CMD") >"$gate_log" 2>&1 || gate_rc=$?
+    # Path carries no "arbiter" (suites matched that substring) and the env is scrubbed.
+    gate_exec "$ARB_WT" "${ARB_STATE}/gate-tmp/integration" "${SUITE_TIMEOUT_S:-300}" "$TEST_CMD" >"$gate_log" 2>&1 || gate_rc=$?
     if ! gate_tree_matches "$ARB_WT" "$candidate"; then
       _arb_set_status "$ticket" "$sha" integration_red \
         "$(jq -cn --arg old "$i0" --arg log "$gate_log" \

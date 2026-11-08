@@ -318,6 +318,9 @@ review_loop_on_review_verdict() { # TICKET SHA VERDICT STATE_DIR REVIEWER
   [[ "$sha" == "$cur_sha" ]] || { _review_fail_closed "$ticket" "$sd" "sha-mismatch:expected:${cur_sha:-none}"; return 1; }
 
   if [[ "$verdict" == "PASS" ]]; then
+    # REV-DUP-1: sha already matched the recorded one above, so a repeat PASS on
+    # review_passed is idempotent — no alert, no second ENQUEUE.
+    [[ "$state" == review_passed ]] && return 0
     [[ "$state" == awaiting_review ]] || { printf 'ALERT_INVALID %s no-pending-review\n' "$ticket"; return 1; }
     # shellcheck disable=SC2016  # jq program, not shell
     _review_write "$sd" \
@@ -332,6 +335,7 @@ review_loop_on_review_verdict() { # TICKET SHA VERDICT STATE_DIR REVIEWER
     printf 'DISPATCH_CRITIQUE %s %s %s %s %s\n' "$seat" "$ticket" "$round" "$max" "$(review_loop_findings_path "$ticket" "$sha" "$sd")"
     return 0
   fi
+  [[ "$state" == review_blocked ]] && return 0   # REV-DUP-1: repeat BLOCK at the recorded sha
   [[ "$state" == awaiting_review ]] || { printf 'ALERT_INVALID %s no-pending-review\n' "$ticket"; return 1; }
 
   if (( round < max )); then
@@ -807,16 +811,7 @@ swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
   if [[ -f "$config_file" ]]; then
     # Roster names must be namespaced exactly as config binding does it
     # (lib/config.sh: "{name}-{slug}"); the ledger records full names. The
-    # slug derivation mirrors the launcher: profile REPO, else dir basename.
-    if ! declare -F slugify >/dev/null 2>&1; then
-      slugify() {
-        local s="${1:-}"
-        s=$(printf '%s' "$s" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_-]+/-/g')
-        if [[ -z "$s" ]]; then printf 'swarm\n'; return 0; fi
-        [[ "$s" =~ ^[a-z] ]] || s="s-${s}"
-        printf '%s\n' "$s"
-      }
-    fi
+    # slug derivation mirrors the launcher (config_project_slug).
     roster_slug=""
     local profile_repo
     # Quoted form matches ensure_profile's writer (REPO="owner/repo"); the
@@ -826,11 +821,18 @@ swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
     if [[ -f "${abs_target}/.herdr-swarm/profile.env" ]]; then
       profile_repo=$(sed -nE 's/^REPO="?([^"]*)"?$/\1/p' "${abs_target}/.herdr-swarm/profile.env" 2>/dev/null | tail -n1 || true)
     fi
+    local roster_src
     if [[ -n "$profile_repo" && "$profile_repo" != none ]]; then
-      roster_slug=$(slugify "$profile_repo")
+      roster_src="$profile_repo"
     else
-      roster_slug=$(slugify "$(basename "$abs_target")")
+      roster_src=$(basename "$abs_target")
     fi
+    # ADR 0019: [swarm] name wins; REPO/basename is only the unnamed fallback.
+    if ! declare -F config_project_slug >/dev/null 2>&1; then
+      # shellcheck disable=SC1091
+      source "$(dirname "${BASH_SOURCE[0]}")/config.sh"
+    fi
+    roster_slug=$(config_project_slug "$config_file" "$roster_src")
     local roster_text roster_rc=0
     roster_text=$("${PYTHON_BIN:-python3}" - "$config_file" "$roster_slug" <<'PYROSTER'
 import sys, tomllib
