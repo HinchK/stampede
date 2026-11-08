@@ -135,6 +135,17 @@ resolve_timeout() {
   return 1
 }
 
+# A suite that inherits the gate runner's swarm context reads the LIVE
+# .herdr-swarm instead of its fixtures and goes falsely RED.
+gate_env() { # CMD [ARGS...]
+  local v args=()
+  for v in REPO_DIR STATE_DIR PROJECT_SLUG SWARM_CONFIG_NAME \
+           $(compgen -e | grep -E '^(HERDR_|STAMPEDE_CONFIG)' || true); do
+    args+=(-u "$v")
+  done
+  env "${args[@]}" "$@"
+}
+
 # ── verdict evidence (HASH-1) ───────────────────────────────────────────────
 # Tamper-evident verdict rows: every new session-verdicts.jsonl record carries
 # the supervising host and pid; rows produced by an actual gate run also carry

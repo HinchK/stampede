@@ -103,7 +103,11 @@ arch = next(s for s in seats if s['name'].startswith('arch-1'))
 pin = open(arch['worktree_dir'] + '/.opencode/opencode.json').read()
 assert 'zai-coding-plan/glm-5.3' in pin, pin
 assert any(c[:2] == ['agent', 'start'] and c[2].startswith('looper-') for c in calls), calls
-assert not any('arbiter' in ' '.join(c) for c in calls), calls
+# Match invocations, not substrings: the integration gate's own checkout
+# path (worktrees/arbiter-<slug>/) contains 'arbiter'.
+def invokes_arbiter(c):
+    return any(a == 'arbiter' or a.endswith('/arbiter.sh') or a == 'arbiter.sh' for a in c)
+assert not any(invokes_arbiter(c) for c in calls), calls
 PY
 [[ -f "$TARGET/.herdr-swarm/seat-only" ]] || { echo 'seat-only intake marker absent' >&2; exit 1; }
 

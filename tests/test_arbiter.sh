@@ -678,6 +678,18 @@ arbiter_enqueue 79 seat-num "$SHA_A" >/dev/null 2>&1
 check "string enqueue at the same (ticket, sha) is a duplicate, not an append" \
   '[[ $(jq -s "[.[] | select((.ticket|tostring) == \"79\")] | length" "$Q") == 1 ]]'
 
+# ── 20. hermetic gate: the runner's swarm context never reaches the suite ──
+HERM_STATE="$TEST_DIR/herm-state"
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wherm" "swarm/ptest/integration"
+printf 'herm\n' > "$TEST_DIR/wherm/herm.txt"
+SHA_HERM=$(commit_at "$TEST_DIR/wherm" "seat-h work")
+STATE_DIR="$HERM_STATE" arbiter_enqueue 230 seat-h "$SHA_HERM" >/dev/null 2>&1
+HERDR_PANE_ID=wX:p1 STAMPEDE_CONFIG_FILE=/live/swarm.config.toml STATE_DIR="$HERM_STATE" \
+  TEST_CMD='test -z "${REPO_DIR-}${STATE_DIR-}${PROJECT_SLUG-}${HERDR_PANE_ID-}${STAMPEDE_CONFIG_FILE-}"' \
+  arbiter_drain 2>/dev/null
+check "integration gate sees no REPO_DIR/STATE_DIR/slug/HERDR_*/config from its runner" \
+  '[[ $(jq -r -s "map(select((.ticket|tostring) == \"230\")) | .[-1].status" "$HERM_STATE/integration.jsonl") == integrated ]]'
+
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))

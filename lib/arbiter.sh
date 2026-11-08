@@ -410,7 +410,7 @@ _arb_integrate() { # TICKET SEAT SHA I0
     mkdir -p "$gate_dir" "${ARB_STATE}/arbiter-tmp"
     local gate_rc=0
     (cd "$ARB_WT" && TMPDIR="${ARB_STATE}/arbiter-tmp" \
-      "$TIMEOUT_BIN" "${SUITE_TIMEOUT_S:-300}" sh -c "$TEST_CMD") >"$gate_log" 2>&1 || gate_rc=$?
+      gate_env "$TIMEOUT_BIN" "${SUITE_TIMEOUT_S:-300}" sh -c "$TEST_CMD") >"$gate_log" 2>&1 || gate_rc=$?
     if ! gate_tree_matches "$ARB_WT" "$candidate"; then
       _arb_set_status "$ticket" "$sha" integration_red \
         "$(jq -cn --arg old "$i0" --arg log "$gate_log" \
