@@ -351,8 +351,12 @@ arbiter_drain() {
       return 1
     fi
 
+    # A resolved record (conflict/red/retry) must not block independent work
+    # behind it; one left queued is a harness stall, and would spin forever.
     if ! _arb_integrate "$ticket" "$seat" "$sha" "$i0"; then
-      break   # record resolved (conflict/red/retry), or ungateable; stop the pass
+      [[ "$(jq -r -s --arg t "$ticket" --arg s "$sha" \
+        'any(.[]; (.ticket | tostring) == $t and .sha == $s and .status == "queued")' \
+        "$ARB_QUEUE" 2>/dev/null)" == false ]] || break
     fi
   done
 

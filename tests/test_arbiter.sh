@@ -690,6 +690,21 @@ HERDR_PANE_ID=wX:p1 STAMPEDE_CONFIG_FILE=/live/swarm.config.toml STATE_DIR="$HER
 check "integration gate sees no REPO_DIR/STATE_DIR/slug/HERDR_*/config from its runner" \
   '[[ $(jq -r -s "map(select((.ticket|tostring) == \"230\")) | .[-1].status" "$HERM_STATE/integration.jsonl") == integrated ]]'
 
+# ── 21. one conflict does not halt the pass: independent work behind it lands
+DL_STATE="$TEST_DIR/dl-state"
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wdl1" main
+printf 'clash\n' > "$TEST_DIR/wdl1/alpha.txt"          # add/add vs integrated alpha.txt
+SHA_DL1=$(commit_at "$TEST_DIR/wdl1" "conflicting work")
+git -C "$REPO" worktree add -q --detach "$TEST_DIR/wdl2" "swarm/ptest/integration"
+printf 'independent\n' > "$TEST_DIR/wdl2/indep.txt"
+SHA_DL2=$(commit_at "$TEST_DIR/wdl2" "independent work")
+STATE_DIR="$DL_STATE" arbiter_enqueue 240 seat-x "$SHA_DL1" >/dev/null 2>&1
+STATE_DIR="$DL_STATE" arbiter_enqueue 241 seat-y "$SHA_DL2" >/dev/null 2>&1
+TEST_CMD="exit 0" STATE_DIR="$DL_STATE" arbiter_drain 2>/dev/null   # own gate: earlier sections leave a ref-racing check.sh in the tree
+dl_status() { jq -r -s --arg t "$1" 'map(select((.ticket|tostring) == $t)) | .[-1].status' "$DL_STATE/integration.jsonl"; }
+check "head-of-line conflict is recorded" '[[ $(dl_status 240) == conflict ]]'
+check "independent record behind the conflict integrates in the same pass" '[[ $(dl_status 241) == integrated ]]'
+
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))

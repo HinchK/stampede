@@ -172,7 +172,8 @@ arbiter_unlock "$STATE_DIR" queue.lock
     os.mkfifo(gate_release)
     drain = subprocess.Popen(['/bin/bash', str(root/'lib/arbiter.sh'), 'drain'],
         env={**env, 'GATE_ENTERED': str(gate_entered), 'GATE_RELEASE': str(gate_release),
-             'TEST_CMD': 'printf ready > "$GATE_ENTERED"; read -r token < "$GATE_RELEASE"'},
+             'GATE_ONCE': str(Path(tmp)/'gate-once'),
+             'TEST_CMD': '[ -e "$GATE_ONCE" ] && exit 0; : > "$GATE_ONCE"; printf ready > "$GATE_ENTERED"; read -r token < "$GATE_RELEASE"'},
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     with gate_entered.open() as handle:
         assert handle.read() == 'ready'
@@ -188,15 +189,15 @@ arbiter_unlock "$STATE_DIR" queue.lock
             handle.write('continue\n')
         stdout, stderr = drain.communicate(timeout=20)
     assert drain.returncode == 0, (stdout, stderr)
-    assert git('rev-parse', 'refs/heads/swarm/test/integration') == base
-    assert {(r['ticket'], r['sha']) for r in rows() if r['status'] == 'queued'} == {('A', new), ('B', base)}
+    # The pass continues past the superseded candidate: the arrivals integrate,
+    # and the tip is the superseding sha, never the superseded one.
+    assert git('rev-parse', 'refs/heads/swarm/test/integration') == new
+    assert not any(r['status'] == 'queued' for r in rows()), rows()
+    assert {(r['ticket'], r['sha']) for r in rows() if r['status'] == 'integrated'} == {('A', new), ('B', base)}
     assert next(r for r in rows() if r['sha'] == old)['status'] == 'superseded'
     print('PASS: arrivals proceed during slow tests; superseded candidates cannot advance integration')
 
-    run('''_arb_set_status A "$NEW" integrated "{merge_sha: \\\"$NEW\\\"}"
-_arb_set_status B "$BASE" integrated "{merge_sha: \\\"$BASE\\\"}"
-_arb_queue_write promote "$BASE"
-''', extra={'NEW': new})
+    run('_arb_queue_write promote "$BASE"')
     records = rows()
     assert next(r for r in records if r['sha'] == new)['status'] == 'integrated'
     assert next(r for r in records if r['ticket'] == 'B')['status'] == 'promoted'
