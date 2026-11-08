@@ -36,8 +36,16 @@ trap cleanup EXIT
 assert_ok()  { printf '  ✓ [%s] %s\n' "$1" "${2:-}"; PASS=$((PASS + 1)); }
 assert_bad() { printf '  ✗ [%s] %s\n' "$1" "${2:-}"; FAIL=$((FAIL + 1)); }
 last_suite_of() { jq -r -s --arg t "$1" '[.[] | select((.ticket | tostring) == $t)] | .[-1].suite // "none"' "$LOG" 2>/dev/null || printf 'err'; }
-expect() { # LABEL WANT GOT
-  if [[ "$3" == "$2" ]]; then assert_ok "$1" "$4"; else assert_bad "$1" "$4 (wanted $2, got $3)"; fi
+expect() { # LABEL GOT WANT MSG
+  if [[ "$3" == "$2" ]]; then assert_ok "$1" "$4"; else assert_bad "$1" "$4 (wanted $3, got $2)"; fi
+}
+# Eventual assertions poll instead of sleeping a fixed window: a stalled host
+# once pushed a 3s gate past the old 4s window and flaked [1e]/[1f]/[6].
+reap_until() { # TICKET WANT DEADLINE_S
+  local end=$((SECONDS + $3))
+  while [[ "$(last_suite_of "$1")" != "$2" ]] && (( SECONDS < end )); do
+    sleep 0.2; gate_reap >/dev/null 2>&1
+  done
 }
 
 # NOTE: helper names are redefined AFTER the sources below win — loop-bot's
@@ -145,8 +153,7 @@ gate_reap >/dev/null 2>&1
 b_state=$(last_suite_of 302); a_state=$(last_suite_of 301)
 [[ "$b_state" == "green" ]] && assert_ok 1c "fast seat B recorded while slow seat A still gating" || assert_bad 1c "B reaped early (got $b_state)"
 [[ "$a_state" == "none" ]] && assert_ok 1d "slow seat A not yet recorded (rc absent)" || assert_bad 1d "A premature (got $a_state)"
-sleep 2.5
-gate_reap >/dev/null 2>&1
+reap_until 301 green 15
 expect 1e "$(last_suite_of 301)" green "slow seat A recorded after completion"
 
 # ── 1f: HASH-1 — evidence hash + supervising host/pid on the reaped row ────
