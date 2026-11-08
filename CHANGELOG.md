@@ -20,6 +20,12 @@ pre-1.0: the public surface is not frozen.
   now a silent no-op when the base branch is already at the integration tip.
 
 ### Fixed
+- One project slug (#166, ADR 0019): the launcher, supervisor, standby,
+  verify roster, `stampede arbiter` and `stampede autopilot` all take the
+  slug from `[swarm] name` via `config_project_slug`, falling back to the
+  profile `REPO` or directory name only when no name is set. Agent names,
+  seat branches and the integration ref can no longer split across
+  `swarm/<repo-slug>/…` and `swarm/<name>/…`.
 - A rejected review verdict anchor is harvested exactly once (#REV-ALERT-1,
   audit Must-fix #1): pane scrollback persists across supervisor passes, and
   a rejected anchor that was never recorded in the seen-file re-alerted —

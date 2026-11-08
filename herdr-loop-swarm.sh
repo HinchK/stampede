@@ -239,7 +239,7 @@ slug_source="${REPO:-}"
 if [[ -z "$slug_source" || "$slug_source" == "none" ]]; then
   slug_source=$(basename "$PWD")
 fi
-PROJECT_SLUG=$(slugify "$slug_source")
+PROJECT_SLUG=$(config_project_slug "$slug_source" "$CONFIG_FILE")
 good "Project slug: ${PROJECT_SLUG}"
 
 # Config binding: seats, kinds, models, tabs — single source of truth

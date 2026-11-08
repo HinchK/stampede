@@ -102,7 +102,7 @@ printf 'predecessor\n' > "$G/pred.txt"; git -C "$G" add pred.txt; gcommit "$G" '
 git -C "$G" branch swarm/test/integration
 git -C "$G" checkout -q main
 # shellcheck disable=SC2034  # read by the sourced dispatch_sync_worker function
-REPO_DIR="$G" STATE_DIR="$TMP/sync-state" CHANNEL_DIR="$TMP/sync-channel" SWARM_CONFIG_NAME=test
+REPO_DIR="$G" STATE_DIR="$TMP/sync-state" CHANNEL_DIR="$TMP/sync-channel" PROJECT_SLUG=test
 mkdir -p "$STATE_DIR" "$CHANNEL_DIR"
 printf '{"seats":[{"name":"arch-1-test","isolated":true,"worktree_dir":"%s"},{"name":"arch-2-test","isolated":true,"worktree_dir":"%s"},{"name":"pm-test","isolated":false,"worktree_dir":"%s"}]}' \
   "$W1" "$W2" "$G" > "$STATE_DIR/seats.json"

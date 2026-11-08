@@ -68,6 +68,12 @@ if cur is not None:
   fi
 }
 
+# Seats and the integration ref must share one slug, or integration splits
+# across two refs; FALLBACK (profile REPO / dir name) only when unnamed.
+config_project_slug() { # FALLBACK [TOML]
+  slugify "$(config_get swarm.name "$1" "${2:-$DEFAULT_CONFIG}")"
+}
+
 # List all enabled seat keys in declaration order
 config_get_seats() {
   local toml_path="${1:-$DEFAULT_CONFIG}"

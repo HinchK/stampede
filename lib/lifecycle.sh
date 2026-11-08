@@ -807,7 +807,8 @@ swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
   if [[ -f "$config_file" ]]; then
     # Roster names must be namespaced exactly as config binding does it
     # (lib/config.sh: "{name}-{slug}"); the ledger records full names. The
-    # slug derivation mirrors the launcher: profile REPO, else dir basename.
+    # slug derivation mirrors the launcher (ADR 0019): [swarm] name, else
+    # profile REPO, else dir basename.
     if ! declare -F slugify >/dev/null 2>&1; then
       slugify() {
         local s="${1:-}"
@@ -826,7 +827,11 @@ swarm_verify_seats() { # [TARGET_DIR] [TIMEOUT_MS]
     if [[ -f "${abs_target}/.herdr-swarm/profile.env" ]]; then
       profile_repo=$(sed -nE 's/^REPO="?([^"]*)"?$/\1/p' "${abs_target}/.herdr-swarm/profile.env" 2>/dev/null | tail -n1 || true)
     fi
-    if [[ -n "$profile_repo" && "$profile_repo" != none ]]; then
+    local cfg_name
+    cfg_name=$("${PYTHON_BIN:-python3}" -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb")).get("swarm", {}).get("name", ""))' "$config_file" 2>/dev/null || true)
+    if [[ -n "$cfg_name" ]]; then
+      roster_slug=$(slugify "$cfg_name")
+    elif [[ -n "$profile_repo" && "$profile_repo" != none ]]; then
       roster_slug=$(slugify "$profile_repo")
     else
       roster_slug=$(slugify "$(basename "$abs_target")")

@@ -118,7 +118,7 @@ slug_source="${REPO:-}"
 if [[ -z "$slug_source" || "$slug_source" == "none" ]]; then
   slug_source=$(basename "$REPO_DIR")
 fi
-PROJECT_SLUG=$(slugify "$slug_source")
+PROJECT_SLUG=$(config_project_slug "$slug_source")
 config_env=$(config_dump_env "$PROJECT_SLUG")
 eval "$config_env"
 
@@ -1237,8 +1237,8 @@ dispatch_sync_worker() { # WORKER
   wt=$(_headless_seat_field "$worker" worktree_dir)
   [[ -n "$wt" && -d "$wt" ]] || return 0
   [[ "$(cd "$wt" && pwd -P)" != "$(cd "$REPO_DIR" && pwd -P)" ]] || return 0
-  # ARB-SLUG-1: the same slug expression the arbiter drain uses.
-  ref="refs/heads/swarm/${SWARM_CONFIG_NAME:-$PROJECT_SLUG}/integration"
+  # ADR 0019: the one project slug the arbiter drain uses too.
+  ref="refs/heads/swarm/${PROJECT_SLUG}/integration"
   git -C "$wt" rev-parse -q --verify "$ref" >/dev/null || return 0
   git -C "$wt" merge-base --is-ancestor "$ref" HEAD && return 0
   if ! git -C "$wt" merge --ff-only -q "$ref" >/dev/null 2>&1; then
@@ -1336,10 +1336,9 @@ arbiter_auto_drain() {
   # Explicit env: a separate process does not inherit the supervisor's
   # unexported shell bindings, and the arbiter must come from the
   # orchestrator (SCRIPT_DIR), never the target tree (DOG-13).
-  # ARB-SLUG-1: the drain's slug is the config [swarm] name — the canonical
-  # integration-ref slug — NOT this process's seat-namespacing slug (the
-  # profile-REPO slug), whose mismatch is what forked a phantom ref.
-  REPO_DIR="$REPO_DIR" STATE_DIR="$STATE_DIR" PROJECT_SLUG="${SWARM_CONFIG_NAME:-$PROJECT_SLUG}" \
+  # ADR 0019: one project slug ([swarm] name) names seats and the
+  # integration ref alike, so the drain cannot fork a second line (#166).
+  REPO_DIR="$REPO_DIR" STATE_DIR="$STATE_DIR" PROJECT_SLUG="$PROJECT_SLUG" \
   BASE_BRANCH="${BASE_BRANCH:-}" TEST_CMD="$TEST_CMD" SUITE_TIMEOUT_S="$SUITE_TIMEOUT_S" \
   bash "$SCRIPT_DIR/lib/arbiter.sh" drain \
     >> "${STATE_DIR}/gate-logs/arbiter-drain.log" 2>&1 &
