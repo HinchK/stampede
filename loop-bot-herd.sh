@@ -383,7 +383,8 @@ _base_is_red() { # SHA → 0 when the merge-base fails the suite too
   case "$(cat "$rcf")" in
     0|126|127) return 1 ;;
     2)
-      if [[ -f "$base_log" ]] && grep -q -E "cannot open|Can't open" "$base_log"; then
+      # dash reports a missing script on its first line; a later match is suite output.
+      if [[ -f "$base_log" ]] && head -n 3 "$base_log" | grep -q -E "cannot open|Can't open"; then
         return 1
       fi
       ;;
