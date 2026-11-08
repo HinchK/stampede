@@ -245,6 +245,12 @@ if _base_is_red "$SHA_B"; then
 else
   assert_bad 7c "real exit 2 was not base RED"
 fi
+printf 'running suite\nok t1\nok t2\nok t3\nt4: cannot open fixture.txt\nFAIL: t4\n' > "$STATE/gate-logs/base-${base_sha:0:12}.log"
+if _base_is_red "$SHA_B"; then
+  assert_ok 7d "exit 2 with a late 'cannot open' in suite output is base RED"
+else
+  assert_bad 7d "late 'cannot open' was misread as a missing script"
+fi
 rm -rf "$STATE/base-gates"
 
 # ── 4: crash safety — dead pid without rc discarded, never green ──────────
