@@ -133,4 +133,21 @@ printf -- '---\nid: 21\nowns: src/next.py\n---\n\nNext task\n' > "$TMP/sync-tick
 [[ "$(git -C "$W3" rev-parse HEAD)" == "$(git -C "$G" rev-parse swarm/test/integration)" ]] \
   || { echo 'frontmatter ticket brief skipped the checkout sync' >&2; exit 1; }
 
+# A GREEN records files outside the ticket's owns; a RED first asks whether
+# the base fails too, so the worker is not sent to repair a broken trunk.
+WD="$TMP/wd"
+git -C "$G" worktree add -q --detach "$WD" swarm/test/integration
+mkdir -p "$G/maps/tickets"; printf -- '---\nid: 30\nowns: a.txt\n---\n' > "$G/maps/tickets/t30.md"
+printf 'a\n' > "$WD/a.txt"; printf 'b\n' > "$WD/b.txt"; git -C "$WD" add -A; gcommit "$WD" 'drifting work'
+SHA_D=$(git -C "$WD" rev-parse HEAD)
+_gate_green_continue 30 arch-x "$SHA_D" false 2>/dev/null
+jq -e 'select(.ticket == "30") | .files == ["b.txt"]' "$G/.herdr-swarm/owns-violations.jsonl" >/dev/null 2>&1 \
+  || { echo 'GREEN did not record the file outside owns' >&2; exit 1; }
+TEST_CMD='test -e ok.txt'
+_base_is_red "$SHA_D" 2>/dev/null || { echo 'a base that fails the suite was blamed on the worker' >&2; exit 1; }
+rm -rf "$STATE_DIR/base-gates"
+TEST_CMD='test ! -e b.txt'
+! _base_is_red "$SHA_D" 2>/dev/null || { echo 'a green base was reported RED' >&2; exit 1; }
+[[ -z "$(git -C "$G" worktree list | grep base-gates)" ]] || { echo 'base gate left its worktree behind' >&2; exit 1; }
+
 printf 'test_manual_arbiter: PASS\n'

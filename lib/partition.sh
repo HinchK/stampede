@@ -340,6 +340,19 @@ _partition_ticket_file() { # TICKET REPO — prints the path; rc 1 when unresolv
   return 1
 }
 
+# Prints each blocked_by/depends_on id not yet resolved; rc 0 when any is open.
+# A blocker with no ticket file counts as open: dispatching ahead of an
+# unknown prerequisite is the out-of-order failure this exists to stop.
+ticket_blockers_open() { # TICKET_FILE REPO
+  local id tf st open=1
+  for id in $(sed -nE 's/^(blocked_by|depends_on):[[:space:]]*//p' "$1" | tr -d '[]"' | tr ',' ' '); do
+    st=""
+    tf=$(_partition_ticket_file "$id" "$2") && st=$(sed -nE 's/^status:[[:space:]]*//p' "$tf" | head -n1 | tr -d '[:space:]"')
+    case "$st" in resolved|done|closed|superseded) ;; *) printf '%s\n' "$id"; open=0 ;; esac
+  done
+  return "$open"
+}
+
 # lease_acquire TICKET [SEAT] [BRANCH] [OWNS_LINE|'-' to read ticket file]
 # The conflict check and the acquire happen in the SAME locked section.
 # rc 0 acquired; 1 blocked/malformed

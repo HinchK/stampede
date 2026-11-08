@@ -204,7 +204,11 @@ EOF
     # an owns-overlap or a held lease parks the ticket, it never forces in.
     # partition_check: 0 = clear, 2 = exclusive-clear (no owns — runs
     # alone), 1 = blocked. Only 1 parks.
-    local prc=0
+    local prc=0 blockers
+    if blockers=$(ticket_blockers_open "$f" "$dir"); then
+      printf 'headless: #%s parked — blocked by unresolved %s\n' "$tid" "$(tr '\n' ' ' <<<"$blockers")"
+      continue
+    fi
     partition_check "$f" "$dir" >/dev/null 2>&1 || prc=$?
     if (( prc == 1 )); then
       printf 'headless: #%s parked — partition overlap\n' "$tid"
