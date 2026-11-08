@@ -1303,7 +1303,7 @@ arbiter_handback_feedback() {
   done < <(jq -r 'select(.status == "conflict" or .status == "integration_red")
     | [ (.ticket | tostring), (.seat // ""), .sha, .status,
         (if .status == "conflict" then ((.files // []) | join(", "))
-         else ([.gate.reason, .gate.log] | map(select(. != null)) | join("; ")) end) ] | @tsv' "$q" 2>/dev/null)
+         else ([.gate.reason, (.gate.failed_suite | if . then "failed suite: " + . else null end), .gate.log] | map(select(. != null)) | join("; ")) end) ] | @tsv' "$q" 2>/dev/null)
 }
 
 arbiter_auto_drain() {
