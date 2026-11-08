@@ -471,11 +471,16 @@ _arb_integrate() { # TICKET SEAT SHA I0
       return 1
     fi
     if (( gate_rc != 0 )); then
+      # ARB-RED-MSG-1: `make test` ends a failing run with "✖ FAILED: <suite>"; other runners leave it empty.
+      local failed_suite
+      failed_suite=$(sed -n 's/^✖ FAILED: //p' "$gate_log" 2>/dev/null | tail -n 1)
       _arb_set_status "$ticket" "$sha" "integration_red" \
-        "{integration_before: \"${i0}\", gate: {log: \"${gate_log}\"}}"
+        "$(jq -cn --arg old "$i0" --arg log "$gate_log" --arg fs "$failed_suite" \
+          '{integration_before:$old, gate:({log:$log} + (if $fs == "" then {} else {failed_suite:$fs} end))}')"
       _arb_telemetry arbiter.red "$ticket" "$seat" "$sha" \
-        "$(jq -cn --arg l "$gate_log" '{summary:"integration gate RED", log: $l}')"
-      printf 'arbiter: #%s integration gate RED (ref NOT advanced; log: %s)\n' "$ticket" "$gate_log" >&2
+        "$(jq -cn --arg l "$gate_log" --arg fs "$failed_suite" '{summary:"integration gate RED", log: $l, failed_suite: $fs}')"
+      printf 'arbiter: #%s integration gate RED%s (ref NOT advanced; log: %s)\n' \
+        "$ticket" "${failed_suite:+ in $failed_suite}" "$gate_log" >&2
       return 1
     fi
   fi

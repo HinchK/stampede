@@ -184,13 +184,18 @@ check "arbiter worktree clean after merge --abort" \
 
 # ── 4. integration_red leaves the ref unmoved ──────────────────────────────
 printf 'RED\n' > "$TEST_DIR/wc/red.flag"
-printf '#!/bin/sh\nif [ -f red.flag ]; then exit 1; fi\nexit 0\n' > "$TEST_DIR/wc/check.sh"
+printf '#!/bin/sh\nif [ -f red.flag ]; then printf "\\342\\234\\226 FAILED: tests/test_fake.sh\\n" >&2; exit 1; fi\nexit 0\n' > "$TEST_DIR/wc/check.sh"
 rm -f "$TEST_DIR/wc/alpha.txt"
 SHA_R=$(commit_at "$TEST_DIR/wc" "breaks combined suite")
 REF_BEFORE=$(git -C "$REPO" rev-parse "$IREF")
 arbiter_enqueue 204 seat-c "$SHA_R"
-arbiter_drain 2>/dev/null
+RED_ERR=$(arbiter_drain 2>&1 >/dev/null)
 ck 204 integration_red "RED combined tree recorded as integration_red"
+# ARB-RED-MSG-1 (#168): the RED names the failing suite, in the message and the row.
+check "RED message names the failing suite" \
+  '[[ "$RED_ERR" == *"#204 integration gate RED in tests/test_fake.sh"* ]]'
+check "integration_red row carries gate.failed_suite" \
+  '[[ $(jq -r -s --arg t 204 "[.[] | select((.ticket|tostring) == \$t and .status == \"integration_red\")] | last | .gate.failed_suite" "$Q") == tests/test_fake.sh ]]'
 check "RED integration files NO green verdict record (#204)" \
   '[[ $(jq -s --arg t 204 "[.[] | select((.ticket|tostring) == \$t and .suite == \"green\")] | length" "$SV") == 0 ]]'
 check "integration ref NOT advanced on RED" \
