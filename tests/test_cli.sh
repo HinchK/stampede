@@ -232,7 +232,9 @@ if [[ -e "$HB_BIN/timeout" ]]; then
   git -C "$HR3" config user.email t@t; git -C "$HR3" config user.name t
   git -C "$HR3" remote add origin https://github.com/t/scratch3.git
   printf '.herdr-swarm/\n' > "$HR3/.gitignore"
-  printf 'test:\n\t@exit 1\n' > "$HR3/Makefile"          # the gate is RED, always
+  # RED for the worker, green only in the supervisor's base-check checkout:
+  # the failure is the worker's, so the re-verdict ceiling is what ends it.
+  printf 'test:\n\t@case "$$PWD" in */base-gates/*) exit 0;; *) exit 1;; esac\n' > "$HR3/Makefile"
   mkdir -p "$HR3/maps/tickets"
   printf 'x\n' > "$HR3/f.txt"; git -C "$HR3" add -A; git -C "$HR3" commit -qm base
   printf -- '---\nid: T-RED\nstatus: backlog\n---\nbody\n' > "$HR3/maps/tickets/tred.md"

@@ -143,9 +143,11 @@ SHA_D=$(git -C "$WD" rev-parse HEAD)
 _gate_green_continue 30 arch-x "$SHA_D" false 2>/dev/null
 jq -e 'select(.ticket == "30") | .files == ["b.txt"]' "$G/.herdr-swarm/owns-violations.jsonl" >/dev/null 2>&1 \
   || { echo 'GREEN did not record the file outside owns' >&2; exit 1; }
+# shellcheck disable=SC2034  # read by the sourced _base_is_red
 TEST_CMD='test -e ok.txt'
 _base_is_red "$SHA_D" 2>/dev/null || { echo 'a base that fails the suite was blamed on the worker' >&2; exit 1; }
 rm -rf "$STATE_DIR/base-gates"
+# shellcheck disable=SC2034  # read by the sourced _base_is_red
 TEST_CMD='test ! -e b.txt'
 ! _base_is_red "$SHA_D" 2>/dev/null || { echo 'a green base was reported RED' >&2; exit 1; }
 [[ -z "$(git -C "$G" worktree list | grep base-gates)" ]] || { echo 'base gate left its worktree behind' >&2; exit 1; }

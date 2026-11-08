@@ -375,7 +375,16 @@ _base_is_red() { # SHA → 0 when the merge-base fails the suite too
     git -C "$REPO_DIR" worktree remove "$wt" >/dev/null 2>&1 || warn "base gate worktree $wt left in place (not clean)"
     printf '%s' "$rc" > "$rcf"
   fi
-  [[ "$(cat "$rcf")" != 0 ]]
+  # 126/127: the base cannot run the suite at all, which attributes nothing.
+  case "$(cat "$rcf")" in 0|126|127) return 1 ;; esac
+}
+
+_base_red_escalate() { # TICKET SHA → 0 when headless dead-lettered it (no human is watching a batch)
+  bad "#$1 @ $2 RED, and its base RED too — worker NOT asked to repair; fix the base (log: ${STATE_DIR}/gate-logs/base-*.log)"
+  _sup_notify "base RED" "#$1: the base also fails the suite; worker repair loop skipped"
+  _headless_active || return 1
+  _headless_deadletter "$1" "$2" "suite RED and its base fails too — fix the base"
+  return 0
 }
 
 _gate_green_continue() { # TICKET SEAT SHA ISOLATED
@@ -433,7 +442,7 @@ gate_reap() {
       suite_ok="green"; ok "gate job ${jid}: GREEN (log: $gate_log)"
       _gate_green_continue "$ticket" "$seat" "$sha" "$iso"
     elif _base_is_red "$sha"; then
-      suite_ok="base_red"; bad "#$ticket @ ${sha} RED, and its base RED too — worker NOT asked to repair; fix the base (log: ${STATE_DIR}/gate-logs/base-*.log)"; _sup_notify "base RED" "#$ticket: the base also fails the suite; worker repair loop skipped"
+      suite_ok="base_red"; _base_red_escalate "$ticket" "$sha" && suite_ok="dead_letter"
     else
       suite_ok="RED"; bad "gate job ${jid}: RED (rc=${rc_val}) — NOT filed; worker must fix (log: $gate_log)"
       if _headless_ceiling_breached "$ticket" 1; then
@@ -1024,7 +1033,7 @@ harvest_verdicts() {
           _gate_green_continue "$ticket" "$seat" "$sha" "$GATE_ISOLATED"
           echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence "$gate_log")}" >> "$SESSION_LOG"
         elif _base_is_red "$sha"; then
-          suite_ok="base_red"; bad "#$ticket @ ${sha} RED, and its base RED too — worker NOT asked to repair; fix the base (log: ${STATE_DIR}/gate-logs/base-*.log)"; _sup_notify "base RED" "#$ticket: the base also fails the suite; worker repair loop skipped"
+          suite_ok="base_red"; _base_red_escalate "$ticket" "$sha" && suite_ok="dead_letter"
           echo "{\"ts\": $ts, \"ticket\": \"$ticket\", \"sha\": \"$sha\", \"seat\": \"$seat\", \"suite\": \"$suite_ok\", \"log\": \"$gate_log\", \"verdict\": $(jq -Rn --arg v "$verdict_line" '$v' ), $(_verdict_evidence "$gate_log")}" >> "$SESSION_LOG"
         else
           suite_ok="RED"; bad "suite gate RED for #$ticket @ ${sha} — NOT filed; arch must fix before done (log: $gate_log)"
