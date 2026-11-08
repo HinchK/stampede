@@ -18,6 +18,16 @@ import tomllib
 from roles import seat_roles
 
 
+def _agy_failure_message(model, exc):
+    detail = exc.stderr or exc.stdout or ""
+    snippet = str(detail).strip().replace("\n", " ")[:300]
+    exit_text = "timeout" if isinstance(exc, subprocess.TimeoutExpired) else str(exc.returncode)
+    message = f"agy --print failed for model {model} (exit {exit_text})"
+    if snippet:
+        message += f": {snippet}"
+    return message
+
+
 VALID_MODES = ("quiet", "medium", "loud")
 VALID_EVENTS = ("green", "new", "red", "blocked")
 PAUSED_SUMMARY_LIMIT = 8
@@ -455,10 +465,17 @@ class Attention:
                   "Do not run commands, approve gates, drain the arbiter, or promote. "
                   "Checkpoint: " + json.dumps(checkpoint, ensure_ascii=False))
         with tempfile.TemporaryDirectory(prefix="stampede-looper-") as runtime:
-            result = subprocess.run(["agy", "--print", prompt, "--model", model, "--effort", "low", "--sandbox",
-                                     "--output-format", "json", "--json-schema", SCHEMA,
-                                     "--print-timeout", "90s", "--disable-slash-commands"],
-                                    cwd=Path(runtime), capture_output=True, text=True, timeout=100, check=True)
+            try:
+                result = subprocess.run(["agy", "--print", prompt, "--model", model, "--effort", "low", "--sandbox",
+                                         "--output-format", "json", "--json-schema", SCHEMA,
+                                         "--print-timeout", "90s", "--disable-slash-commands"],
+                                        cwd=Path(runtime), capture_output=True, text=True, timeout=100, check=True)
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+                # ATTN-ERR-1: CalledProcessError/TimeoutExpired stringify the whole
+                # argv, so the ~1,500-char prompt lands in handoff.log and gets
+                # truncated before the exit status. Name the model, exit, and a
+                # short stderr/stdout snippet instead.
+                raise ValueError(_agy_failure_message(model, exc)) from None
         if len(result.stdout) > 100_000:
             raise ValueError("looper response exceeded bound")
         packet = json.loads(result.stdout)
