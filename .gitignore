@@ -9,6 +9,7 @@ __pycache__/
 .DS_Store
 .env
 *.log
+*.bak
 .vscode/
 .claude/
 .clearance-rendered-preview-*/
