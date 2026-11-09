@@ -1,9 +1,12 @@
 # Swarm State Checkpoint: Universal Herdr Swarm (`herd-swarm`)
 
 **Updated:** 2026-11-08  
-**HEAD on main:** `71b23e6` (PR #183 merged)  
+**HEAD on main:** `24c2cef` (PR #183 merged, worktrees audited & pruned)  
 **Suites:** 34, `make lint` clean (68 shell files), 20/20 in `test_worktree_sweep.sh`  
-**Now:** Shipped PR #182 & PR #183 (`fix/base-red-dash-log-window`, `fix/base-timeout-and-worktree-sweep`), added `scripts/worktree-sweep.sh` & `stampede worktree` CLI, swept 8 stale merged worktrees (down from 18 to 10).  
+**Now:** Pruned 5 dangling/superseded worktrees (`arb-slug-3-166`, `swarm-provider-research`, `research-gas-city-herdr-adapter`, `research-herdr-plugin-packaging`, `docs-simplify-reset`) and their local branches. Registered worktrees down from 11 to 6 (1 root, 3 active swarm seats, 2 queued/spike worktrees).  
+**Looper Backlog Queue:**  
+1. `docs/landscape-map` (`.claude/worktrees/landscape-map` @ `91153ef`): 3 findings docs (`open-source-landscape.md`, `gas-city-herdr-adapter.md`, `herdr-plugin-packaging.md`) and remaining triage tickets (`HERDR-6..10`, `LAND-5..8`). Needs clean landing on `main` via arch/docs seat.  
+2. `spike/looper-idle-discipline` (`.claude/worktrees/looper-idle-discipline` @ `cbd3612`): looper idle discipline experiment in `briefs/looper.in.md` (benchmark poll share vs idle before deciding to merge or drop).  
 **Not doing:** version bump, live Herdr, unconfirmed branch resets.
 
 ---
