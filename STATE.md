@@ -1,5 +1,21 @@
 # Swarm State Checkpoint: Universal Herdr Swarm (`herd-swarm`)
 
+**Updated:** 2026-11-09  
+**HEAD on main:** `78b8b06` (PR #184 merged, Tag `v0.6.1` published)  
+**Suites:** 34 green, `make lint` clean (68 shell files), version 0.6.1  
+**Landings & Checkpoint Progress:**  
+- **v0.6.1 Release Landed:** Consolidated PR #184 merged to `main` and tagged `v0.6.1`:
+  - `TEST-ISO-1` (`4901397`): Autopilot suite hermeticity to ambient `HERDR_*` pane context.
+  - `T-LAYOUT-4PANE` (`7764331`): Tab pane cap at 4; dedicated `logs` tab with 2×2 layout for model-free views.
+  - `LIBDOC-1` (`1f2bd20`): Published `docs/lib-guide.md` covering all 31 modules in `lib/`.
+  - `AUDIT-1` (`e6fc188`): Whole-repo ponytail audit and triage report in-repo (`docs/audits/2026-11-08-ponytail-audit.md`).
+  - `DOCSWEEP-1` (`31e444a`): Truth sweep of README, user guide, CHANGELOG [Unreleased], archival banners, and CLI sync.
+  - `ADR 0020` (`629513d`): Ticket eligibility and status categories specification.
+- **Active Dispatch:** `ELIG-1` dispatched to `arch-1-stampede` (deepening Ticket Eligibility into `lib/tickets.py`) under human override for `PART-1` partition check.  
+**Worktree Cleanup Status:** 0 unmerged/dangling worktrees; clean registered seat layout.  
+
+---
+
 **Updated:** 2026-11-08  
 **HEAD on main:** `629513d` (DOCSWEEP-1 and ELIG-1 queue landed)  
 **Suites:** 34, `make lint` clean (68 shell files), 100% green test suites  
