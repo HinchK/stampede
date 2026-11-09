@@ -432,13 +432,20 @@ fi
 # Layout Engine: 2-Tab Balanced Topology + Dynamic Seating
 # ──────────────────────────────────────────────────────────────────────────
 
-printf '\n%s▸ Building Swarm Topology (Herd & Ops Tabs)%s\n' "$BOLD" "$RESET"
+printf '\n%s▸ Building Swarm Topology (Herd, Ops & Logs Tabs)%s\n' "$BOLD" "$RESET"
 
 # shellcheck disable=SC1091  # dynamically resolved sibling lib
 source "$LIB_DIR/layout_engine.sh"
 
 read -r HerdTab HerdAnchor <<< "$(tab_by_label "$WS_ID" "herd")"
 read -r OpsTab OpsAnchor   <<< "$(tab_by_label "$WS_ID" "ops")"
+# T-LAYOUT-4PANE: the dedicated model-free views tab. Bounded mode only —
+# legacy installs keep their historical ops-tab layout and must not sprout
+# an empty logs tab (tab_by_label creates the tab when it is missing).
+LogTab=""; LogAnchor=""
+if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; then
+  read -r LogTab LogAnchor <<< "$(tab_by_label "$WS_ID" "logs")"
+fi
 
 agent_alive() { herdr agent list 2>/dev/null | grep -q "\"$1\""; }
 pane_of_agent() { herdr agent get "$1" 2>/dev/null | jq -r '.result.agent.pane_id // empty'; }
@@ -495,6 +502,12 @@ pane_present() { # PANE
   [[ -n "$1" ]] && herdr pane list 2>/dev/null \
     | jq -e --arg p "$1" '.result.panes[]? | select(.pane_id == $p)' >/dev/null 2>&1
 }
+# T-LAYOUT-4PANE: an anchor pane hosting a live agent must never be closed
+# as an "idle shell" (the split-failure fallback seats agents into anchors).
+anchor_has_agent() { # PANE
+  [[ -n "$1" ]] && herdr agent list 2>/dev/null \
+    | jq -e --arg p "$1" '.result.agents[]? | select(.pane_id == $p)' >/dev/null 2>&1
+}
 
 # Render project briefs from briefs/*.in.md templates (profile- & slug-aware)
 printf '\n%s▸ Rendering Standing Briefs%s\n' "$BOLD" "$RESET"
@@ -514,6 +527,7 @@ for tab_name in herd ops; do
 
   seat_idx=0
   prev_pane=""
+  tab_split_new=0
   for seat_key in $SEAT_KEYS; do
     tab_var="SEAT_TAB_${seat_key}"
     [[ "${!tab_var}" == "$tab_name" ]] || continue
@@ -570,7 +584,9 @@ for tab_name in herd ops; do
         1) seat_pane=$(split_pane "${prev_pane:-$tab_anchor}" down 0.5 "$seat_cwd") ;;
         *) seat_pane=$(split_pane "$tab_anchor" down 0.5 "$seat_cwd") ;;
       esac
-      if [[ -z "$seat_pane" ]]; then
+      if [[ -n "$seat_pane" ]]; then
+        tab_split_new=1
+      else
         warn "No pane available for '${seat_name}' — seating into tab anchor"
         seat_pane="$tab_anchor"
       fi
@@ -657,34 +673,60 @@ for tab_name in herd ops; do
     fi
     seat_idx=$((seat_idx + 1))
   done
+
+  # T-LAYOUT-4PANE: a tab created fresh carries an idle anchor shell beside
+  # its seats. Once this run has seated panes here, close the anchor so the
+  # tab holds exactly its seats (the 2×2 cap of ADR 0011). Never on
+  # reattach-only runs (no splits happened) and never while a live agent
+  # occupies the anchor. Legacy (non-bounded) installs keep the ops anchor:
+  # it hosts their telemetry stream.
+  if (( tab_split_new )) \
+     && { [[ "$tab_name" == "herd" ]] || [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; } \
+     && ! anchor_has_agent "$tab_anchor"; then
+    herdr pane close "$tab_anchor" >/dev/null 2>&1 || true
+  fi
 done
 
 # Durable, model-free views. Their pane IDs join the managed ledger so `down`
 # closes only Stampede-owned panes; a repeated `up` reuses them.
 if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; then
-  for view in worklog troubleshooting handoff; do
-    view_name="${view}-${PROJECT_SLUG}"
-    view_path="${PWD}/.herdr-swarm/${view}.log"
-    touch "$view_path"
-    view_pane=$(recorded_pane "$view_name")
-    if ! pane_present "$view_pane"; then
-      view_pane=$(split_pane "$OpsAnchor" down 0.5 "$PWD") || true
-      if [[ -n "$view_pane" ]]; then
-        herdr pane rename "$view_pane" "$view" >/dev/null 2>&1 || true
-        printf -v view_cmd 'tail -n 30 -F %q' "$view_path"
-        herdr pane run "$view_pane" "$view_cmd" >/dev/null 2>&1 || warn "$view pane could not start"
-      fi
+  # T-LAYOUT-4PANE: the model-free views live in the 'logs' tab as a
+  # balanced 2×2 — TL telemetry-stream (the logs anchor itself), TR the
+  # supervisor watch (split right of the anchor), BL the worklog tail
+  # (split down of the anchor), BR the handoff tail (split down of the
+  # supervisor pane). With [proxy] enabled the BR cell runs the routing
+  # proxy instead and the BL tail adds handoff — no tab ever exceeds the
+  # 4-pane cap. Pane IDs join the managed ledger so `down` closes only
+  # Stampede-owned panes; a repeated `up` reuses recorded panes.
+  anchor_view="${LogAnchor:-$OpsAnchor}"
+  touch "${PWD}/.herdr-swarm/worklog.log" \
+        "${PWD}/.herdr-swarm/troubleshooting.log" \
+        "${PWD}/.herdr-swarm/handoff.log"
+
+  view_cell() { # NAME SPLIT_FROM DIRECTION — recorded pane, or a fresh split
+    local pane
+    pane=$(recorded_pane "$1")
+    if pane_present "$pane"; then
+      printf '%s\n' "$pane"
+      return 0
     fi
-    if [[ -n "$view_pane" ]]; then
-      SEAT_LEDGER+=$(jq -cn --arg n "$view_name" --arg p "$view_pane" --arg d "$PWD" \
-        '{name:$n,kind:"log",pane:$p,worktree_dir:$d,isolated:false,agentless:true}')$'\n'
-    fi
-  done
+    [[ -n "$2" ]] || return 0
+    split_pane "$2" "$3" 0.5 "$PWD" || true
+  }
+
+  telemetry_name="telemetry-stream-${PROJECT_SLUG}"
+  TELEMETRY_PANE=$(view_cell "$telemetry_name" "" "")
+  [[ -n "$TELEMETRY_PANE" ]] || TELEMETRY_PANE="$anchor_view"
+  herdr pane rename "$TELEMETRY_PANE" telemetry-stream >/dev/null 2>&1 || true
+  herdr pane run "$TELEMETRY_PANE" "${PYTHON_BIN} -u '$LIB_DIR/telemetry.py' stream '$SESSION_ID' '${PWD}/.herdr-swarm/traces'" >/dev/null 2>&1 || true
+  SEAT_LEDGER+=$(jq -cn --arg n "$telemetry_name" --arg p "$TELEMETRY_PANE" --arg d "$PWD" \
+    '{name:$n,kind:"log",pane:$p,worktree_dir:$d,isolated:false,agentless:true}')$'\n'
+
   supervisor_name="supervisor-${PROJECT_SLUG}"
-  SRV_PANE=$(recorded_pane "$supervisor_name")
+  _srv_recorded=$(recorded_pane "$supervisor_name")
+  SRV_PANE=$(view_cell "$supervisor_name" "$TELEMETRY_PANE" right)
   supervisor_new=0
-  if ! pane_present "$SRV_PANE"; then
-    SRV_PANE=$(split_pane "$OpsAnchor" down 0.5 "$PWD") || true
+  if [[ -n "$SRV_PANE" && ( -z "$_srv_recorded" || "$SRV_PANE" != "$_srv_recorded" ) ]]; then
     supervisor_new=1
   fi
   if [[ -n "$SRV_PANE" ]]; then
@@ -692,26 +734,61 @@ if [[ "${CONFIG_BOUNDED_LOOPER:-0}" == 1 ]]; then
     SEAT_LEDGER+=$(jq -cn --arg n "$supervisor_name" --arg p "$SRV_PANE" --arg d "$PWD" \
       '{name:$n,kind:"shell",pane:$p,worktree_dir:$d,isolated:false,agentless:true}')$'\n'
   fi
-  if [[ "${PROXY_ENABLED:-false}" == true ]]; then
-    PROXY_PANE=$(recorded_pane "proxy-${PROJECT_SLUG}")
-    if ! pane_present "$PROXY_PANE"; then
-      PROXY_PANE=$(split_pane "$OpsAnchor" down 0.5 "$PWD") || true
+
+  worklog_name="worklog-${PROJECT_SLUG}"
+  WL_PANE=$(view_cell "$worklog_name" "$TELEMETRY_PANE" down)
+  if [[ -n "$WL_PANE" ]]; then
+    herdr pane rename "$WL_PANE" worklog >/dev/null 2>&1 || true
+    if [[ "$WL_PANE" != "$(recorded_pane "$worklog_name")" ]]; then
+      if [[ "${PROXY_ENABLED:-false}" == true ]]; then
+        printf -v view_cmd 'tail -n 30 -F %q %q %q' \
+          "${PWD}/.herdr-swarm/worklog.log" \
+          "${PWD}/.herdr-swarm/troubleshooting.log" \
+          "${PWD}/.herdr-swarm/handoff.log"
+      else
+        printf -v view_cmd 'tail -n 30 -F %q' "${PWD}/.herdr-swarm/worklog.log"
+      fi
+      herdr pane run "$WL_PANE" "$view_cmd" >/dev/null 2>&1 || warn "worklog pane could not start"
     fi
+    SEAT_LEDGER+=$(jq -cn --arg n "$worklog_name" --arg p "$WL_PANE" --arg d "$PWD" \
+      '{name:$n,kind:"log",pane:$p,worktree_dir:$d,isolated:false,agentless:true}')$'\n'
+  fi
+
+  if [[ "${PROXY_ENABLED:-false}" == true ]]; then
+    PROXY_PANE=$(view_cell "proxy-${PROJECT_SLUG}" "$SRV_PANE" down)
     if [[ -n "$PROXY_PANE" ]]; then
+      herdr pane rename "$PROXY_PANE" proxy >/dev/null 2>&1 || true
       SEAT_LEDGER+=$(jq -cn --arg n "proxy-${PROJECT_SLUG}" --arg p "$PROXY_PANE" --arg d "$PWD" \
         '{name:$n,kind:"shell",pane:$p,worktree_dir:$d,isolated:false,agentless:true}')$'\n'
     fi
+  else
+    handoff_name="handoff-${PROJECT_SLUG}"
+    HO_PANE=$(view_cell "$handoff_name" "$SRV_PANE" down)
+    if [[ -n "$HO_PANE" ]]; then
+      herdr pane rename "$HO_PANE" handoff >/dev/null 2>&1 || true
+      if [[ "$HO_PANE" != "$(recorded_pane "$handoff_name")" ]]; then
+        printf -v view_cmd 'tail -n 30 -F %q %q' \
+          "${PWD}/.herdr-swarm/handoff.log" \
+          "${PWD}/.herdr-swarm/troubleshooting.log"
+        herdr pane run "$HO_PANE" "$view_cmd" >/dev/null 2>&1 || warn "handoff pane could not start"
+      fi
+      SEAT_LEDGER+=$(jq -cn --arg n "$handoff_name" --arg p "$HO_PANE" --arg d "$PWD" \
+        '{name:$n,kind:"log",pane:$p,worktree_dir:$d,isolated:false,agentless:true}')$'\n'
+    fi
   fi
 else
-  # Legacy install config retains its historical service pane.
+  # Legacy install config retains its historical service pane and the
+  # telemetry stream in the Ops anchor.
   SRV_PANE=$(split_pane "$OpsAnchor" down 0.5 "$PWD") || true
+  herdr pane rename "$OpsAnchor" "telemetry-stream" >/dev/null 2>&1 || true
+  herdr pane run "$OpsAnchor" "${PYTHON_BIN} -u '$LIB_DIR/telemetry.py' stream '$SESSION_ID' '${PWD}/.herdr-swarm/traces'" >/dev/null 2>&1 || true
 fi
 
-# Live telemetry stream occupies the Ops anchor pane (replaces raw log tail)
-herdr pane rename "$OpsAnchor" "telemetry-stream" >/dev/null 2>&1 || true
-herdr pane run "$OpsAnchor" "${PYTHON_BIN} -u '$LIB_DIR/telemetry.py' stream '$SESSION_ID' '${PWD}/.herdr-swarm/traces'" >/dev/null 2>&1 || true
-
-good "Layout established: Herd Tab (${HerdTab}) & Ops Tab (${OpsTab})"
+# T-LAYOUT-4PANE invariant: no tab holds more than 4 panes (ADR 0011).
+if ! enforce_tab_pane_limit "$WS_ID" 4; then
+  warn "Tab layout exceeds the 4-pane cap (2×2 grid) — see the layout warnings above"
+fi
+good "Layout established: Herd (${HerdTab}) · Ops (${OpsTab}) · Logs (${LogTab:-n/a})"
 
 # Durable seat ledger v2 (ADR 0006 §4.B): every seat records where it works
 # (worktree_dir + branch). Consumed by swarm_down/verify; written atomically
@@ -890,7 +967,7 @@ if (( EXTERNAL )); then
   say "Attach to the swarm session via:"
   printf '  %s%sherdr%s\n\n' "$BOLD" "$CYAN" "$RESET"
 else
-  say "Swarm active in tabs: 'herd' (pm, arch, looper) & 'ops' (docs, gh, serve, log)"
+  say "Swarm active in tabs: 'herd' (looper, pm, arch) · 'ops' (docs, gh, reviewer, helper) · 'logs' (telemetry, supervisor, worklog, handoff)"
 fi
-say "Live telemetry: Ops tab 'telemetry-stream' pane"
+say "Live telemetry: Logs tab 'telemetry-stream' pane"
 say "Telemetry traces: ${PWD}/.herdr-swarm/traces/"
