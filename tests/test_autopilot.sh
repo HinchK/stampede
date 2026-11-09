@@ -12,11 +12,27 @@
 #
 # The repo var is $R, never $REPO: the sourced supervisor rebinds REPO from
 # the profile, and `git -C ""` is a silent no-op that targets $PWD.
+#
+# Hermeticity (TEST-ISO-1): section 1 drives the REAL promote-grant path,
+# which GATE-1 correctly refuses under ambient HERDR_* context — an agent
+# pane may never grant itself — so this suite must not inherit the pane it
+# was launched from. Re-exec scrubbed with the same enumeration the suite
+# gate uses (ARB-HERM-1, lib/common.sh gate_exec). The refusal itself is
+# pinned as a tooth in section 1b.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+
+if [[ "${_TEST_AUTOPILOT_HERM:-}" != 1 ]]; then
+  _unsets=()
+  for _v in REPO_DIR STATE_DIR PROJECT_SLUG SWARM_CONFIG_NAME \
+           $(compgen -e | grep -E '^(HERDR_|STAMPEDE_CONFIG)' || true); do
+    _unsets+=(-u "$_v")
+  done
+  exec env "${_unsets[@]}" _TEST_AUTOPILOT_HERM=1 "$BASH" "$0" "$@"
+fi
 
 # ── 1. on/off end-to-end against the real attention/arbiter seams ─────────
 R="$TMP/repo"
@@ -36,7 +52,10 @@ resolve_python >/dev/null
 
 # shellcheck source=/dev/null  # convention-dispatched command module
 source "$ROOT/lib/cli/stampede-autopilot.sh"
-stampede_cmd_autopilot "$R" on >/dev/null
+# stderr captured (TEST-ISO-1): a bare set -e death here prints three
+# orphan refusal lines with no assertion context — fail with diagnostics.
+on_out=$(stampede_cmd_autopilot "$R" on 2>&1) \
+  || { printf 'on: autopilot on failed:\n%s\n' "$on_out" >&2; exit 1; }
 
 [[ "$(jq -r .mode "$R/.herdr-swarm/attention.json")" == "quiet" ]] \
   || { echo 'on: attention mode is not quiet' >&2; exit 1; }
@@ -51,13 +70,43 @@ git -C "$R" show-ref --verify --quiet refs/heads/swarm/test/integration \
 
 stampede_cmd_autopilot "$R" status >/dev/null
 
-stampede_cmd_autopilot "$R" off >/dev/null
+off_out=$(stampede_cmd_autopilot "$R" off 2>&1) \
+  || { printf 'off: autopilot off failed:\n%s\n' "$off_out" >&2; exit 1; }
 [[ ! -f "$R/.herdr-swarm/promote-grant.json" ]] \
   || { echo 'off: promote grant not revoked' >&2; exit 1; }
 jq -e '.autopilot == false and .frontier_drain == false' "$R/.herdr-swarm/control.json" >/dev/null \
   || { echo 'off: control flags not cleared' >&2; exit 1; }
 [[ "$(jq -r .mode "$R/.herdr-swarm/attention.json")" == "loud" ]] \
   || { echo 'off: previous attention mode not restored' >&2; exit 1; }
+
+# ── 1b. tooth: `on` from an agent-occupied pane refuses and changes nothing ─
+# GATE-1/GRANT-1 is the property whose correct enforcement caused the
+# hermeticity bug above: an agent pane may never create a promote grant.
+# The stub is an executable on PATH (not a shell function) because the
+# grant path runs `bash lib/arbiter.sh grant-session` as a child process;
+# listing shape mirrors tests/test_arbiter.sh §7d.
+mkdir -p "$TMP/bin"
+cat > "$TMP/bin/herdr" <<'STUB'
+#!/usr/bin/env bash
+# stub: one recognized agent parked in pane wT:p9
+[[ "${1:-}" == "agent" && "${2:-}" == "list" ]] \
+  && printf '{"result":{"agents":[{"name":"stub-agent","pane_id":"wT:p9"}]}}\n' \
+  || exit 1
+STUB
+chmod +x "$TMP/bin/herdr"
+if ( export HERDR_PANE_ID=wT:p9 PATH="$TMP/bin:$PATH"
+     stampede_cmd_autopilot "$R" on ) >"$TMP/tooth.out" 2>"$TMP/tooth.err"; then
+  echo 'tooth: autopilot on succeeded from an agent-occupied pane' >&2
+  exit 1
+fi
+grep -q 'promote grant refused' "$TMP/tooth.err" \
+  || { echo "tooth: refusal unexplained — stderr: $(cat "$TMP/tooth.err")" >&2; exit 1; }
+[[ "$(jq -r .mode "$R/.herdr-swarm/attention.json")" == "loud" ]] \
+  || { echo 'tooth: refused on still mutated attention mode' >&2; exit 1; }
+jq -e '.autopilot == false and .frontier_drain == false' "$R/.herdr-swarm/control.json" >/dev/null \
+  || { echo 'tooth: refused on still mutated control flags' >&2; exit 1; }
+[[ ! -f "$R/.herdr-swarm/promote-grant.json" ]] \
+  || { echo 'tooth: refused on still created a promote grant' >&2; exit 1; }
 
 # ── 2. the supervisor pass: drain on autopilot, promote only with a grant ──
 export REPO_DIR="$R" STATE_DIR="$R/.herdr-swarm"
