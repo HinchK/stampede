@@ -2,7 +2,9 @@
 
 Stampede is a Bash + Python orchestrator. There is no build step and no package
 manifest — the deliverables are the shell scripts at the repo root and the
-libraries in `lib/`. That makes the contribution loop short: install a handful
+libraries in `lib/`. Before adding or editing anything under `lib/`, read
+[`docs/lib-guide.md`](lib-guide.md): every module's purpose, consumers, contract,
+and public surface live there. That makes the contribution loop short: install a handful
 of tools, run one command, and you have the same verdict the supervisor would
 give you.
 
