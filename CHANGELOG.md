@@ -10,7 +10,21 @@ pre-1.0: the public surface is not frozen.
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-11-08 (public readiness, quad-pane floor, lib guide, and test hermeticity)
+
 ### Added
+- Tab pane ceiling of <= 4 panes with dedicated 2x2 'logs' tab for model-free views (telemetry-stream, supervisor, worklog, handoff), preventing UI crushing and enforcing ADR 0011 floor geometry (#T-LAYOUT-4PANE).
+- Comprehensive lib/ usage guide at `docs/lib-guide.md` documenting all 31 library modules, purpose, consumers, contracts, and public API surface (#LIBDOC-1).
+- Whole-repository ponytail audit report committed at `docs/audits/2026-11-08-ponytail-audit.md` triaging 20 numbered findings and 33 deferred items (#AUDIT-1).
+- Architectural Decision Record ADR 0020 (`docs/adr/0020-ticket-eligibility-and-status-categories.md`) establishing unified status categories and non-blocking terminal ticket claim rules (#ELIG-1).
+- `stampede worktree [dir] [--apply] [--force] [--base <ref>]` (PR #183):
+  single-command Git worktree audit and safe sweep. Audits registered git
+  worktrees, categorizing them against a base reference (`origin/main`,
+  `main`, or custom). Safely prunes clean merged worktrees under `--apply`,
+  preserves live Herdr seats and locked registrations, preserves dirty
+  trees unless `--force` checkpoints tracked modifications and salvages
+  untracked files to `.herdr-swarm/salvage/`, and operates safely when invoked
+  from inside linked seat worktrees without pruning the root checkout.
 - `stampede autopilot <repo> on|off|status` (#AUTOPILOT-1): one command that
   composes the existing switches into a fast mode — quiet attention,
   deterministic intake, a per-pass arbiter drain, and a TTL'd promote grant
@@ -28,6 +42,47 @@ pre-1.0: the public surface is not frozen.
     and the worker is not sent into a repair loop (a headless batch
     dead-letters it with that reason). A base that cannot run the suite at
     all (exit 126/127) attributes nothing and stays an ordinary RED.
+    A base timeout (exit 124) or signal termination (exit 128+) is treated
+    as environmental load rather than a broken base: it attributes nothing,
+    is not cached in `base-gates/`, and allows subsequent passes to re-measure.
+  - A ticket whose `blocked_by:` / `depends_on:` names an unresolved (or
+    unknown) ticket is not dispatched, interactively or headless.
+  - A failed `herdr agent prompt` warns instead of vanishing behind
+    `|| true` at the six kickoff/notice/feedback sites.
+
+### Fixed
+- Autopilot test hermeticity (#TEST-ISO-1): `tests/test_autopilot.sh` re-executes
+  scrubbed of ambient `HERDR_*` context, pins the agent-pane grant refusal tooth,
+  and captures assertion diagnostics on non-zero returns, restoring green test
+  parity across all seated agent panes, CI, and plain shells.
+- `stampede worktree [dir] [--apply] [--force] [--base <ref>]` (PR #183):
+  single-command Git worktree audit and safe sweep. Audits registered git
+  worktrees, categorizing them against a base reference (`origin/main`,
+  `main`, or custom). Safely prunes clean merged worktrees under `--apply`,
+  preserves live Herdr seats and locked registrations, preserves dirty
+  trees unless `--force` checkpoints tracked modifications and salvages
+  untracked files to `.herdr-swarm/salvage/`, and operates safely when invoked
+  from inside linked seat worktrees without pruning the root checkout.
+- `stampede autopilot <repo> on|off|status` (#AUTOPILOT-1): one command that
+  composes the existing switches into a fast mode — quiet attention,
+  deterministic intake, a per-pass arbiter drain, and a TTL'd promote grant
+  so greens integrate and promote locally without the manual ceremony. The
+  suite gate, the state locks, the agent-pane promote block, and pushing
+  stay enforced; `off` restores the previous attention mode. `promote` is
+  now a silent no-op when the base branch is already at the integration tip.
+
+- Four borrows from the 2026-11-07 prior-art survey:
+  - A GREEN gate records files outside the ticket's `owns:` line in
+    `owns-violations.jsonl` (the existing `partition_drift_check`, now
+    called). Never blocking.
+  - A RED gate first runs the suite once at the worker's merge-base; when
+    the base fails too the verdict is `base_red`, the human is notified,
+    and the worker is not sent into a repair loop (a headless batch
+    dead-letters it with that reason). A base that cannot run the suite at
+    all (exit 126/127) attributes nothing and stays an ordinary RED.
+    A base timeout (exit 124) or signal termination (exit 128+) is treated
+    as environmental load rather than a broken base: it attributes nothing,
+    is not cached in `base-gates/`, and allows subsequent passes to re-measure.
   - A ticket whose `blocked_by:` / `depends_on:` names an unresolved (or
     unknown) ticket is not dispatched, interactively or headless.
   - A failed `herdr agent prompt` warns instead of vanishing behind

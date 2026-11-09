@@ -163,6 +163,11 @@ when the grant expires, drain keeps going and promote waits for you again.
   available transcript tails, closes Stampede-managed panes, and preserves
   unrelated operator panes. Isolated worker worktrees follow the existing
   checkpoint and salvage rules.
+- **Audit and sweep worktrees:** after tickets merge and seats close, run
+  `stampede worktree /path/to/your/repo` to audit linked worktrees. Run
+  with `--apply` to prune clean merged worktrees while keeping live seats
+  and the root checkout inviolable; `--force` checkpoints tracked changes
+  and salvages untracked files to `.herdr-swarm/salvage/` before pruning.
 
 After a Herdr server restart, eligible native agent conversations resume only
 if current Herdr integrations supplied session references. Check them with

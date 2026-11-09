@@ -71,6 +71,6 @@ reattaches to managed panes. To end the swarm deliberately, inspect pending
 work and run `stampede down /path/to/repo`.
 
 The [user guide](docs/user-guide.md) covers setup, attention behavior,
-arbiter commands, and state handling. The [legacy README](LEGACY.md) and
+arbiter commands, worktree sweeps (`stampede worktree`), and state handling. The [legacy README](LEGACY.md) and
 [legacy user guide](docs/legacy-user-guide.md) preserve the previous layout
 and `stampede init` flow.

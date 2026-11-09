@@ -59,6 +59,9 @@ python3 lib/telemetry.py log <session> <event> <agent> <ticket> '<json>' --trace
 python3 lib/telemetry.py stream <session> <trace-dir>
 ```
 
+Before adding or calling anything under `lib/`, check [`docs/lib-guide.md`](lib-guide.md) —
+it documents every module's purpose, consumers, contract, and public functions.
+
 No suite has a per-test filter. To exercise one function, source the lib in a scratch repo yourself (that is what the
 suites do) rather than narrowing the file.
 

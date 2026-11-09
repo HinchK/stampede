@@ -50,3 +50,21 @@ tab_by_label() {
 check_and_relocate_geometry() {
   return 0
 }
+
+# enforce_tab_pane_limit WS_ID [MAX_PANES] — T-LAYOUT-4PANE invariant check.
+# Counts live panes per tab; names every tab over the cap on stderr and
+# returns 1 (0 when every tab is within MAX_PANES, default 4 — the 2×2
+# grid of ADR 0011). Read-only: it checks, it never moves or closes panes.
+enforce_tab_pane_limit() {
+  local ws_id="$1" max="${2:-4}" over=0 tab count
+  while IFS=$'\t' read -r tab count; do
+    [[ -n "$tab" ]] || continue
+    if (( count > max )); then
+      printf 'layout: tab %s holds %d panes (cap %d)\n' "$tab" "$count" "$max" >&2
+      over=1
+    fi
+  done < <(herdr pane list --workspace "$ws_id" 2>/dev/null \
+    | jq -r '.result.panes[]? | .tab_id' | sort | uniq -c \
+    | awk '{print $2 "\t" $1}')
+  return "$over"
+}
