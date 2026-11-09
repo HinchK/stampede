@@ -380,7 +380,13 @@ _base_is_red() { # SHA → 0 when the merge-base fails the suite too
   # "Can't open"), not 127. A suite that actually ran and failed can also
   # exit 2, so that code counts only when the log says the script never opened.
   base_log="${STATE_DIR}/gate-logs/base-${base:0:12}.log"
-  case "$(cat "$rcf")" in
+  # 124 (timeout) and 128+ (killed) are load/environment, not a verdict on the
+  # base — never attribute, and drop the cached rc so the next call re-measures.
+  local base_rc; base_rc=$(cat "$rcf")
+  if [[ "$base_rc" =~ ^[0-9]+$ ]] && (( base_rc == 124 || base_rc >= 128 )); then
+    rm -f "$rcf"; return 1
+  fi
+  case "$base_rc" in
     0|126|127) return 1 ;;
     2)
       # dash reports a missing script on its first line; a later match is suite output.

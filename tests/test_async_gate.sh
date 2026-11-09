@@ -251,6 +251,17 @@ if _base_is_red "$SHA_B"; then
 else
   assert_bad 7d "late 'cannot open' was misread as a missing script"
 fi
+# Fix 3: a base timeout (124) or kill (137) attributes nothing and is not cached.
+for brc in 124 137; do
+  printf '%s' "$brc" > "$STATE/base-gates/${base_sha}.rc"
+  if _base_is_red "$SHA_B"; then
+    assert_bad 7e "base rc=$brc classified as base RED"
+  else
+    assert_ok 7e "base rc=$brc is not a base RED"
+  fi
+  [[ ! -f "$STATE/base-gates/${base_sha}.rc" ]] \
+    && assert_ok 7f "base rc=$brc not cached" || assert_bad 7f "base rc=$brc cached"
+done
 rm -rf "$STATE/base-gates"
 
 # ── 4: crash safety — dead pid without rc discarded, never green ──────────
@@ -1016,6 +1027,19 @@ expect 19e "$(grep -c 'HB-3' "$HB_OUT" || true)" 0 "integrated record is not han
 arbiter_handback_feedback
 expect 19f "$(wc -l < "$HB_OUT" | tr -d ' ')" 2 "second pass re-prompts nothing"
 unset -f worker_feedback
+
+# ── 20: skipped and base_red stay judged on the next poll ──────────────────
+GATE_CONCURRENCY=0
+SHA_DJ=$(git -C "$WTB" rev-parse HEAD)
+printf '{"ts":1,"ticket":"DJ-1","sha":"%s","seat":"seat-b","suite":"skipped"}\n' "$SHA_DJ" >> "$LOG"
+printf '{"ts":2,"ticket":"DJ-2","sha":"%s","seat":"seat-b","suite":"base_red"}\n' "$SHA_DJ" >> "$LOG"
+VERDICT_A=""
+VERDICT_B=$(printf 'ARCH DONE #DJ-1 %s\nARCH DONE #DJ-2 %s' "$SHA_DJ" "$SHA_DJ")
+harvest_verdicts >/dev/null 2>&1
+dj=$(jq -s '[.[] | select(.ticket == "DJ-1" or .ticket == "DJ-2")] | length' "$LOG")
+[[ "$dj" == 2 ]] \
+  && assert_ok 20a "second pass does not re-judge skipped or base_red" \
+  || assert_bad 20a "re-judged rows=$dj"
 
 # ── summary ────────────────────────────────────────────────────────────────
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
