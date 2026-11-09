@@ -1,5 +1,13 @@
 # Swarm State Checkpoint: Universal Herdr Swarm (`herd-swarm`)
 
+**Updated:** 2026-11-08  
+**HEAD on main:** `71b23e6` (PR #183 merged)  
+**Suites:** 34, `make lint` clean (68 shell files), 20/20 in `test_worktree_sweep.sh`  
+**Now:** Shipped PR #182 & PR #183 (`fix/base-red-dash-log-window`, `fix/base-timeout-and-worktree-sweep`), added `scripts/worktree-sweep.sh` & `stampede worktree` CLI, swept 8 stale merged worktrees (down from 18 to 10).  
+**Not doing:** version bump, live Herdr, unconfirmed branch resets.
+
+---
+
 **Updated:** 2026-11-05  
 **HEAD after Phase 0:** `0028ea9` on `origin/main` (LOOPER-1 published)  
 **Suites:** 27, `make check` green locally at report time  
