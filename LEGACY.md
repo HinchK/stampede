@@ -1,3 +1,5 @@
+<!-- ARCHIVED: Historical v0.1-v0.5 architecture overview, topology, and init flow; preserved for provenance. Current documentation is in README.md and docs/user-guide.md. -->
+
 # Stampede
 
 **Zero Trust for LLM compute nodes.**

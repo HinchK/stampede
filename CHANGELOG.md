@@ -11,6 +11,14 @@ pre-1.0: the public surface is not frozen.
 ## [Unreleased]
 
 ### Added
+- `stampede worktree [dir] [--apply] [--force] [--base <ref>]` (PR #183):
+  single-command Git worktree audit and safe sweep. Audits registered git
+  worktrees, categorizing them against a base reference (`origin/main`,
+  `main`, or custom). Safely prunes clean merged worktrees under `--apply`,
+  preserves live Herdr seats and locked registrations, preserves dirty
+  trees unless `--force` checkpoints tracked modifications and salvages
+  untracked files to `.herdr-swarm/salvage/`, and operates safely when invoked
+  from inside linked seat worktrees without pruning the root checkout.
 - `stampede autopilot <repo> on|off|status` (#AUTOPILOT-1): one command that
   composes the existing switches into a fast mode — quiet attention,
   deterministic intake, a per-pass arbiter drain, and a TTL'd promote grant
@@ -28,6 +36,9 @@ pre-1.0: the public surface is not frozen.
     and the worker is not sent into a repair loop (a headless batch
     dead-letters it with that reason). A base that cannot run the suite at
     all (exit 126/127) attributes nothing and stays an ordinary RED.
+    A base timeout (exit 124) or signal termination (exit 128+) is treated
+    as environmental load rather than a broken base: it attributes nothing,
+    is not cached in `base-gates/`, and allows subsequent passes to re-measure.
   - A ticket whose `blocked_by:` / `depends_on:` names an unresolved (or
     unknown) ticket is not dispatched, interactively or headless.
   - A failed `herdr agent prompt` warns instead of vanishing behind

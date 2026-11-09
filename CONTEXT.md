@@ -86,6 +86,13 @@ An interview in which an agent puts design decisions to the human, one round of 
 - **Origin**: the 2026-11-07 post-mortem. `looper` answered the PM's EHS-10 Q1–Q7 grilling under a blanket instruction, and the result was recorded as the human's decision.
 - **_Avoid_**: _Avoid_ treating an agent's answer to a grilling question as an accepted decision; _Avoid_ reading a blanket "answer the panels" instruction as authority over design.
 
+### 16. Ticket Eligibility
+The single answer to "may this ticket be dispatched now, to this role or seat, under this dispatch mode — and if not, why". A ticket is identified by its frontmatter `id:` (never its filename) and read from its frontmatter only. Eligibility combines the ticket's **status category**, its open `blocked_by:` tickets, its `assignee:`, and the mode's intake set; partition overlap and leases are checked separately against the tickets that hold a claim.
+- **Status category**: every ticket status belongs to exactly one category. **Intake** (`backlog`, `queued`, `ready`) may be dispatched; **claimed** (`in_progress`, `review`, …) is work in flight and holds its `owns:` paths; **parked** (`blocked`, `paused`) waits; **terminal** (`resolved`, `closed`, `done`, `superseded`, `integrated`, `promoted`) is finished. A missing or unrecognised status is ineligible and still holds its `owns:` paths (Fail-Closed).
+- **Intake set**: the intake statuses a dispatch mode accepts. Headless Batch Drain takes `backlog` and `queued`.
+- **Assignee**: `human` is never dispatchable; a role is dispatchable only to a seat with that role; a seat is dispatchable only to that seat. Choosing *which* eligible seat gets the ticket is the dispatcher's job, not part of eligibility. `arch` is the canonical ticket spelling of the architect role (likewise `agy-docs` for docs and `agy-gh` for gh); an assignee that names neither a role nor a seat is ineligible.
+- **_Avoid_**: _Avoid_ treating an intake status (e.g. `queued`) as a claim on paths; _Avoid_ reading ticket fields from the ticket body; _Avoid_ deriving a ticket's id from its filename; _Avoid_ a dispatch path that applies its own eligibility rule.
+
 ## Architectural Interaction Matrix
 
 ```

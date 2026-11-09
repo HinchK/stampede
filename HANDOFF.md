@@ -1,3 +1,5 @@
+<!-- ARCHIVED: Historical audit handoff from 2026-10-09 (must-fix findings 1-5); preserved for provenance and context. -->
+
 # HANDOFF — audit must-fix 1 to 5
 
 **Goal:** fix findings 1 to 5 of the 2026-10-09 ponytail audit (second, merged report).
