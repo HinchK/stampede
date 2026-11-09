@@ -1,6 +1,18 @@
 # Swarm State Checkpoint: Universal Herdr Swarm (`herd-swarm`)
 
 **Updated:** 2026-11-08  
+**HEAD on main:** `629513d` (DOCSWEEP-1 and ELIG-1 queue landed)  
+**Suites:** 34, `make lint` clean (68 shell files), 100% green test suites  
+**Landings & Checkpoint Progress:**  
+- **DOCSWEEP-1** (`31e444a`): Documentation truth pass reconciling `CHANGELOG.md` [Unreleased], archival banners on `HANDOFF.md` / `LEGACY.md`, glossary alignment, and user guide worktree commands.  
+- **ADR 0020 & ELIG-1 Queue** (`629513d`): Authored ADR 0020 (Ticket eligibility and status categories), updated `CONTEXT.md` §16, and queued staged tickets (`ELIG-1..3`) for unified ticket parser and dispatcher eligibility.  
+- **TEST-ISO-1** (`4901397`): Test isolation and gate fixes landed on seat branches with independent reviewer PASS.  
+- **In-flight:** `T-LAYOUT-4PANE` (quad-pane floor layout ergonomics) and `AUDIT-1` (findings review and backlog triage).  
+**Worktree Cleanup Status:** 0 unmerged/dangling worktrees. Active footprint: 4 registered worktrees (1 root, 3 active live swarm seats). Safe to prune: 0.  
+
+---
+
+**Updated:** 2026-11-08  
 **HEAD on main:** `24c2cef` (PR #183 merged, worktrees audited & pruned)  
 **Suites:** 34, `make lint` clean (68 shell files), 20/20 in `test_worktree_sweep.sh`  
 **Now:** Pruned 5 dangling/superseded worktrees (`arb-slug-3-166`, `swarm-provider-research`, `research-gas-city-herdr-adapter`, `research-herdr-plugin-packaging`, `docs-simplify-reset`) and their local branches. Registered worktrees down from 11 to 6 (1 root, 3 active swarm seats, 2 queued/spike worktrees).  
