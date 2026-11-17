@@ -128,6 +128,13 @@ unchanged. A successful test exit with a changed tree is handed back with its
 gate log, and the integration ref stays unchanged. New GREEN arrivals can
 enter the queue while an integration test is running.
 
+An integration gate that times out or cannot run reports `UNDETERMINED`.
+The candidate stays queued and the drain stops at that ticket. The queue
+record and Ops trace carry the reason, plus the exit code and log when
+available. Fix the test environment or timeout setting, then run `drain`
+again to test the same candidate. A failing assertion produces `RED` and
+returns the ticket to the worker for repair.
+
 ## Run everything automatically (autopilot)
 
 The ceremony above is the careful default. When you want the swarm to run end

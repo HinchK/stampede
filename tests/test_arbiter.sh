@@ -220,12 +220,61 @@ arbiter_drain 2>/dev/null
 ck 208 queued "ungateable gate leaves the record queued (not integration_red)"
 check "no integration_red recorded when the gate could not run" \
   '[[ $(jq -r -s --arg t 208 "[.[] | select((.ticket|tostring) == \$t and .status == \"integration_red\")] | length" "$Q") == 0 ]]'
+check "missing timeout runner records an inconclusive gate without an exit code" \
+  'jq -es "any(.[]; .ticket == \"208\" and .status == \"queued\" and .gate.result == \"undetermined\" and .gate.exit_code == null and .gate.log == null)" "$Q" >/dev/null'
 check "integration ref unmoved when the gate could not run" \
   '[[ $(git -C "$REPO" rev-parse '"$IREF"') == "$REF_PRE_UNGATED" ]]'
 unset TIMEOUT_BIN                                 # resolver re-probes PATH
 
+# The same candidate can fail an assertion, hit a deadline, or never start
+# its test executable. Only the assertion failure calls for worker repair.
+TEST_CMD='test ! -f echo.txt' arbiter_drain 2>/dev/null
+ck 208 integration_red "candidate assertion failure is integration_red"
+check "assertion failure records exit 1" \
+  'jq -es "any(.[]; .ticket == \"208\" and .status == \"integration_red\" and .gate.exit_code == 1)" "$Q" >/dev/null'
+check "assertion failure leaves the integration ref unchanged" \
+  '[[ $(git -C "$REPO" rev-parse "$IREF") == "$REF_PRE_UNGATED" ]]'
+
+arbiter_enqueue 208 seat-e "$SHA_E"
+TIMEOUT_ERR=$(SUITE_TIMEOUT_S=1 TEST_CMD='sleep 5' arbiter_drain 2>&1 >/dev/null)
+ck 208 queued "timed-out gate stays queued for retry"
+check "timed-out gate reports UNDETERMINED and records its exit code" \
+  '[[ "$TIMEOUT_ERR" == *"UNDETERMINED"*"timed out"* ]] &&
+   jq -es --arg sha "$SHA_E" "any(.[]; .ticket == \"208\" and .sha == \$sha and .status == \"queued\" and .gate.result == \"undetermined\" and .gate.exit_code == 124)" "$Q" >/dev/null'
+check "timeout is visible in the Ops trace" \
+  'jq -es "any(.[]; .event_type == \"arbiter.gate_unavailable\" and .ticket_num == \"208\" and .payload.exit_code == 124)" "$STATE_DIR"/traces/*.jsonl >/dev/null'
+check "timeout leaves the integration ref unchanged" \
+  '[[ $(git -C "$REPO" rev-parse "$IREF") == "$REF_PRE_UNGATED" ]]'
+
+arbiter_enqueue 208 seat-e "$SHA_E"   # idempotent while the same candidate is queued
+MISSING_ERR=$(TEST_CMD='./missing-test-executable' arbiter_drain 2>&1 >/dev/null)
+ck 208 queued "missing test executable leaves the same candidate queued"
+check "missing executable reports UNDETERMINED and records exit 127" \
+  '[[ "$MISSING_ERR" == *"UNDETERMINED"*"not found"* ]] &&
+   jq -es --arg sha "$SHA_E" "any(.[]; .ticket == \"208\" and .sha == \$sha and .status == \"queued\" and .gate.result == \"undetermined\" and .gate.exit_code == 127)" "$Q" >/dev/null'
+check "missing executable leaves the integration ref unchanged" \
+  '[[ $(git -C "$REPO" rev-parse "$IREF") == "$REF_PRE_UNGATED" ]]'
+check "inconclusive attempts created no worker handback or green verdict" \
+  '[[ $(jq -s "[.[] | select(.ticket == \"208\" and .status == \"integration_red\")] | length" "$Q") == 1 ]] &&
+   jq -es "all(.[]; .ticket != \"208\" or .suite != \"green\")" "$SV" >/dev/null'
+
+# A script invoked through sh can also be missing. dash returns 2 here, so
+# check the runner diagnostic rather than treating every suite exit 2 as red.
+MISSING_SCRIPT_ERR=$(TEST_CMD='sh ./missing-test-script' arbiter_drain 2>&1 >/dev/null)
+check "missing shell script leaves the same candidate queued" \
+  '[[ "$MISSING_SCRIPT_ERR" == *"UNDETERMINED"* ]] &&
+   jq -es "any(.[]; .ticket == \"208\" and .status == \"queued\" and .gate.result == \"undetermined\" and (.gate.exit_code == 127 or .gate.exit_code == 2))" "$Q" >/dev/null &&
+   [[ $(git -C "$REPO" rev-parse "$IREF") == "$REF_PRE_UNGATED" ]]'
+
 arbiter_drain 2>/dev/null
-ck 208 integrated "queued record integrates once a timeout(1) is available"
+ck 208 integrated "same candidate integrates when the test command is restored"
+check "successful retry clears the queued gate failure" \
+  'jq -es "any(.[]; .ticket == \"208\" and .status == \"integrated\" and .gate == null)" "$Q" >/dev/null &&
+   git -C "$REPO" merge-base --is-ancestor "$SHA_E" "$IREF"'
+check "a retry preserves the earlier red gate log and files new green evidence" \
+  'old_log=$(jq -rs "map(select(.ticket == \"208\" and .status == \"integration_red\")) | last | .gate.log" "$Q") &&
+   new_log=$(jq -rs "map(select(.ticket == \"208\" and .suite == \"green\")) | last | .log" "$SV") &&
+   [[ "$new_log" != "$old_log" && -f "$new_log" && -f "$old_log" ]]'
 
 # ── 5. CAS: tip moved during the gate → retry ──────────────────────────────
 # The gate command races the CAS: it advances the integration ref to a NEW

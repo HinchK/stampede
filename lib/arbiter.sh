@@ -122,14 +122,14 @@ _arb_queue_write() (
   # numeric ids via --argjson, and jq's == is type-strict, so a raw comparison
   # could never match those rows — their status writes silently no-opped and a
   # drain re-processed them forever (one empty merge commit per pass).
-      filter="if ((.ticket | tostring) == \$t and .sha == \$s and .status == \"queued\") then . + {status: \$st}"
+      filter="if ((.ticket | tostring) == \$t and .sha == \$s and .status == \"queued\") then del(.gate) + {status: \$st}"
       [[ -n "$extra" ]] && filter+=" + ($extra)"
       filter+=" else . end"
       jq -sc --arg t "$t" --arg s "$s" --arg st "$st" "map($filter) | .[]" "$input" > "$tmp" || return 1
       if [[ "$op" == integrate ]] && ! git -C "$ARB_REPO" update-ref "$ARB_REF" "$candidate" "$i0" 2>/dev/null; then
         jq -sc --arg t "$t" --arg s "$s" --arg old "$i0" \
           'map(if (.ticket | tostring) == $t and .sha == $s and .status == "queued"
-               then . + {status:"retry", integration_before:$old} else . end) | .[]' \
+               then del(.gate) + {status:"retry", integration_before:$old} else . end) | .[]' \
           "$input" > "$tmp" || return 1
         printf 'arbiter: #%s CAS failed (integration tip moved) — retry from new tip\n' "$t" >&2
         rc=1
@@ -177,8 +177,8 @@ _arb_verdict_record() { # TICKET SEAT SHA [GATE_LOG]
   local extra="{}" d=""
   d=$(evidence_sha256 "$gate_log") || d=""
   if [[ -n "$d" ]]; then
-    extra=$(jq -cn --arg host "$(evidence_host)" --argjson pid "$$" --arg d "$d" \
-      '{host: $host, pid: $pid, gate_log_sha256: $d}')
+    extra=$(jq -cn --arg host "$(evidence_host)" --argjson pid "$$" --arg d "$d" --arg log "$gate_log" \
+      '{host: $host, pid: $pid, gate_log_sha256: $d, log: $log}')
   else
     extra=$(jq -cn --arg host "$(evidence_host)" --argjson pid "$$" '{host: $host, pid: $pid}')
   fi
@@ -334,6 +334,18 @@ _arb_wt_unusable() { # TICKET SEAT SHA — the stall must show in the Ops stream
     "$(jq -cn '{summary:"gate harness unavailable: arbiter worktree unusable — left queued"}')"
 }
 
+_arb_gate_undetermined() { # TICKET SEAT SHA I0 REASON [EXIT_CODE] [LOG]
+  local ticket="$1" seat="$2" sha="$3" i0="$4" reason="$5" gate_rc="${6:-}" gate_log="${7:-}"
+  local evidence
+  evidence=$(jq -cn --arg reason "$reason" --argjson rc "${gate_rc:-null}" --arg log "$gate_log" \
+    '{result:"undetermined", reason:$reason, exit_code:$rc, log:(if $log == "" then null else $log end)}') || return 1
+  _arb_set_status "$ticket" "$sha" queued "{integration_before: \"${i0}\", gate: $evidence}" || return 1
+  _arb_telemetry arbiter.gate_unavailable "$ticket" "$seat" "$sha" \
+    "$(jq -c '. + {summary:("integration gate UNDETERMINED — " + .reason)}' <<<"$evidence")"
+  printf 'arbiter: #%s integration gate UNDETERMINED — %s%s. Left queued with the ref unchanged.\n' \
+    "$ticket" "$reason" "${gate_log:+ (log: $gate_log)}" >&2
+}
+
 # ARB-LOCK-1: say WHO holds the drain lock and whether it is merely stopped.
 # kill -0 succeeds for a Ctrl+Z'd (state T) process, so liveness alone hides it.
 _arb_lock_holder_report() { # LOCK_DIR
@@ -446,23 +458,47 @@ _arb_integrate() { # TICKET SEAT SHA I0
     return 1
   fi
   if _arb_cmd_runnable; then
-    # The bound resolves BEFORE the gate runs. Without a timeout(1) the gate
-    # exits 127, which this function used to record as integration_red —
-    # condemning a combined tree it never actually measured (DOG-15). Leave
-    # the record queued instead: truthful (unprocessed), self-healing once the
-    # dependency is installed, and the ref stays where it is either way.
     if ! resolve_timeout; then
-      _arb_telemetry arbiter.gate_unavailable "$ticket" "$seat" "$sha" \
-        "$(jq -cn '{summary:"gate harness unavailable: no runnable timeout(1)"}')"
-      printf 'arbiter: #%s NOT gated — no runnable timeout(1); left queued, ref unmoved\n' "$ticket" >&2
+      _arb_gate_undetermined "$ticket" "$seat" "$sha" "$i0" 'no runnable timeout(1)'
       return 1
     fi
-    local gate_dir="${ARB_STATE}/gate-logs"
+    local gate_dir="${ARB_STATE}/gate-logs" gate_tmp="${ARB_STATE}/gate-tmp/integration"
     gate_log="${gate_dir}/arbiter-${ticket}-${sha:0:7}.log"
-    mkdir -p "$gate_dir" "${ARB_STATE}/gate-tmp/integration"
-    local gate_rc=0
-    # Path carries no "arbiter" (suites matched that substring) and the env is scrubbed.
-    gate_exec "$ARB_WT" "${ARB_STATE}/gate-tmp/integration" "${SUITE_TIMEOUT_S:-300}" "$TEST_CMD" >"$gate_log" 2>&1 || gate_rc=$?
+    if ! mkdir -p "$gate_dir" "$gate_tmp"; then
+      _arb_gate_undetermined "$ticket" "$seat" "$sha" "$i0" 'could not prepare gate directories'
+      return 1
+    fi
+    # A retry for the same candidate needs its own log to preserve prior evidence.
+    if [[ -e "$gate_log" || -L "$gate_log" ]]; then
+      gate_log=$(mktemp "${gate_log}.XXXXXX") || gate_log=""
+    fi
+    local gate_rc=0 reason=""
+    # Keep a log-open failure distinct from the suite's exit status.
+    if [[ -z "$gate_log" ]] || ! {
+      gate_exec "$ARB_WT" "$gate_tmp" "${SUITE_TIMEOUT_S:-300}" "$TEST_CMD" || gate_rc=$?
+    } >"$gate_log" 2>&1; then
+      _arb_gate_undetermined "$ticket" "$seat" "$sha" "$i0" 'could not open the gate log'
+      return 1
+    fi
+    case "$gate_rc" in
+      124) reason="test suite timed out after ${SUITE_TIMEOUT_S:-300}s" ;;
+      125) reason='timeout runner failed' ;;
+      126) reason='test command could not be executed' ;;
+      127) reason='test command or required executable not found' ;;
+      2)
+        # dash uses exit 2 when sh cannot open a test script.
+        if head -n 1 "$gate_log" | grep -qE "^(0: |[^:]*sh: ([0-9]+: )?)(cannot open|Can't open) "; then
+          reason='test script could not be opened'
+        fi
+        ;;
+    esac
+    if (( gate_rc >= 128 )); then
+      reason='test suite exited with a signal status'
+    fi
+    if [[ -n "$reason" ]]; then
+      _arb_gate_undetermined "$ticket" "$seat" "$sha" "$i0" "$reason" "$gate_rc" "$gate_log"
+      return 1
+    fi
     if ! gate_tree_matches "$ARB_WT" "$candidate"; then
       _arb_set_status "$ticket" "$sha" integration_red \
         "$(jq -cn --arg old "$i0" --arg log "$gate_log" \
@@ -474,11 +510,13 @@ _arb_integrate() { # TICKET SEAT SHA I0
       # ARB-RED-MSG-1: `make test` ends a failing run with "✖ FAILED: <suite>"; other runners leave it empty.
       local failed_suite
       failed_suite=$(sed -n 's/^✖ FAILED: //p' "$gate_log" 2>/dev/null | tail -n 1)
+      local gate_failure
+      gate_failure=$(jq -cn --arg log "$gate_log" --arg fs "$failed_suite" --argjson rc "$gate_rc" \
+        '{log:$log, exit_code:$rc, failed_suite:$fs}') || return 1
       _arb_set_status "$ticket" "$sha" "integration_red" \
-        "$(jq -cn --arg old "$i0" --arg log "$gate_log" --arg fs "$failed_suite" \
-          '{integration_before:$old, gate:({log:$log} + (if $fs == "" then {} else {failed_suite:$fs} end))}')"
+        "{integration_before: \"${i0}\", gate: ($gate_failure | if .failed_suite == \"\" then del(.failed_suite) else . end)}" || return 1
       _arb_telemetry arbiter.red "$ticket" "$seat" "$sha" \
-        "$(jq -cn --arg l "$gate_log" --arg fs "$failed_suite" '{summary:"integration gate RED", log: $l, failed_suite: $fs}')"
+        "$(jq -c '. + {summary:"integration gate RED"}' <<<"$gate_failure")"
       printf 'arbiter: #%s integration gate RED%s (ref NOT advanced; log: %s)\n' \
         "$ticket" "${failed_suite:+ in $failed_suite}" "$gate_log" >&2
       return 1
